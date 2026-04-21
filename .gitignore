@@ -1,0 +1,65 @@
+# Python
+
+**pycache**/
+*.py[cod]
+*$py.class
+
+# Virtual Environment (IMPORTANTE)
+
+venv/
+.venv/
+env/
+ENV/
+
+# Environment variables
+
+.env
+.env.*
+
+# Flask
+
+instance/
+.webassets-cache
+
+
+# Logs
+
+*.log
+
+# Databases (caso uses localmente)
+
+*.sqlite3
+*.db
+
+# IDEs / Editors
+
+.vscode/
+.idea/
+
+
+# OS files
+
+.DS_Store
+Thumbs.db
+
+# Build / Distribution
+
+build/
+dist/
+*.egg-info/
+
+# Testing / Coverage
+
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Requests / scraping temp files
+
+*.cache
+*.tmp
+*.bak
+
+# Jupyter
+
+.ipynb_checkpoints
