@@ -74,7 +74,6 @@ def parse_products(html):
 
     return products
 
-
 def parse_price(price_text):
     """
     Ex:
@@ -83,12 +82,10 @@ def parse_price(price_text):
     """
     price_text = price_text.replace("€", "").replace(",", ".").strip()
 
-    # caso venha com intervalo tipo "39.99 – 59.99"
     if "-" in price_text:
         price_text = price_text.split("-")[0].strip()
 
     return float(price_text)
-
 
 def parse_stock(card):
     stock_tag = card.select_one('.circle-semaphore')

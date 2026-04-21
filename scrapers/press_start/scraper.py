@@ -20,7 +20,6 @@ class PressStartScraper:
         return response.text
 
     def run(self, max_pages=2):
-        print("🔵 Scraping Press Start...")
 
         all_products = []
 
@@ -40,7 +39,7 @@ class PressStartScraper:
 
             all_products.extend(products)
 
-            time.sleep(2)  # evitar bloqueios
+            time.sleep(2)
 
         except Exception as e:
             print(f"Erro: {e}")
