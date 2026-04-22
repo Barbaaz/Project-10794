@@ -80,10 +80,10 @@
 # for r in resultados:
 #     print(r)
 
-# from scrapers.press_start.scraper import PressStartScraper
+from scrapers.mega_mania.scraper import MegaManiaScraper
 
-# scraper = PressStartScraper()
-# products = scraper.run(max_pages=2)
+scraper = MegaManiaScraper()
+products = scraper.run(max_pages=2)
 
-# for p in products:
-#     print(p)
+for p in products:
+    print(p)

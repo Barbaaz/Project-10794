@@ -1,0 +1,7 @@
+PRODUCT_CARD = ".product-container"  
+NAME = ".list-name"
+SALE = ".price.product-price"
+PRICE = ".old-price.product-price"
+LINK = "a.product-name"
+STOCK = ".out-of-stock"
+DISCOUNT = ".product-price-and-shipping.has_discount"

@@ -88,7 +88,7 @@ def parse_price(price_text):
     return float(price_text)
 
 def parse_stock(card):
-    stock_tag = card.select_one('.circle-semaphore')
+    stock_tag = card.select_one(STOCK)
 
     if not stock_tag:
         return True

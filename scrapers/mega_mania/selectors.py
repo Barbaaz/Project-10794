@@ -1,0 +1,7 @@
+PRODUCT_CARD = ".produto_lista.MolduraProdutos"  
+NAME = ".produto_lista_titulo a"
+SALE = ".produto_lista_botoes__bt_preco"
+PRICE = ".produto_desconto_valor"
+LINK = ".produto_lista_imagem a"
+STOCK = ".produto_lista_stock_emstock"
+DISCOUNT = ".produto_desconto_wrapper"
