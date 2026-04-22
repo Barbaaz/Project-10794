@@ -19,11 +19,11 @@ class MegaManiaScraper:
 
         return response.text
 
-    def run(self, max_pages=2):
+    def run(self, query):
 
         all_products = []
 
-        query = 'resident evil'
+        # query = 'resident evil'
         query = query.replace(' ', '%20')
         query = query +'&ppage=50'
 

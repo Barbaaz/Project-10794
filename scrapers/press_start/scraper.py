@@ -19,11 +19,10 @@ class PressStartScraper:
 
         return response.text
 
-    def run(self, max_pages=2):
+    def run(self, query):
 
         all_products = []
 
-        query = 'resident evil'
         query = query.replace(' ', '+')
 
         url = f'{BASE_URL}{query}'

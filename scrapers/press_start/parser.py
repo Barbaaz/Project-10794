@@ -58,6 +58,13 @@ def parse_products(html):
             
             name = name_tag.get_text(strip=True)
 
+            image_tag = card.select_one(".thumbnail img")
+
+            image = None
+
+            if image_tag:
+                image = image_tag.get("data-full-size-image-url") or image_tag.get("src")
+
             products.append({
                 "store": "press_start",
                 "external_name": name,
@@ -66,6 +73,7 @@ def parse_products(html):
                 "has_discount": has_discount,
                 "console": console,
                 "url": link,
+                "image": image,
                 "in_stock": in_stock
             })
 

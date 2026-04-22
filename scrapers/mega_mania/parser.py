@@ -16,7 +16,7 @@ def parse_products(html):
             name = name_tag.get_text(strip=True)
             console = extrair_consola(name)
             discount_tag = card.select_one(DISCOUNT)
-            has_discount = bool(card.select_one(DISCOUNT))
+            has_discount = bool(discount_tag)
 
             price = None
             sale = None
@@ -39,12 +39,25 @@ def parse_products(html):
                 continue
 
             link = link_tag["href"]
+            if link and link.startswith("/"):
+                link = "https://mega-mania.com.pt" + link
 
             in_stock = parse_stock(card)
             if not in_stock:
                 continue
             
             name = name_tag.get_text(strip=True)
+
+            image_tag = card.select_one(".produto_lista_imagem img")
+
+            image = None
+
+            if image_tag:
+                image = image_tag.get("src")
+
+                # 🔥 corrigir URL relativa
+                if image and image.startswith("/"):
+                    image = "https://mega-mania.com.pt" + image
 
             products.append({
                 "store": "mega-mania",
@@ -54,6 +67,7 @@ def parse_products(html):
                 "has_discount": has_discount,
                 "console": console,
                 "url": link,
+                "image": image,
                 "in_stock": in_stock
             })
 
