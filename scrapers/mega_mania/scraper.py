@@ -8,7 +8,6 @@ HEADERS = {
 
 BASE_URL = "https://mega-mania.com.pt/pt/catalogo/?f="
 
-
 class MegaManiaScraper:
 
     def fetch_page(self, url):
@@ -22,8 +21,7 @@ class MegaManiaScraper:
     def run(self, query):
 
         all_products = []
-
-        # query = 'resident evil'
+        
         query = query.replace(' ', '%20')
         query = query +'&ppage=50'
 

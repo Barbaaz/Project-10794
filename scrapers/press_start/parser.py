@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 from .selectors import PRODUCT_CARD, NAME, SALE, PRICE, LINK, STOCK, DISCOUNT
-from .utils import extrair_consola
+from app.utils.utils import extrair_consola
 
 BASE_URL = "https://www.pressstart.pt/pt/index.php?fc=module&module=leoproductsearch&controller=productsearch&leoproductsearch_static_token=658541fb9c2614f7870540d8c712d5a0&cate=&search_query="
 
@@ -15,23 +15,24 @@ def parse_products(html):
             name_tag = card.select_one(NAME)
             name = name_tag.get_text(strip=True)
             discount_tag = card.select_one(DISCOUNT)
-            has_discount = bool(card.select_one(DISCOUNT))
+            has_discount = bool(discount_tag)
 
             price = None
             sale = None
 
             if has_discount:
-                sale_tag = card.select_one(PRICE)
-                if sale_tag:
-                    sale = parse_price(sale_tag.get_text(strip=True))
+                sale_tag = card.select_one(SALE)
+                price_tag = card.select_one(PRICE)
 
-                price_tag = card.select_one(SALE)
+                if sale_tag:
+                    price = parse_price(sale_tag.get_text(strip=True))
 
                 if price_tag:
-                    price = parse_price(price_tag.get_text(strip=True))
-            
+                    sale = parse_price(price_tag.get_text(strip=True))
+
             else:
-                price_tag = card.select_one(PRICE)
+                price_tag = card.select_one(SALE)
+
                 if price_tag:
                     price = parse_price(price_tag.get_text(strip=True))
 

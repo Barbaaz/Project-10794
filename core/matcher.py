@@ -14,7 +14,13 @@ def match_products(all_products):
         key = build_key(product)
         if not product.get("price"):
             continue
-        groups[key].append(product)
+        exists = any(
+            x["store"] == product["store"] and x["price"] == product["price"]
+            for x in groups[key]
+        )
+
+        if not exists:
+            groups[key].append(product)
 
     # NOVO: transformar para lista organizada
     result = []

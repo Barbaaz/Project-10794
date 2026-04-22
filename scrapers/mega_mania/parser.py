@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 from .selectors import PRODUCT_CARD, NAME, SALE, PRICE, LINK, STOCK, DISCOUNT
-from .utils import extrair_consola
+from app.utils.utils import extrair_consola
 
 BASE_URL = "https://mega-mania.com.pt/pt/catalogo/?f="
 
@@ -23,13 +23,17 @@ def parse_products(html):
 
             if has_discount:
                 sale_tag = card.select_one(SALE)
-                if sale_tag:
-                    sale = parse_price(sale_tag.get_text(strip=True))
                 price_tag = card.select_one(PRICE)
+
+                if sale_tag:
+                    price = parse_price(sale_tag.get_text(strip=True))
+
                 if price_tag:
-                    price = parse_price(price_tag.get_text(strip=True))
+                    sale = parse_price(price_tag.get_text(strip=True))
+
             else:
                 price_tag = card.select_one(SALE)
+
                 if price_tag:
                     price = parse_price(price_tag.get_text(strip=True))
 
@@ -54,8 +58,7 @@ def parse_products(html):
 
             if image_tag:
                 image = image_tag.get("src")
-
-                # 🔥 corrigir URL relativa
+                
                 if image and image.startswith("/"):
                     image = "https://mega-mania.com.pt" + image
 

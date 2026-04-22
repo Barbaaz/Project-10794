@@ -1,287 +1,197 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt" data-bs-theme="light">
 <head>
+    <meta charset="UTF-8">
     <title>Game Price Tracker</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
 </head>
-<body>
-
-<h1>Pesquisar jogos</h1>
-
-<form onsubmit="handleSearch(event)">
-    <input type="text" id="q" placeholder="Ex: resident evil">
-    <select id="consoleFilter">
-    <option value="">Todas as consolas</option>
-    <option value="PS5">PS5</option>
-    <option value="PS4">PS4</option>
-    <option value="Xbox">Xbox</option>
-    <option value="Switch">Switch</option>
-    </select>
-    <button type="submit">Pesquisar</button>
-</form>
-
-<div id="loading" style="display:none; text-align:center;">
-    <div style="
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #3498db;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        animation: spin 1s linear infinite;
-        margin:auto;
-    "></div>
-</div>
 
 <style>
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+.card-img-top {
+    transition: transform 0.3s ease;
+}
+
+.card:hover .card-img-top {
+    transform: scale(1.05);
 }
 </style>
 
-<div id="results"></div>
+<body class="bg-light">
 
-<!-- <script>
+<div class="container py-4">
 
-let currentData = [];
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>🎮 Game Price Tracker</h1>
+        <button onclick="toggleDark()" class="btn btn-sm btn-secondary">🌙</button>
+    </div>
 
-// 🔥 função chamada pelo form
-function handleSearch(event) {
-    event.preventDefault();
-    search();
-}
+    <!-- FORM -->
+    <form class="row g-2 mb-4" onsubmit="handleSearch(event)">
+        <div class="col-md-6">
+            <input type="text" id="q" class="form-control" placeholder="Ex: resident evil">
+        </div>
 
-function render(data) {
+        <div class="col-md-3">
+            <select id="consoleFilter" class="form-select">
+                <option value="">Todas as consolas</option>
+                <option value="PS5">PS5</option>
+                <option value="PS4">PS4</option>
+                <option value="Xbox">Xbox</option>
+                <option value="Switch">Switch</option>
+            </select>
+        </div>
 
-    const container = document.getElementById("results");
+        <div class="col-md-3 d-grid">
+            <button type="submit" class="btn btn-primary">Pesquisar</button>
+        </div>
+    </form>
 
-    container.style.display = "grid";
-    container.style.gridTemplateColumns = "repeat(auto-fill, minmax(250px, 1fr))";
-    container.style.gap = "15px";
-    container.innerHTML = "";
+    <!-- LOADING -->
+    <div id="loading" class="text-center my-4" style="display:none;">
+        <div class="spinner-border text-primary"></div>
+    </div>
 
-    const selectedConsole = document.getElementById("consoleFilter").value;
+    <!-- RESULTADOS -->
+    <div id="results" class="row g-3"></div>
 
-    data.forEach(group => {
-
-        if (selectedConsole && group.console !== selectedConsole) {
-            return;
-        }
-
-        const div = document.createElement("div");
-        div.style.border = "1px solid #ccc";
-        div.style.borderRadius = "10px";
-        div.style.padding = "10px";
-        div.style.background = "#f9f9f9";
-
-        const best = group.offers[0];
-        const bestPrice = best && best.price ? best.price : "N/A";
-
-        const img = document.createElement("img");
-        img.src = best.image || "";
-        img.style.width = "100%";
-        img.style.height = "200px";
-        img.style.objectFit = "cover";
-        img.style.borderRadius = "8px";
-
-        div.appendChild(img);
-
-        const title = document.createElement("h3");
-        title.innerHTML = `
-            ${group.name} (${group.console}) 
-            <span style="color:green;">${bestPrice}€</span>
-        `;
-        div.appendChild(title);
-
-        group.offers.forEach((p, index) => {
-            const item = document.createElement("p");
-
-            item.innerHTML = `
-                🏪 ${p.store} → ${p.price ?? "N/A"}€ 
-                ${p.in_stock ? "✅" : "❌"}
-                ${index === 0 ? "🔥" : ""}
-            `;
-
-            div.appendChild(item);
-        });
-
-        container.appendChild(div);
-    });
-}
-
-// 🔍 função principal
-async function search() {
-
-    document.getElementById("loading").style.display = "block";
-    document.getElementById("results").innerHTML = "";
-
-    const query = document.getElementById("q").value.trim();
-    if (!query) return;
-
-    const res = await fetch(`/search?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-
-    currentData = data;
-
-    render(currentData);   // 🔥 NOVO
-
-    document.getElementById("loading").style.display = "none";
-
-    const selectedConsole = document.getElementById("consoleFilter").value;
-
-    data.forEach(group => {
-
-        if (selectedConsole && group.console !== selectedConsole) {
-            return;
-    }
-
-        const div = document.createElement("div");
-        div.style.border = "1px solid #ccc";
-        div.style.borderRadius = "10px";
-        div.style.padding = "10px";
-        div.style.background = "#f9f9f9";
-
-        const best = group.offers[0];
-        const bestPrice = best && best.price ? best.price : "N/A";
-
-        // 🖼️ IMAGEM
-        const img = document.createElement("img");
-        img.src = best.image || "";
-        img.style.width = "100%";
-        img.style.height = "200px";
-        img.style.objectFit = "cover";
-        img.style.borderRadius = "8px";
-
-        div.appendChild(img);
-
-        // 🧠 TÍTULO
-        const title = document.createElement("h3");
-        title.innerHTML = `
-            ${group.name} (${group.console}) 
-            <span style="color:green;">${bestPrice}€</span>
-        `;
-        div.appendChild(title);
-
-        // 🏪 OFERTAS
-        group.offers.forEach((p, index) => {
-            const isBest = index === 0;
-
-            const item = document.createElement("p");
-
-            item.innerHTML = `
-                🏪 ${p.store} → ${p.price ?? "N/A"}€ 
-                ${p.in_stock ? "✅" : "❌"}
-                ${isBest ? "🔥" : ""}
-            `;
-
-            div.appendChild(item);
-        });
-
-        container.appendChild(div);
-    });
-    document.getElementById("loading").style.display = "none";
-
-    document.getElementById("consoleFilter").addEventListener("change", function() {
-        render(currentData);
-    });
-
-    document.addEventListener("DOMContentLoaded", function() {
-        const filter = document.getElementById("consoleFilter");
-
-        if (filter) {
-            filter.addEventListener("change", function() {
-                render(currentData);
-            });
-        }
-    });
-}
-
-</script> -->
+</div>
 
 <script>
 
 let currentData = [];
+let debounceTimer;
+let favorites = JSON.parse(localStorage.getItem("favorites")) || [];
 
-// 🔥 função chamada pelo form
+// 🔎 pesquisa automática
+document.getElementById("q").addEventListener("input", function () {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(search, 400);
+});
+
+// submit manual
 function handleSearch(event) {
     event.preventDefault();
     search();
 }
 
-// 🎨 render dos resultados
+function formatStoreName(name) {
+    const map = {
+        "mega-mania": "Mega-Mania",
+        "press_start": "Press Start"
+    };
+
+    return map[name] || name;
+}
+
 function render(data) {
 
     const container = document.getElementById("results");
-
-    container.style.display = "grid";
-    container.style.gridTemplateColumns = "repeat(auto-fill, minmax(250px, 1fr))";
-    container.style.gap = "15px";
     container.innerHTML = "";
 
     const selectedConsole = document.getElementById("consoleFilter").value;
 
+    data.sort((a, b) => {
+        const aFav = isFavorite(a.name, a.console);
+        const bFav = isFavorite(b.name, b.console);
+        return bFav - aFav;
+    });
+
     data.forEach(group => {
 
-        if (selectedConsole && group.console !== selectedConsole) {
-            return;
-        }
+        if (selectedConsole && group.console !== selectedConsole) return;
 
-        const div = document.createElement("div");
-        div.style.border = "1px solid #ccc";
-        div.style.borderRadius = "10px";
-        div.style.padding = "10px";
-        div.style.background = "#f9f9f9";
+        // ordenar por preço
+        group.offers.sort((a, b) => {
+            if (a.price == null) return 1;
+            if (b.price == null) return -1;
+            return a.price - b.price;
+        });
 
         const best = group.offers[0];
-        const bestPrice = best && best.price ? best.price : "N/A";
+
+        const col = document.createElement("div");
+        col.className = "col-md-4";
+
+        const card = document.createElement("div");
+        card.className = "card h-100 shadow-sm d-flex flex-column overflow-hidden";
 
         const img = document.createElement("img");
         img.src = best?.image || "";
-        img.style.width = "100%";
-        img.style.height = "200px";
+        img.className = "card-img-top";
+        img.style.aspectRatio = "3 / 4";
         img.style.objectFit = "cover";
-        img.style.borderRadius = "8px";
+        img.style.backgroundColor = "#000";
+        
 
-        div.appendChild(img);
+        const body = document.createElement("div");
+        body.className = "card-body d-flex flex-column";
 
-        const title = document.createElement("h3");
-        title.innerHTML = `
-            ${group.name} (${group.console}) 
-            <span style="color:green;">${bestPrice}€</span>
-        `;
-        div.appendChild(title);
+        const title = document.createElement("h5");
+        title.className = "card-title mb-2";
+        title.style.fontSize = "0.95rem";
+        title.innerHTML = `${group.name} (${group.console})`;
+        title.style.minHeight = "40px";
+
+        const favBtn = document.createElement("button");
+        favBtn.className = "btn btn-sm btn-outline-warning mb-2";
+        favBtn.innerText = isFavorite(group.name, group.console) ? "★ Favorito" : "☆ Favorito";
+
+        favBtn.onclick = () => toggleFavorite(group.name, group.console);
+
+        body.appendChild(favBtn);
+
+        body.appendChild(title);
+
+        const offersContainer = document.createElement("div");
+        offersContainer.className = "flex-grow-1 d-flex flex-column justify-content-end";
 
         group.offers.forEach((p, index) => {
-            const item = document.createElement("p");
 
-            item.innerHTML = `
-                🏪 ${p.store} → ${p.price ?? "N/A"}€ 
-                ${p.in_stock ? "✅" : "❌"}
-                ${index === 0 ? "🔥" : ""}
+            if (index > 0 && p.price === group.offers[0].price && p.store === group.offers[0].store) {
+                return; // 🔥 evita duplicado
+            }
+
+            const item = document.createElement("div");
+            item.className = "mb-2 d-flex flex-column";
+
+            // linha com preço + badge
+            const row = document.createElement("div");
+            row.className = "d-flex justify-content-between align-items-center";
+
+            row.innerHTML = `
+                <span>
+                    ${index === 0 ? '<span class="badge bg-success">Melhor preço</span>' : ''}
+                </span>
+                <strong>${p.price ?? "N/A"}€</strong>
             `;
 
-            // 🔗 BOTÃO VER PRODUTO
+            // botão com nome da loja
             const link = document.createElement("a");
             link.href = p.url;
-            link.target = "_blank"; // abre nova aba
-            link.innerText = "Ver produto";
-            link.style.display = "block";
-            link.style.background = "#3498db";
-            link.style.color = "white";
-            link.style.padding = "5px 10px";
-            link.style.borderRadius = "5px";
-            link.style.textDecoration = "none";
-            link.style.fontSize = "12px";
+            link.target = "_blank";
+            link.innerText = `Ver na ${formatStoreName(p.store)}`;
+            link.className = index === 0
+                ? "btn btn-sm btn-success w-100 mt-auto"
+                : "btn btn-sm btn-outline-primary w-100 mt-auto";
 
+            item.appendChild(row);
             item.appendChild(link);
 
-            div.appendChild(item);
+            offersContainer.appendChild(item);
         });
 
-        container.appendChild(div);
+        body.appendChild(offersContainer);
+
+        card.appendChild(img);
+        card.appendChild(body);
+        col.appendChild(card);
+        container.appendChild(col);
     });
 }
 
-// 🔍 função principal
 async function search() {
 
     document.getElementById("loading").style.display = "block";
@@ -299,7 +209,6 @@ async function search() {
         const data = await res.json();
 
         currentData = data;
-
         render(currentData);
 
     } catch (err) {
@@ -309,10 +218,41 @@ async function search() {
     document.getElementById("loading").style.display = "none";
 }
 
-// 🎛️ filtro por consola (apenas 1 vez!)
+// filtro consola
 document.getElementById("consoleFilter").addEventListener("change", function() {
     render(currentData);
 });
+
+function toggleFavorite(name, console) {
+    const id = name + "_" + console;
+
+    if (favorites.includes(id)) {
+        favorites = favorites.filter(f => f !== id);
+    } else {
+        favorites.push(id);
+    }
+
+    localStorage.setItem("favorites", JSON.stringify(favorites));
+    render(currentData); // re-render
+}
+
+function isFavorite(name, console) {
+    return favorites.includes(name + "_" + console);
+}
+
+// dark mode
+function toggleDark() {
+    const current = document.documentElement.getAttribute("data-bs-theme");
+
+    const newTheme = current === "dark" ? "light" : "dark";
+
+    document.documentElement.setAttribute("data-bs-theme", newTheme);
+    localStorage.setItem("theme", newTheme);
+}
+
+// carregar ao iniciar
+const savedTheme = localStorage.getItem("theme") || "light";
+document.documentElement.setAttribute("data-bs-theme", savedTheme);
 
 </script>
 
