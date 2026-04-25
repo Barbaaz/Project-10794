@@ -17,22 +17,17 @@ def parse_products(html):
             discount_tag = card.select_one(DISCOUNT)
             has_discount = bool(discount_tag)
             price_tag = card.select_one(PRICE)
+            sale_tag = card.select_one(SALE)
 
-            price = None
+            price = parse_price(sale_tag.get_text(strip=True))
             sale = None
 
             if has_discount:
-                sale_tag = card.select_one(SALE)
-
                 if sale_tag:
                     price = parse_price(sale_tag.get_text(strip=True))
 
                 if price_tag:
                     sale = parse_price(price_tag.get_text(strip=True))
-
-            else:
-                if price_tag:
-                    price = parse_price(price_tag.get_text(strip=True))
 
             link_tag = card.select_one(LINK)
             stock_tag = card.select_one(STOCK)

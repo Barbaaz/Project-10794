@@ -25,7 +25,7 @@ def get_recent_products(query, minutes=10):
             "sale": r[4],
             "in_stock": r[5],
             "url": r[6],
-            "image": r[7]   # 🔥 NOVO
+            "image": r[7]
         })
 
     return products

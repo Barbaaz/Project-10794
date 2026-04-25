@@ -21,7 +21,7 @@ def insert_products(products):
             p.get("sale"),
             p.get("in_stock"),
             p.get("url"),
-            p.get("image")   # 🔥 NOVO
+            p.get("image")
             )
 
         conn.commit()

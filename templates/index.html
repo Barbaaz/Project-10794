@@ -151,7 +151,7 @@ function render(data) {
         group.offers.forEach((p, index) => {
 
             if (index > 0 && p.price === group.offers[0].price && p.store === group.offers[0].store) {
-                return; // 🔥 evita duplicado
+                return; //
             }
 
             const item = document.createElement("div");

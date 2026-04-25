@@ -22,7 +22,7 @@ def search():
         print("A usar dados da BD")
         all_products = recent
     else:
-        print("🌐 A fazer scraping")
+        print("A fazer scraping")
         ps = PressStartScraper().run(query)
         mm = MegaManiaScraper().run(query)
 
@@ -33,19 +33,6 @@ def search():
     matched = match_products(all_products)
 
     return jsonify(matched)
-
-    # ps = PressStartScraper().run(query)
-    # mm = MegaManiaScraper().run(query)
-
-    # all_products = ps + mm
-
-    # print("ANTES DB")
-    # insert_products(all_products)
-    # print("DEPOIS DB")
-
-    # matched = match_products(all_products)
-
-    # return jsonify(matched)
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
