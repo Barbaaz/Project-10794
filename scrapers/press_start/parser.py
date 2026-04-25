@@ -16,13 +16,13 @@ def parse_products(html):
             name = name_tag.get_text(strip=True)
             discount_tag = card.select_one(DISCOUNT)
             has_discount = bool(discount_tag)
+            price_tag = card.select_one(PRICE)
 
             price = None
             sale = None
 
             if has_discount:
                 sale_tag = card.select_one(SALE)
-                price_tag = card.select_one(PRICE)
 
                 if sale_tag:
                     price = parse_price(sale_tag.get_text(strip=True))
@@ -31,8 +31,6 @@ def parse_products(html):
                     sale = parse_price(price_tag.get_text(strip=True))
 
             else:
-                price_tag = card.select_one(SALE)
-
                 if price_tag:
                     price = parse_price(price_tag.get_text(strip=True))
 
