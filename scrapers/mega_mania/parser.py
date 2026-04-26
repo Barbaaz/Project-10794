@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 from .selectors import PRODUCT_CARD, NAME, SALE, PRICE, LINK, STOCK, DISCOUNT
 from app.utils.utils import extrair_consola
 
-BASE_URL = "https://mega-mania.com.pt/pt/catalogo/?f="
+BASE_URL = "https://mega-mania.com.pt/pt/catalogo/?p=1&f="
 
 def parse_products(html):
     soup = BeautifulSoup(html, "html.parser")
@@ -17,25 +17,23 @@ def parse_products(html):
             console = extrair_consola(name)
             discount_tag = card.select_one(DISCOUNT)
             has_discount = bool(discount_tag)
+            price_tag = card.select_one(PRICE)
+            sale_tag = card.select_one(SALE)
 
             price = None
             sale = None
 
-            if has_discount:
-                sale_tag = card.select_one(SALE)
-                price_tag = card.select_one(PRICE)
-
-                if sale_tag:
-                    price = parse_price(sale_tag.get_text(strip=True))
-
+            if sale_tag:
+                price = parse_price(sale_tag.get_text(strip=True))
+            
                 if price_tag:
                     sale = parse_price(price_tag.get_text(strip=True))
-
+            
             else:
-                price_tag = card.select_one(SALE)
-
                 if price_tag:
                     price = parse_price(price_tag.get_text(strip=True))
+                elif sale_tag:
+                    price = parse_price(sale_tag.get_text(strip=True))
 
             link_tag = card.select_one(LINK)
 

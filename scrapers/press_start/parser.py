@@ -18,19 +18,27 @@ def parse_products(html):
             has_discount = bool(discount_tag)
             price_tag = card.select_one(PRICE)
             sale_tag = card.select_one(SALE)
+            console = extrair_consola(name)
+            image_tag = card.select_one(".thumbnail img")
+            link_tag = card.select_one(LINK)
+            link = link_tag["href"]
+            stock_tag = card.select_one(STOCK)
 
-            price = parse_price(sale_tag.get_text(strip=True))
+            price = None
             sale = None
 
             if has_discount:
                 if sale_tag:
                     price = parse_price(sale_tag.get_text(strip=True))
-
+                
                 if price_tag:
                     sale = parse_price(price_tag.get_text(strip=True))
-
-            link_tag = card.select_one(LINK)
-            stock_tag = card.select_one(STOCK)
+            
+            else:
+                if price_tag:
+                    price = parse_price(price_tag.get_text(strip=True))
+                elif sale_tag:
+                    price = parse_price(sale_tag.get_text(strip=True))
 
             in_stock = True
 
@@ -40,19 +48,12 @@ def parse_products(html):
                 if any('low-stock' in c for c in classes):
                     in_stock = False
 
-            console = extrair_consola(name)
             if not console:
                 continue
-
-            link = link_tag["href"]
 
             in_stock = parse_stock(card)
             if not in_stock:
                 continue
-            
-            name = name_tag.get_text(strip=True)
-
-            image_tag = card.select_one(".thumbnail img")
 
             image = None
 

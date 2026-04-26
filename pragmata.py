@@ -3,10 +3,15 @@ import requests
 import re
 from collections import defaultdict
 
-BASE_URL = 'https://www.pressstart.pt/pt/index.php?fc=module&module=leoproductsearch&controller=productsearch&leoproductsearch_static_token=658541fb9c2614f7870540d8c712d5a0&cate=&search_query='
+# BASE_URL = 'https://www.pressstart.pt/pt/index.php?fc=module&module=leoproductsearch&controller=productsearch&leoproductsearch_static_token=658541fb9c2614f7870540d8c712d5a0&cate=&search_query='
 
-nome_jogo = 'Resident Evil'
-query = nome_jogo.replace(' ', '+').lower()
+BASE_URL = 'https://mega-mania.com.pt/pt/catalogo/?f='
+
+nome_jogo = 'hell is us ps5'
+# query = nome_jogo.replace(' ', '+').lower()
+
+query = nome_jogo.replace(' ', '%20').lower()
+query = query + '&ppage=50'
 
 url = f'{BASE_URL}{query}'
 
