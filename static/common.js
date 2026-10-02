@@ -99,3 +99,7 @@ async function showUnreadCount() {
         link.setAttribute("aria-label", `${t("messages")} (${t("unread_count", { count })})`);
     }
 }
+
+function forget(key, storage = "localStorage") {
+    try { window[storage].removeItem(key); } catch (e) {}
+}

@@ -7,7 +7,8 @@ from helpers import HEADERS
 
 @pytest.fixture
 def client(web_client, test_db):
-    test_db.conn.cursor().execute("DELETE FROM users")
+    for table in ("user_favorites", "users"):
+        test_db.conn.cursor().execute(f"DELETE FROM {table}")
     auth_service._failures.clear()
     return web_client
 

@@ -117,16 +117,24 @@ def record_merges(cursor, moves):
     """
     merged = {}
     for kind, table in (("game", "games"), ("edition", "game_editions")):
+        # left without store products: merged, whatever users point to (that moves along below)
         orphans = {r[0] for r in cursor.execute(f"""
             SELECT t.id FROM {table} t
-            WHERE NOT EXISTS (SELECT 1 FROM store_products sp WHERE sp.{kind}_id = t.id)
-              AND NOT EXISTS (SELECT 1 FROM user_listings ul WHERE ul.{kind}_id = t.id)""").fetchall()}
+            WHERE NOT EXISTS (SELECT 1 FROM store_products sp WHERE sp.{kind}_id = t.id)""").fetchall()}
         merged[kind] = {old: targets.most_common(1)[0][0] for old, targets in moves[kind].items() if old in orphans}
 
         for old, new in merged[kind].items():
             cursor.execute("UPDATE merged_ids SET new_id = ? WHERE kind = ? AND new_id = ?", new, kind, old)
             cursor.execute("DELETE FROM merged_ids WHERE kind = ? AND old_id = ?", kind, old)
             cursor.execute("INSERT INTO merged_ids (kind, old_id, new_id) VALUES (?, ?, ?)", kind, old, new)
+            # what users point to moves to the one that replaced it: listings, favourites
+            cursor.execute(f"UPDATE user_listings SET {kind}_id = ? WHERE {kind}_id = ?", new, old)
+            if kind == "edition":
+                cursor.execute(
+                    "INSERT INTO user_favorites (user_id, edition_id) SELECT f.user_id, ? FROM user_favorites f "
+                    "WHERE f.edition_id = ? AND NOT EXISTS (SELECT 1 FROM user_favorites x "
+                    "WHERE x.user_id = f.user_id AND x.edition_id = ?)", new, old, new)
+                cursor.execute("DELETE FROM user_favorites WHERE edition_id = ?", old)
 
     columns = ", ".join(f"{c} = old.{c}" for c in (*IGDB_COLUMNS, "igdb_checked_at"))
     for old, new in merged["game"].items():
@@ -177,6 +185,7 @@ def delete_orphans(cursor):
         DELETE e FROM game_editions e
         WHERE NOT EXISTS (SELECT 1 FROM store_products sp WHERE sp.edition_id = e.id)
           AND NOT EXISTS (SELECT 1 FROM user_listings ul WHERE ul.edition_id = e.id)
+          AND NOT EXISTS (SELECT 1 FROM user_favorites f WHERE f.edition_id = e.id)
     """)
     editions = cursor.rowcount
 

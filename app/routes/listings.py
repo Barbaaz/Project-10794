@@ -6,7 +6,7 @@ New listings and new photos are sent as multipart/form-data (fields + "photos" f
 from flask import Blueprint, jsonify, request
 
 from app.routes.auth import current_user, login_required
-from app.routes.params import int_arg
+from app.routes.params import choice_arg, int_arg, text_arg
 from app.services import listing_service
 from app.services.listing_service import ListingError
 
@@ -23,9 +23,19 @@ def uploaded_photos():
 
 
 @bp.get("")
-def for_game():
-    """/api/listings?game_id=12: the game's listings everyone can see."""
-    return jsonify(listing_service.listings_for_game(int_arg("game_id", 0, minimum=1)))
+def for_game_or_all():
+    """
+    /api/listings?game_id=12: that game's listings everyone can see (a list).
+    /api/listings?platform=PS5&sort=newest|price_asc|price_desc&page=1&per_page=48: every
+    active listing, paged (the market tab).
+    """
+    game_id = int_arg("game_id", None, minimum=1)
+    if game_id:
+        return jsonify(listing_service.listings_for_game(game_id))
+    return jsonify(listing_service.browse(
+        text_arg("platform"), choice_arg("sort", "newest", listing_service.BROWSE_SORTS),
+        int_arg("page", 1, minimum=1), int_arg("per_page", 48, minimum=1, maximum=100),
+    ))
 
 
 @bp.get("/mine")

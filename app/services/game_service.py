@@ -4,6 +4,7 @@ import re
 from app.services.common import (
     EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, card_group, lowest_prices, page_result, title_word_filters,
 )
+from app.services.listing_service import used_summaries
 from app.services.release_service import game_release_date, game_release_dates
 from db import fetch_all, fetch_one, placeholders
 
@@ -240,9 +241,10 @@ def editions_with_offers(edition_ids):
         o["restocked_at"] = restocked.get(o["offer_id"]) if o["in_stock"] else None
 
     order = {edition_id: i for i, edition_id in enumerate(edition_ids)}
+    used = used_summaries(edition_ids)
     return [
         card_group(e, [o for o in offers if o["edition_id"] == e["edition_id"]],
-                   image=e["image"], lowest_price=lowest.get(e["edition_id"]))
+                   image=e["image"], lowest_price=lowest.get(e["edition_id"]), used=used.get(e["edition_id"]))
         for e in sorted(editions, key=lambda e: order[e["edition_id"]])
     ]
 
@@ -256,12 +258,15 @@ CATALOG_SORTS = {
 
 def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False, q=None, store=None):
     """
-    The whole catalogue: every edition with at least one offer in stock, as card groups
-    (same shape as /search), one page at a time. sort: name / price_asc / price_desc.
+    The whole catalogue: every edition with at least one offer in stock at a store or a used
+    copy for sale by a user, as card groups (same shape as /search), one page at a time; each
+    group has `used` ({count, price, listing_id}) when users sell it. sort: name / price_asc /
+    price_desc (the lowest price, store or used).
     special_only: only editions above Standard (Deluxe, Collector's, Steelbook...). Keys are
     "" for Standard and "|Game Key Card" for a Standard that only differs in format.
     q: every word must be in the game's title (the search uses this).
-    store: only editions this store has in stock (all stores' offers are still shown, to compare).
+    store: only editions this store has in stock (all stores' offers and used copies are still
+    shown, to compare).
     """
     order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS["name"])
     in_stock_editions = f"""
@@ -270,7 +275,14 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             FROM store_products sp {LATEST_PRICE}
             WHERE sp.is_active = 1 AND last.in_stock = 1 AND sp.edition_id IS NOT NULL
         ),
-        ed AS (SELECT edition_id, MIN(price) AS best_price FROM offers GROUP BY edition_id)
+        used AS (
+            SELECT edition_id, price FROM user_listings WHERE status = 'active' AND edition_id IS NOT NULL
+        ),
+        ed AS (
+            SELECT edition_id, MIN(price) AS best_price
+            FROM (SELECT edition_id, price FROM offers UNION ALL SELECT edition_id, price FROM used) x
+            GROUP BY edition_id
+        )
     """
     filters, params = ["(? IS NULL OR p.code = ?)"], [platform, platform]
     if special_only:
@@ -296,7 +308,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
 
     page_editions = fetch_all(
         f"""{in_stock_editions}
-        SELECT {EDITION_CARD_COLUMNS}
+        SELECT {EDITION_CARD_COLUMNS}, g.image_url AS image
         FROM ed
         JOIN game_editions e ON e.id = ed.edition_id
         JOIN games g ON g.id = e.game_id
@@ -320,7 +332,10 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             """,
             *ids,
         )
-        groups = [card_group(e, [o for o in offers if o["edition_id"] == e["edition_id"]]) for e in page_editions]
+        used = used_summaries(ids)
+        groups = [card_group(e, [o for o in offers if o["edition_id"] == e["edition_id"]],
+                             image=e["image"], used=used.get(e["edition_id"]))
+                  for e in page_editions]
 
         # Games not out yet: their release date, so the card can say so
         pre_order_games = {g["game_id"] for g in groups if g["offers"] and all(o["is_preorder"] for o in g["offers"])}

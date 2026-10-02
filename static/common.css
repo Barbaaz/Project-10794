@@ -8,3 +8,7 @@
 .listing-card { color: inherit; }
 .listing-card img { aspect-ratio: 4 / 3; object-fit: cover; background: var(--bs-secondary-bg); }
 .listing-card:hover { border-color: var(--bs-primary); }
+
+/* Copies users sell, next to the store prices on catalogue cards: a colour of their own */
+.btn-used { --bs-btn-color: #fff; --bs-btn-bg: #6f42c1; --bs-btn-border-color: #6f42c1;
+            --bs-btn-hover-color: #fff; --bs-btn-hover-bg: #59339d; --bs-btn-hover-border-color: #59339d; }

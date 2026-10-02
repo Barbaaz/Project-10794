@@ -29,7 +29,7 @@ const STRINGS = {
         empty_releases: "Ainda sem datas de lançamento anunciadas.",
         empty_catalog: "Sem jogos em stock para esta plataforma.",
         empty_special: "Sem edições especiais em stock para esta plataforma.",
-        empty_favorites: "Ainda não tens favoritos. Carrega na ☆ de um jogo para o acompanhares aqui.",
+        empty_favorites: "Ainda não tem favoritos. Carregue na ☆ de um jogo para o acompanhar aqui.",
         empty_platform: "Nada para esta plataforma.",
         store_deals_intro: "<strong>Melhores preços entre lojas.</strong> Ainda não há descontos reais para mostrar (o preço tem de estar abaixo do mais baixo dos 30 dias anteriores, e o histórico começou a 1 de outubro). Entretanto, estes jogos estão bem mais baratos numa loja do que na seguinte.",
         vs_other_stores: "-{percent}% vs outras lojas",
@@ -53,9 +53,9 @@ const STRINGS = {
         today: "Hoje",
 
         // catalogue
-        catalog_count: "{count} edições em stock · página {page} de {pages}",
-        special_count: "{count} edições especiais em stock · página {page} de {pages}",
-        search_count: "{count} edições em stock para «{query}» · página {page} de {pages}",
+        catalog_count: "{count} edições à venda · página {page} de {pages}",
+        special_count: "{count} edições especiais à venda · página {page} de {pages}",
+        search_count: "{count} edições à venda para «{query}» · página {page} de {pages}",
         store_filter: "Loja:",
         all_stores: "Todas as lojas",
 
@@ -86,6 +86,14 @@ const STRINGS = {
 
         // marketplace
         market_title: "À venda por utilizadores",
+        tab_market: "👤 Usados",
+        empty_favorites_logged_out: "Os favoritos ficam na sua conta: entre (botão Entrar, em cima) para os ver e guardar.",
+        error_favorites_full: "Já tem 200 favoritos, o máximo. Retire algum primeiro.",
+        empty_market: "Ainda ninguém pôs jogos à venda. Seja o primeiro!",
+        market_count: "{count} jogos à venda por utilizadores · página {page} de {pages}",
+        sort_newest: "Mais recentes",
+        used_from_users: "Usados ({count})",
+        used_title: "{count} à venda por utilizadores",
         market_sell_this: "Vender este jogo",
         market_sell: "Vender um jogo",
         market_empty: "Ninguém está a vender este jogo. Seja o primeiro!",
@@ -316,9 +324,9 @@ const STRINGS = {
         editions_count: "{count} editions",
         today: "Today",
 
-        catalog_count: "{count} editions in stock · page {page} of {pages}",
-        special_count: "{count} special editions in stock · page {page} of {pages}",
-        search_count: "{count} editions in stock for “{query}” · page {page} of {pages}",
+        catalog_count: "{count} editions for sale · page {page} of {pages}",
+        special_count: "{count} special editions for sale · page {page} of {pages}",
+        search_count: "{count} editions for sale for “{query}” · page {page} of {pages}",
         store_filter: "Store:",
         all_stores: "All stores",
 
@@ -349,6 +357,14 @@ const STRINGS = {
 
         // marketplace
         market_title: "For sale by users",
+        tab_market: "👤 Used",
+        empty_favorites_logged_out: "Favourites are kept in your account: log in (button at the top) to see and save them.",
+        error_favorites_full: "You already have 200 favourites, the maximum. Remove one first.",
+        empty_market: "Nobody is selling games yet. Be the first!",
+        market_count: "{count} games for sale by users · page {page} of {pages}",
+        sort_newest: "Newest",
+        used_from_users: "Used ({count})",
+        used_title: "{count} for sale by users",
         market_sell_this: "Sell this game",
         market_sell: "Sell a game",
         market_empty: "Nobody is selling this game yet. Be the first!",

@@ -7,7 +7,8 @@ from pipeline.matcher import GameMatcher, same_with_typos
 @pytest.fixture
 def cursor(test_db):
     c = test_db.conn.cursor()
-    for table in ("merged_ids", "price_snapshots", "store_products", "game_editions", "games"):
+    for table in ("merged_ids", "messages", "conversations", "listing_photos", "user_listings", "user_favorites",
+                  "users", "price_snapshots", "store_products", "game_editions", "games"):
         c.execute(f"DELETE FROM {table}")
     return c
 
@@ -88,8 +89,17 @@ def test_rematch_merges_duplicates_and_records_redirects(cursor, app_on_test_db)
     full_game, full_edition = product("Doom: The Dark Ages PS5", "https://x/2")
     cursor.execute("UPDATE games SET igdb_id = 77, summary = 'Fight.' WHERE id = ?", short_game)
     assert short_game != full_game
+    # a user's favourite and listing on the copy that will be merged
+    user = cursor.execute("INSERT INTO users (username, email, display_name) OUTPUT INSERTED.id "
+                          "VALUES ('fan', 'fan@x.pt', 'Fan')").fetchone()[0]
+    cursor.execute("INSERT INTO user_favorites (user_id, edition_id) VALUES (?, ?)", user, short_edition)
+    cursor.execute("INSERT INTO user_listings (user_id, game_id, edition_id, price, condition) VALUES (?, ?, ?, 20, 'good')",
+                   user, short_game, short_edition)
 
     rematch_all()
+
+    assert cursor.execute("SELECT edition_id FROM user_favorites WHERE user_id = ?", user).fetchone()[0] == full_edition
+    assert tuple(cursor.execute("SELECT game_id, edition_id FROM user_listings WHERE user_id = ?", user).fetchone())         == (full_game, full_edition)
 
     rows = cursor.execute("SELECT DISTINCT game_id FROM store_products").fetchall()
     assert [r[0] for r in rows] == [full_game]

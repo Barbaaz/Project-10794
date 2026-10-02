@@ -5,6 +5,7 @@ Only the seller changes a listing. A listing always has MIN_PHOTOS..MAX_PHOTOS p
 from decimal import Decimal, InvalidOperation
 
 from app.services.photo_storage import PhotoError, process_photo, storage
+from app.services.common import page_result
 from db import connection, fetch_all, fetch_one, placeholders
 
 CONDITIONS = ("new", "like_new", "good", "fair", "poor")
@@ -66,6 +67,45 @@ def listings_for_game(game_id):
         game_id,
     )
     return _with_photos(rows)
+
+
+BROWSE_SORTS = {
+    "newest": "l.created_at DESC, l.id DESC",
+    "price_asc": "l.price, l.created_at DESC",
+    "price_desc": "l.price DESC, l.created_at DESC",
+}
+
+
+def browse(platform=None, sort="newest", page=1, per_page=48):
+    """The market tab: every active listing (optionally one platform's), one page at a time."""
+    where = "l.status = 'active' AND (? IS NULL OR p.code = ?)"
+    total = fetch_one(f"SELECT COUNT(*) AS total {LISTING_JOINS} WHERE {where}", platform, platform)["total"]
+    rows = fetch_all(
+        f"SELECT {LISTING_COLUMNS} {LISTING_JOINS} WHERE {where} "
+        f"ORDER BY {BROWSE_SORTS.get(sort, BROWSE_SORTS['newest'])} OFFSET ? ROWS FETCH NEXT ? ROWS ONLY",
+        platform, platform, (page - 1) * per_page, per_page,
+    )
+    return page_result(page, per_page, total, listings=_with_photos(rows))
+
+
+def used_summaries(edition_ids):
+    """
+    {edition_id: {count, price, listing_id}}: the active listings of these editions, for the
+    "Used" button on catalogue cards: how many, the lowest price and that listing.
+    """
+    if not edition_ids:
+        return {}
+    rows = fetch_all(
+        f"""
+        SELECT edition_id, COUNT(*) OVER (PARTITION BY edition_id) AS count, price, id AS listing_id,
+               ROW_NUMBER() OVER (PARTITION BY edition_id ORDER BY price, id) AS rn
+        FROM user_listings
+        WHERE status = 'active' AND edition_id IN ({placeholders(edition_ids)})
+        """,
+        *edition_ids,
+    )
+    return {r["edition_id"]: {"count": r["count"], "price": r["price"], "listing_id": r["listing_id"]}
+            for r in rows if r["rn"] == 1}
 
 
 def my_listings(user_id):

@@ -331,3 +331,14 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_messages_conversation')
     CREATE INDEX ix_messages_conversation ON dbo.messages (conversation_id, id);
 GO
+
+-- Favourite editions, per account (before accounts they were kept in the browser; the page
+-- moves those into the account at the first log-in)
+IF OBJECT_ID('dbo.user_favorites', 'U') IS NULL
+CREATE TABLE dbo.user_favorites (
+    user_id     INT        NOT NULL REFERENCES dbo.users(id),
+    edition_id  INT        NOT NULL REFERENCES dbo.game_editions(id),
+    created_at  DATETIME2  NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT pk_user_favorites PRIMARY KEY (user_id, edition_id)
+);
+GO

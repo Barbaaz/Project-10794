@@ -10,6 +10,7 @@
     <link href="/static/common.css" rel="stylesheet">
     <script src="/static/common.js"></script>
     <script src="/static/i18n.js"></script>
+    <script src="/static/market.js"></script>
 
     <style>
         .game-card .cover-link { display: block; overflow: hidden; background: #000; }
@@ -87,6 +88,7 @@
             <li class="nav-item"><button class="nav-link" data-tab="releases" role="tab" data-i18n="tab_releases"></button></li>
             <li class="nav-item"><button class="nav-link" data-tab="catalog" role="tab" data-i18n="tab_catalog"></button></li>
             <li class="nav-item"><button class="nav-link" data-tab="special" role="tab" data-i18n="tab_special"></button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="market" role="tab" data-i18n="tab_market"></button></li>
             <li class="nav-item"><button class="nav-link" data-tab="favorites" role="tab" data-i18n="tab_favorites"></button></li>
         </ul>
         <div id="front-loading" class="text-center my-4 d-none"><div class="spinner-border text-primary"></div></div>
@@ -110,7 +112,7 @@ const MAX_OFFERS = 3;   // offers shown on a card; the game page has all of them
 let currentData = null;     // the search results on screen (a catalogue page)
 let hasSearched = false;
 let stores = {};
-let favorites = savedJSON("favoriteEditions", []).filter(Number.isInteger);
+let favorites = [];     // the logged-in user's favourite edition ids (kept in the account: loadFavoriteIds)
 // esc(), storeName(), saved() / save(), toggleDark(): static/common.js
 
 function handleSearch(event) {
@@ -127,8 +129,11 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
     const best = offers[0];
     const gameUrl = `/game/${group.game_id}`;
 
-    // Cheapest store in stock in green, the others outlined; each opens the product on the store's site
-    const rows = offers.slice(0, MAX_OFFERS).map((o, i) => `
+    // Cheapest store in stock in green, the others grey; each opens the product on the store's site.
+    // Copies users sell take one of the spots, in price order, in their own colour (see usedButton)
+    const used = group.used;
+    const storeSpots = used ? MAX_OFFERS - 1 : MAX_OFFERS;
+    const storeRows = offers.slice(0, storeSpots).map((o, i) => ({ price: o.price, html: `
         <a href="${esc(o.url)}" target="_blank" rel="noopener"
            class="btn offer-btn ${i === 0 && o.in_stock ? "btn-success" : "btn-secondary"} ${o.in_stock ? "" : "opacity-75"}"
            title="${esc(t("view_at", { store: storeName(o.store) }))}">
@@ -137,11 +142,13 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
                 ${o.discount_percent && !coverBadge ? `<span class="badge text-bg-danger">-${o.discount_percent}%</span>` : ""}
                 ${o.was_price ? `<span class="was">${eur.format(o.was_price)}</span>` : ""}${eur.format(o.price)}
             </span>
-        </a>`).join("");
+        </a>` }));
+    if (used) storeRows.push({ price: used.price, html: usedButton(group) });
+    const rows = storeRows.sort((a, b) => a.price - b.price).map(r => r.html).join("");
 
-    const more = offers.length > MAX_OFFERS
-        ? `<a href="${gameUrl}" class="btn btn-primary offer-btn justify-content-center">${t("see_all_stores", { count: offers.length - MAX_OFFERS })}</a>`
-        : offers.length ? "" : `<div class="small text-body-secondary">${t("no_offers")}</div>`;
+    const more = offers.length > storeSpots
+        ? `<a href="${gameUrl}" class="btn btn-primary offer-btn justify-content-center">${t("see_all_stores", { count: offers.length - storeSpots })}</a>`
+        : offers.length || used ? "" : `<div class="small text-body-secondary">${t("no_offers")}</div>`;
 
     const col = document.createElement("div");
     col.className = "col";
@@ -162,6 +169,17 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
         </div>`;
     col.querySelector(".fav-btn").onclick = () => toggleFavorite(group);
     return col;
+}
+
+// "👤 Usados (2) · 18,99 €": the copies users sell; one → that listing, several → the game page's list
+function usedButton(group) {
+    const { count, price, listing_id } = group.used;
+    const href = count === 1 ? `/listing/${listing_id}` : `/game/${group.game_id}#market`;
+    return `
+        <a href="${href}" class="btn offer-btn btn-used" title="${esc(t("used_title", { count }))}">
+            <span class="store">👤 ${esc(t("used_from_users", { count }))}</span>
+            <span class="price">${eur.format(price)}</span>
+        </a>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -267,6 +285,53 @@ async function loadCatalogPage(special, platform, page) {
 
 // The catalogue tabs and the search results: count, store filter, sort, cards, page buttons.
 // showPage(n) loads page n again with the current filters (the tab's or the search's)
+// ---------------------------------------------------------------------------
+// Market tab: every game users sell (active listings), 48 at a time, newest first or by price
+// ---------------------------------------------------------------------------
+let marketSort = saved("marketSort", "newest");
+
+async function loadMarketPage(platform, page) {
+    const params = new URLSearchParams({ sort: marketSort, page, per_page: CATALOG_PAGE });
+    if (platform) params.set("platform", platform);
+    const data = await fetch(`/api/listings?${params}`).then(r => r.json());
+    return { ...data, groups: data.listings, platform };   // "groups": what renderFront checks for content
+}
+
+async function showMarketPage(page) {
+    frontData.market = await loadMarketPage(frontData.market.platform, page);
+    setPageUrl(listUrl({ tab: "market" }, page));
+    renderFront();
+    document.getElementById("front").scrollIntoView({ block: "start" });
+}
+
+function renderMarket(data) {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <span class="small text-body-secondary me-auto">${esc(t("market_count",
+                { count: fmtNumber(data.total), page: data.page, pages: data.pages }))}</span>
+            <a href="/sell" class="btn btn-sm btn-success">${t("market_sell")}</a>
+            <label class="small text-body-secondary" for="market-sort">${t("sort")}</label>
+            <select id="market-sort" class="form-select form-select-sm w-auto">
+                <option value="newest">${t("sort_newest")}</option>
+                <option value="price_asc">${t("sort_price_asc")}</option>
+                <option value="price_desc">${t("sort_price_desc")}</option>
+            </select>
+        </div>
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-2">
+            ${data.listings.map(l => listingCard(l, { showGame: true })).join("")}
+        </div>`;
+    const select = wrap.querySelector("#market-sort");
+    select.value = marketSort;
+    select.onchange = () => {
+        marketSort = select.value;
+        save("marketSort", marketSort);
+        showMarketPage(1);
+    };
+    wrap.appendChild(pagination(data.page, data.pages, showMarketPage));
+    return wrap;
+}
+
 function renderCatalog(data, showPage = showCatalogPage) {
     const count = { count: fmtNumber(data.total), page: data.page, pages: data.pages, query: data.query };
     const storeOptions = Object.values(stores)      // active stores (/api/stores)
@@ -337,12 +402,24 @@ const FRONT_TABS = {
     releases: { url: "/api/releases", render: renderReleases, empty: "empty_releases" },
     catalog: catalogTab(false, "empty_catalog"),
     special: catalogTab(true, "empty_special"),
+    market: {
+        platformAware: true,
+        paged: true,
+        load: platform => {
+            const page = pageFromUrl;
+            pageFromUrl = 1;    // only for the first load
+            return loadMarketPage(platform, page);
+        },
+        render: renderMarket,
+        empty: "empty_market",
+    },
     favorites: {
         // the list changes as the visitor stars games, so it's fetched every time
         load: () => loadFavorites(),
         fresh: true,
         render: renderFavorites,
-        empty: "empty_favorites",
+        // logged out there's nothing to show: favourites belong to an account
+        get empty() { return currentUser ? "empty_favorites" : "empty_favorites_logged_out"; },
     },
 };
 const frontData = {};      // tab → data, loaded once per visit
@@ -737,27 +814,41 @@ function renderStoreStatus(storeList) {
         `${t("status_intro")} ${parts.join(" · ")}`;
 }
 
-// The favourite editions with their offers. When two editions were merged into one
-// (duplicates cleaned up), the answer says which saved id it replaces: keep the new id
-async function loadFavorites() {
-    const groups = await fetch(`/api/games/editions?ids=${favorites.join(",")}`).then(r => r.json());
-    const replaced = new Map(groups.flatMap(g => (g.merged_from || []).map(old => [old, g.edition_id])));
-    if (replaced.size) {
-        favorites = [...new Set(favorites.map(id => replaced.get(id) ?? id))];
-        save("favoriteEditions", favorites);
+// Favourites are game editions, kept in the user's account. Before accounts they were kept
+// in this browser ("favoriteEditions"): those move into the account at the first log-in.
+const BROWSER_FAVORITES = "favoriteEditions";
+
+async function loadFavoriteIds() {
+    favorites = [];
+    if (!currentUser) return;
+    const fromBrowser = savedJSON(BROWSER_FAVORITES, []).filter(Number.isInteger);
+    if (fromBrowser.length) {
+        const { ok, data } = await api("/api/favorites/import", { body: { ids: fromBrowser } });
+        if (ok) {
+            forget(BROWSER_FAVORITES);
+            favorites = data;
+            return;
+        }
     }
-    return groups;
+    favorites = await fetch("/api/favorites").then(r => r.ok ? r.json() : []).catch(() => []);
 }
 
-// Favourites are game editions, saved in this browser by edition id
+// The favourite editions with their offers (cards)
+function loadFavorites() {
+    return fetch(`/api/games/editions?ids=${favorites.join(",")}`).then(r => r.json());
+}
+
 function isFavorite(group) {
     return favorites.includes(group.edition_id);
 }
 
-function toggleFavorite(group) {
+// The star: logged out, it asks to log in first (favourites belong to an account)
+async function toggleFavorite(group) {
+    if (!currentUser) return location.assign(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
     const id = group.edition_id;
-    favorites = favorites.includes(id) ? favorites.filter(f => f !== id) : [...favorites, id];
-    save("favoriteEditions", favorites);
+    const { ok, data } = await api(`/api/favorites/${id}`, { method: favorites.includes(id) ? "DELETE" : "PUT" });
+    if (!ok) return;
+    favorites = data;
 
     if (hasSearched) return renderSearch();
     if (frontTab === "favorites") frontData.favorites = (frontData.favorites || []).filter(g => favorites.includes(g.edition_id));
@@ -765,10 +856,13 @@ function toggleFavorite(group) {
 }
 
 applyI18n();
-renderAccountArea();
 
+// Who's logged in first (their favourites mark the stars), then the filters and the page;
 // /?q=zelda opens with that search, so searches can be bookmarked or shared
-loadFilters().then(() => {
+(async () => {
+    await renderAccountArea();
+    await loadFavoriteIds();
+    await loadFilters();
     const params = new URLSearchParams(location.search);
     const q = params.get("q");
     if (q) {
@@ -778,7 +872,7 @@ loadFilters().then(() => {
     // after loadFilters, so the cards show store names
     selectFrontTab(frontTab);
     loadRestockAlerts();
-});
+})();
 </script>
 </body>
 </html>
