@@ -4,22 +4,9 @@ import io
 import pytest
 from PIL import Image
 
-from app.services import auth_service, photo_storage
+from app.services import photo_storage
 from app.services.photo_storage import PhotoError, process_photo
-
-HEADERS = {"X-Requested-With": "fetch"}
-
-
-def jpeg(width=2400, height=1800, gps=False):
-    """A photo like a phone's: big, optionally with the place it was taken in its EXIF data."""
-    image = Image.new("RGB", (width, height), (200, 30, 30))
-    exif = Image.Exif()
-    if gps:
-        exif[0x8825] = {1: "N", 2: (38.0, 42.0, 0.0), 3: "W", 4: (9.0, 8.0, 0.0)}   # GPSInfo: Lisbon
-        exif[0x0110] = "Phone Model X"                                            # Model
-    out = io.BytesIO()
-    image.save(out, "JPEG", exif=exif)
-    return out.getvalue()
+from helpers import HEADERS, jpeg, new_listing, sign_up
 
 
 def png():
@@ -51,44 +38,6 @@ def test_only_real_images_are_accepted():
 
 
 # --- listings through the API ------------------------------------------------------------------
-
-@pytest.fixture
-def market(web_client, test_db, tmp_path, monkeypatch):
-    """A game with two editions, two users (seller logged in), photos stored in tmp_path."""
-    monkeypatch.setattr(photo_storage.storage, "root", tmp_path)
-    c = test_db.conn.cursor()
-    for table in ("listing_photos", "user_listings", "users"):
-        c.execute(f"DELETE FROM {table}")
-    auth_service._failures.clear()
-    ps5 = c.execute("SELECT id FROM platforms WHERE code = 'PS5'").fetchone()[0]
-    game = c.execute("INSERT INTO games (platform_id, title, normalized_title) OUTPUT INSERTED.id "
-                     "VALUES (?, 'Market Test Game', 'market test game')", ps5).fetchone()[0]
-    standard = c.execute("INSERT INTO game_editions (game_id, edition_key, name) OUTPUT INSERTED.id "
-                         "VALUES (?, '', 'Standard')", game).fetchone()[0]
-    other_game = c.execute("INSERT INTO games (platform_id, title, normalized_title) OUTPUT INSERTED.id "
-                           "VALUES (?, 'Other Game', 'other game')", ps5).fetchone()[0]
-    other_edition = c.execute("INSERT INTO game_editions (game_id, edition_key, name) OUTPUT INSERTED.id "
-                              "VALUES (?, '', 'Standard')", other_game).fetchone()[0]
-    yield {"client": web_client, "game": game, "edition": standard, "other_edition": other_edition, "dir": tmp_path}
-    for table in ("listing_photos", "user_listings", "users"):
-        c.execute(f"DELETE FROM {table}")
-    c.execute("DELETE FROM game_editions WHERE game_id IN (?, ?)", game, other_game)
-    c.execute("DELETE FROM games WHERE id IN (?, ?)", game, other_game)
-
-
-def sign_up(client, username):
-    response = client.post("/api/auth/register", headers=HEADERS,
-                           json={"username": username, "email": f"{username}@example.pt", "password": "segredo123"})
-    assert response.status_code == 201
-    return response.get_json()
-
-
-def new_listing(m, photos=3, **fields):
-    data = {"game_id": m["game"], "edition_id": m["edition"], "price": "24.90", "condition": "good",
-            "description": "Jogado uma vez.", **fields}
-    data["photos"] = [(io.BytesIO(jpeg(gps=True)), f"p{i}.jpg") for i in range(photos)]
-    return m["client"].post("/api/listings", data=data, headers=HEADERS, content_type="multipart/form-data")
-
 
 def test_selling_needs_an_account(market):
     assert new_listing(market).status_code == 401

@@ -2,8 +2,7 @@
 import pytest
 
 from app.services import auth_service
-
-HEADERS = {"X-Requested-With": "fetch"}
+from helpers import HEADERS
 
 
 @pytest.fixture

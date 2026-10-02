@@ -62,3 +62,39 @@ def web_client(app_on_test_db):
     """The web app (app/web.py) on the throwaway database, for requests in tests."""
     from app.web import app
     return app.test_client()
+
+
+MARKET_TABLES = ("messages", "conversations", "listing_photos", "user_listings", "users")
+
+
+@pytest.fixture
+def market(web_client, test_db, tmp_path, monkeypatch):
+    """
+    For marketplace tests: a game with an edition (and another game's edition), no users or
+    listings yet, uploaded photos stored in tmp_path.
+    """
+    from app.services import auth_service, photo_storage
+
+    monkeypatch.setattr(photo_storage.storage, "root", tmp_path)
+    c = test_db.conn.cursor()
+    for table in MARKET_TABLES:
+        c.execute(f"DELETE FROM {table}")
+    auth_service._failures.clear()
+    ps5 = c.execute("SELECT id FROM platforms WHERE code = 'PS5'").fetchone()[0]
+
+    def game(title):
+        game_id = c.execute("INSERT INTO games (platform_id, title, normalized_title) OUTPUT INSERTED.id "
+                            "VALUES (?, ?, ?)", ps5, title, title.lower()).fetchone()[0]
+        edition_id = c.execute("INSERT INTO game_editions (game_id, edition_key, name) OUTPUT INSERTED.id "
+                               "VALUES (?, '', 'Standard')", game_id).fetchone()[0]
+        return game_id, edition_id
+
+    game_id, edition_id = game("Market Test Game")
+    other_game, other_edition = game("Other Game")
+    yield {"client": web_client, "game": game_id, "edition": edition_id, "other_edition": other_edition,
+           "dir": tmp_path, "db": c}
+    for table in MARKET_TABLES:
+        c.execute(f"DELETE FROM {table}")
+    c.execute("DELETE FROM game_editions WHERE game_id IN (?, ?)", game_id, other_game)
+    c.execute("DELETE FROM games WHERE id IN (?, ?)", game_id, other_game)
+

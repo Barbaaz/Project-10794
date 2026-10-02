@@ -12,6 +12,7 @@ import sys
 from scheduler.jobs import SCRAPERS, RanRecently, active_store_slugs, run_store, setup_logging
 from scheduler.notify import notify, run_summary
 from pipeline.igdb import enrich_games, fill_videos
+from app.services.chat_service import complete_overdue
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +42,15 @@ def main():
         fill_videos()
     except Exception as e:
         log.warning("IGDB lookup skipped: %s", e)
+
+    # Marketplace: purchases sent 7 days ago without a problem reported are completed
+    # (also done whenever someone opens their messages; this covers quiet days)
+    try:
+        completed = complete_overdue()
+        if completed:
+            log.info("Marketplace: %d purchases completed after 7 days", completed)
+    except Exception as e:
+        log.warning("Marketplace auto-complete skipped: %s", e)
 
     # Tell the user on their desktop, so a broken store doesn't go unnoticed
     summary = run_summary(failed, warnings)

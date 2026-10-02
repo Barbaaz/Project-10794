@@ -287,3 +287,47 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_listing_photos_listing')
     CREATE INDEX ix_listing_photos_listing ON dbo.listing_photos (listing_id, position);
 GO
+
+-- Marketplace conversations: one per listing and buyer. The purchase steps live here too
+-- (deal_status, see app/services/chat_service.py): none → requested → accepted → sent →
+-- completed, or declined / cancelled / problem. *_read_at: unread messages for each side.
+IF OBJECT_ID('dbo.conversations', 'U') IS NULL
+CREATE TABLE dbo.conversations (
+    id               INT IDENTITY(1,1) PRIMARY KEY,
+    listing_id       INT          NOT NULL REFERENCES dbo.user_listings(id),
+    buyer_id         INT          NOT NULL REFERENCES dbo.users(id),
+    seller_id        INT          NOT NULL REFERENCES dbo.users(id),
+    deal_status      VARCHAR(12)  NOT NULL DEFAULT 'none',
+    sent_at          DATETIME2    NULL,      -- seller marked it sent / handed over
+    completed_at     DATETIME2    NULL,      -- buyer confirmed (or 7 days after sent)
+    buyer_read_at    DATETIME2    NULL,
+    seller_read_at   DATETIME2    NULL,
+    last_message_at  DATETIME2    NOT NULL DEFAULT SYSUTCDATETIME(),
+    created_at       DATETIME2    NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT uq_conversations_listing_buyer UNIQUE (listing_id, buyer_id),
+    CONSTRAINT ck_conversations_deal CHECK (deal_status IN
+        ('none', 'requested', 'accepted', 'declined', 'cancelled', 'sent', 'completed', 'problem'))
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_conversations_buyer')
+    CREATE INDEX ix_conversations_buyer ON dbo.conversations (buyer_id, last_message_at);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_conversations_seller')
+    CREATE INDEX ix_conversations_seller ON dbo.conversations (seller_id, last_message_at);
+GO
+
+-- The messages of a conversation. sender_id NULL = a message from the site about a purchase
+-- step (event: requested, accepted, sent…), shown differently and translated by the page.
+IF OBJECT_ID('dbo.messages', 'U') IS NULL
+CREATE TABLE dbo.messages (
+    id               INT IDENTITY(1,1) PRIMARY KEY,
+    conversation_id  INT            NOT NULL REFERENCES dbo.conversations(id),
+    sender_id        INT            NULL REFERENCES dbo.users(id),
+    body             NVARCHAR(2000) NULL,
+    event            VARCHAR(20)    NULL,
+    created_at       DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME()
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_messages_conversation')
+    CREATE INDEX ix_messages_conversation ON dbo.messages (conversation_id, id);
+GO
