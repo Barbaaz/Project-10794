@@ -342,3 +342,24 @@ CREATE TABLE dbo.user_favorites (
     CONSTRAINT pk_user_favorites PRIMARY KEY (user_id, edition_id)
 );
 GO
+
+-- Ratings between users after a completed purchase (app/services/rating_service.py): each side
+-- rates the other once per purchase (conversation). The rated user may reply.
+IF OBJECT_ID('dbo.user_ratings', 'U') IS NULL
+CREATE TABLE dbo.user_ratings (
+    id               INT IDENTITY(1,1) PRIMARY KEY,
+    conversation_id  INT           NOT NULL REFERENCES dbo.conversations(id),
+    rater_id         INT           NOT NULL REFERENCES dbo.users(id),
+    rated_id         INT           NOT NULL REFERENCES dbo.users(id),
+    stars            TINYINT       NOT NULL,
+    comment          NVARCHAR(500) NULL,
+    reply            NVARCHAR(500) NULL,
+    created_at       DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at       DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT uq_user_ratings UNIQUE (conversation_id, rater_id),
+    CONSTRAINT ck_user_ratings_stars CHECK (stars BETWEEN 1 AND 5)
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_user_ratings_rated')
+    CREATE INDEX ix_user_ratings_rated ON dbo.user_ratings (rated_id) INCLUDE (stars);
+GO

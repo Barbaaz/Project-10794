@@ -12,3 +12,8 @@
 /* Copies users sell, next to the store prices on catalogue cards: a colour of their own */
 .btn-used { --bs-btn-color: #fff; --bs-btn-bg: #6f42c1; --bs-btn-border-color: #6f42c1;
             --bs-btn-hover-color: #fff; --bs-btn-hover-bg: #59339d; --bs-btn-hover-border-color: #59339d; }
+.listing-card .listing-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+                               line-height: 1.25; min-height: 2.5em; }
+/* Used tab: seller (and rating) on one line, the copy's condition under it */
+.offer-btn .seller-lines { display: flex; flex-direction: column; line-height: 1.15; text-align: left; min-width: 0; }
+.offer-btn .seller-lines small { font-weight: 400; opacity: .85; overflow: hidden; text-overflow: ellipsis; }

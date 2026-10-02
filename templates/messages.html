@@ -20,6 +20,11 @@
         .bubble.theirs { align-self: flex-start; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-bottom-left-radius: .2rem; }
         .bubble .time { display: block; font-size: .7rem; opacity: .75; margin-top: .15rem; }
         .site-message { align-self: center; font-size: .8rem; color: var(--bs-secondary-color); text-align: center; }
+        .star-input { display: inline-flex; flex-direction: row-reverse; gap: .1rem; }
+        .star-input input { position: absolute; opacity: 0; }
+        .star-input label { font-size: 1.6rem; line-height: 1; cursor: pointer; color: var(--bs-secondary-color); }
+        .star-input input:checked ~ label, .star-input label:hover, .star-input label:hover ~ label { color: #f5b301; }
+        .star-input input:focus-visible + label { outline: 2px solid var(--bs-primary); border-radius: .2rem; }
     </style>
 </head>
 <body class="bg-body-tertiary">
@@ -54,6 +59,8 @@
                     </div>
                     <div id="chat-steps" class="d-flex flex-wrap gap-1 mb-2"></div>
                     <p id="step-hint" class="small text-body-secondary mb-2"></p>
+                    <!-- After a completed purchase: rate the other side, see their rating of you -->
+                    <div id="chat-rating" class="mb-2"></div>
                     <div id="chat-messages" class="chat-messages mb-2" aria-live="polite"></div>
                     <form id="chat-form" class="d-flex gap-2">
                         <textarea id="chat-input" rows="2" maxlength="2000" class="form-control"
@@ -128,8 +135,8 @@ function renderChat(newMessages) {
     const listing = document.getElementById("chat-listing");
     listing.href = `/listing/${open.listing_id}`;
     listing.textContent = `${open.title} · ${eur.format(open.price)}`;
-    document.getElementById("chat-with").textContent =
-        `${t(open.role === "buyer" ? "you_buy_from" : "you_sell_to")} @${open.other_username} · ${open.platform_name}`;
+    document.getElementById("chat-with").innerHTML =
+        `${esc(t(open.role === "buyer" ? "you_buy_from" : "you_sell_to"))} <a href="/user/${encodeURIComponent(open.other_username)}">@${esc(open.other_username)}</a> · ${esc(open.platform_name)}`;
     const status = document.getElementById("chat-status");
     status.className = `badge ${STATUS_STYLES[open.deal_status] || "d-none"}`;
     status.textContent = open.deal_status !== "none" ? t(`deal_${open.deal_status}`) : "";
@@ -139,6 +146,7 @@ function renderChat(newMessages) {
         <button type="button" class="btn btn-sm ${STEP_STYLES[s] || "btn-secondary"}" data-step="${s}">${t(`step_${s}_${open.role}`)}</button>`).join("");
     steps.querySelectorAll("[data-step]").forEach(b => b.onclick = () => takeStep(b.dataset.step));
     document.getElementById("step-hint").textContent = t(`hint_${open.deal_status}_${open.role}`, {}, "");
+    renderRating();
 
     const box = document.getElementById("chat-messages");
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
@@ -155,6 +163,57 @@ function renderChat(newMessages) {
         lastId = Math.max(lastId, m.id);
     }
     if (atBottom || newMessages.length) box.scrollTop = box.scrollHeight;
+}
+
+// --- ratings (completed purchases) ---------------------------------------------------------
+let editingRating = false;
+
+function stars(n) {
+    return `<span class="text-warning" aria-label="${esc(t("stars_n", { n }))}">${"★".repeat(n)}${"☆".repeat(5 - n)}</span>`;
+}
+
+function renderRating() {
+    const box = document.getElementById("chat-rating");
+    if (!open.ratings) { box.innerHTML = ""; return; }
+    const { mine, theirs } = open.ratings;
+    const theirsHtml = theirs
+        ? `<div class="small mb-2">${esc(t("their_rating", { user: open.other_username }))} ${stars(theirs.stars)}
+             ${theirs.comment ? `<span class="fst-italic">“${esc(theirs.comment)}”</span>` : ""}</div>`
+        : `<div class="small text-body-secondary mb-2">${esc(t("their_rating_pending", { user: open.other_username }))}</div>`;
+
+    if (mine && !editingRating) {
+        box.innerHTML = `<div class="alert alert-success py-2 mb-2 small">
+            ${esc(t("your_rating", { user: open.other_username }))} ${stars(mine.stars)}
+            ${mine.comment ? `<span class="fst-italic">“${esc(mine.comment)}”</span>` : ""}
+            ${mine.editable ? `<button type="button" id="edit-rating" class="btn btn-sm btn-secondary ms-2">${t("change_rating")}</button>` : ""}
+        </div>${theirsHtml}`;
+        box.querySelector("#edit-rating")?.addEventListener("click", () => { editingRating = true; renderRating(); });
+        return;
+    }
+    box.innerHTML = `
+        <form id="rating-form" class="card card-body py-2 mb-2">
+            <div class="fw-semibold small mb-1">${esc(t("rate_user", { user: open.other_username }))}</div>
+            <div class="star-input mb-2" role="radiogroup" aria-label="${esc(t("rating_stars"))}">
+                ${[5, 4, 3, 2, 1].map(n => `<input type="radio" name="stars" id="star-${n}" value="${n}"
+                    ${mine?.stars === n ? "checked" : ""}><label for="star-${n}" title="${esc(t("stars_n", { n }))}">★</label>`).join("")}
+            </div>
+            <textarea name="comment" rows="2" maxlength="500" class="form-control form-control-sm mb-2"
+                      placeholder="${esc(t("rating_comment"))}" aria-label="${esc(t("rating_comment"))}">${esc(mine?.comment || "")}</textarea>
+            <button class="btn btn-sm btn-primary align-self-start">${t(mine ? "save_rating" : "send_rating")}</button>
+        </form>${theirsHtml}`;
+    box.querySelector("#rating-form").onsubmit = async e => {
+        e.preventDefault();
+        const form = new FormData(e.target);
+        if (!form.get("stars")) return chatError("stars_invalid");
+        const { ok, data } = await api(`/api/conversations/${open.id}/rating`,
+            { body: { stars: Number(form.get("stars")), comment: form.get("comment") } });
+        if (!ok) return chatError(data?.error);
+        chatError(null);
+        open.ratings = data;
+        editingRating = false;
+        renderRating();
+        showPendingRatings();
+    };
 }
 
 function chatError(code) {

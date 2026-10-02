@@ -182,6 +182,37 @@ function usedButton(group) {
         </a>`;
 }
 
+// A game edition users sell, like the catalogue cards: cover, name, platform, then one button
+// per seller (seller and rating, condition, price; cheapest first) opening that listing
+function marketCard(group) {
+    const sellers = group.listings.slice(0, MAX_OFFERS).map((l, i) => `
+        <a href="/listing/${l.id}" class="btn offer-btn ${i === 0 ? "btn-used" : "btn-secondary"}"
+           title="${esc(`${sellerName(l)} · ${conditionLabel(l.condition)}`)}">
+            <span class="store seller-lines">@${esc(l.seller_username)}${l.seller_rating_count ? ` ★${fmtNumber(l.seller_rating)}` : ""}
+                <small>${esc(conditionLabel(l.condition))}</small></span>
+            <span class="price">${eur.format(l.price)}</span>
+        </a>`).join("");
+    const more = group.listings.length > MAX_OFFERS
+        ? `<a href="/game/${group.game_id}#market" class="btn btn-primary offer-btn justify-content-center">
+              ${t("see_all_sellers", { count: group.listings.length - MAX_OFFERS })}</a>` : "";
+    const cover = group.image || group.listings[0]?.photos[0]?.thumb_url || "";
+    const col = document.createElement("div");
+    col.className = "col";
+    col.innerHTML = `
+        <div class="card h-100 shadow-sm overflow-hidden game-card">
+            <a href="/game/${group.game_id}#market" class="cover-link"><img src="${esc(cover)}" alt="" loading="lazy"></a>
+            <div class="card-body d-flex flex-column">
+                <a href="/game/${group.game_id}#market" class="link-body-emphasis text-decoration-none game-title"
+                   title="${esc(group.name)}">${esc(group.name)}</a>
+                <div class="text-body-secondary small card-platform">${esc(group.platform_name)}
+                    · ${esc(t("sellers_count", { count: group.listings.length }))}</div>
+                <div class="mb-2"></div>
+                <div class="mt-auto">${sellers}${more}</div>
+            </div>
+        </div>`;
+    return col;
+}
+
 // ---------------------------------------------------------------------------
 // Front page tabs
 // ---------------------------------------------------------------------------
@@ -294,7 +325,7 @@ async function loadMarketPage(platform, page) {
     const params = new URLSearchParams({ sort: marketSort, page, per_page: CATALOG_PAGE });
     if (platform) params.set("platform", platform);
     const data = await fetch(`/api/listings?${params}`).then(r => r.json());
-    return { ...data, groups: data.listings, platform };   // "groups": what renderFront checks for content
+    return { ...data, platform };
 }
 
 async function showMarketPage(page) {
@@ -318,9 +349,10 @@ function renderMarket(data) {
                 <option value="price_desc">${t("sort_price_desc")}</option>
             </select>
         </div>
-        <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-2">
-            ${data.listings.map(l => listingCard(l, { showGame: true })).join("")}
-        </div>`;
+        `;
+    const grid = cardGrid();
+    data.groups.forEach(group => grid.appendChild(marketCard(group)));
+    wrap.appendChild(grid);
     const select = wrap.querySelector("#market-sort");
     select.value = marketSort;
     select.onchange = () => {

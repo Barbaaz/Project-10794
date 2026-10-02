@@ -64,7 +64,7 @@ def web_client(app_on_test_db):
     return app.test_client()
 
 
-MARKET_TABLES = ("messages", "conversations", "listing_photos", "user_listings", "user_favorites", "users")
+MARKET_TABLES = ("user_ratings", "messages", "conversations", "listing_photos", "user_listings", "user_favorites", "users")
 
 
 @pytest.fixture

@@ -7,7 +7,7 @@ from pipeline.matcher import GameMatcher, same_with_typos
 @pytest.fixture
 def cursor(test_db):
     c = test_db.conn.cursor()
-    for table in ("merged_ids", "messages", "conversations", "listing_photos", "user_listings", "user_favorites",
+    for table in ("merged_ids", "user_ratings", "messages", "conversations", "listing_photos", "user_listings", "user_favorites",
                   "users", "price_snapshots", "store_products", "game_editions", "games"):
         c.execute(f"DELETE FROM {table}")
     return c

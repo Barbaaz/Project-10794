@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Game Price Tracker</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/common.css" rel="stylesheet">
+    <script src="/static/common.js"></script>
+    <script src="/static/i18n.js"></script>
+    <script src="/static/market.js"></script>
+</head>
+<body class="bg-body-tertiary">
+
+<div class="container py-4" style="max-width: 1000px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <a href="/" class="btn btn-sm btn-primary" data-i18n="home"></a>
+        <div class="d-flex gap-2">
+            <div id="account-area" class="d-flex gap-2"></div>
+            <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
+            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
+        </div>
+    </div>
+
+    <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
+    <div id="error" class="alert alert-warning d-none" data-i18n="profile_not_found"></div>
+
+    <div id="profile" class="d-none">
+        <div class="d-flex align-items-center gap-3 mb-4">
+            <div class="display-6">👤</div>
+            <div>
+                <h1 id="name" class="h3 mb-0"></h1>
+                <div id="since" class="text-body-secondary small"></div>
+            </div>
+            <div class="ms-auto text-end">
+                <div id="average" class="fs-3 fw-bold"></div>
+                <div id="count" class="small text-body-secondary"></div>
+            </div>
+        </div>
+
+        <h2 class="h5" data-i18n="profile_ratings"></h2>
+        <div id="ratings" class="list-group mb-4"></div>
+        <p id="no-ratings" class="small text-body-secondary d-none" data-i18n="profile_no_ratings"></p>
+
+        <h2 class="h5" data-i18n="profile_listings"></h2>
+        <div id="listings" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 g-2"></div>
+        <p id="no-listings" class="small text-body-secondary d-none" data-i18n="profile_no_listings"></p>
+    </div>
+</div>
+
+<script>
+const USERNAME = {{ username | tojson }};
+
+function stars(n) {
+    return `<span class="text-warning" aria-label="${esc(t("stars_n", { n }))}">${"★".repeat(n)}${"☆".repeat(5 - n)}</span>`;
+}
+
+async function load() {
+    await renderAccountArea();
+    const response = await fetch(`/api/users/${encodeURIComponent(USERNAME)}`);
+    document.getElementById("loading").classList.add("d-none");
+    if (!response.ok) return document.getElementById("error").classList.remove("d-none");
+    const user = await response.json();
+    document.title = `@${user.username} · Game Price Tracker`;
+    document.getElementById("name").textContent =
+        user.display_name !== user.username ? `${user.display_name} (@${user.username})` : `@${user.username}`;
+    document.getElementById("since").textContent =
+        `${t("member_since")} ${new Date(user.created_at).toLocaleDateString(LOCALE)}`;
+    document.getElementById("average").innerHTML = user.rating_count ? `★ ${fmtNumber(user.rating)}` : "—";
+    document.getElementById("count").textContent = t("profile_rating_count", { count: user.rating_count });
+
+    const mine = currentUser && currentUser.id === user.id;     // the person can answer their ratings
+    const list = document.getElementById("ratings");
+    list.innerHTML = user.ratings.map(r => `
+        <div class="list-group-item">
+            <div class="d-flex justify-content-between flex-wrap gap-1">
+                <span>${stars(r.stars)} <span class="small text-body-secondary">
+                    ${esc(t(r.rated_as === "seller" ? "rated_as_seller" : "rated_as_buyer", { user: r.rater_username, game: r.title }))}</span></span>
+                <span class="small text-body-secondary">${new Date(r.created_at).toLocaleDateString(LOCALE)}</span>
+            </div>
+            ${r.comment ? `<div class="mt-1">${esc(r.comment)}</div>` : ""}
+            ${r.reply ? `<div class="mt-1 ms-3 small border-start ps-2"><strong>${esc(t("reply_from", { user: user.username }))}</strong> ${esc(r.reply)}</div>` : ""}
+            ${mine ? `<form class="reply-form d-flex gap-1 mt-2" data-id="${r.id}">
+                <input name="reply" maxlength="500" class="form-control form-control-sm" value="${esc(r.reply || "")}"
+                       placeholder="${esc(t("reply_placeholder"))}" aria-label="${esc(t("reply_placeholder"))}">
+                <button class="btn btn-sm btn-secondary">${t("reply_save")}</button></form>` : ""}
+        </div>`).join("");
+    list.querySelectorAll(".reply-form").forEach(form => form.onsubmit = async e => {
+        e.preventDefault();
+        const { ok } = await api(`/api/ratings/${form.dataset.id}/reply`, { body: { reply: form.reply.value } });
+        if (ok) load();
+    });
+    document.getElementById("no-ratings").classList.toggle("d-none", user.ratings.length > 0);
+
+    document.getElementById("listings").innerHTML = user.listings.map(l => listingCard(l, { showSeller: false })).join("");
+    document.getElementById("no-listings").classList.toggle("d-none", user.listings.length > 0);
+    document.getElementById("profile").classList.remove("d-none");
+}
+
+applyI18n();
+load();
+</script>
+</body>
+</html>

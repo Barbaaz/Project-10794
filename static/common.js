@@ -82,6 +82,7 @@ async function renderAccountArea() {
         <a href="/account" class="btn btn-sm btn-secondary" title="${esc(t("my_account"))}">👤 ${esc(currentUser.username || currentUser.display_name)}</a>
         <button type="button" class="btn btn-sm btn-secondary" id="logout-btn">${t("log_out")}</button>`;
     showUnreadCount();
+    showPendingRatings();
     box.querySelector("#logout-btn").onclick = async () => {
         await api("/api/auth/logout");
         location.reload();
@@ -102,4 +103,22 @@ async function showUnreadCount() {
 
 function forget(key, storage = "localStorage") {
     try { window[storage].removeItem(key); } catch (e) {}
+}
+
+// Ratings still to give (completed purchases): a reminder at the top of every page, red once one
+// is overdue (14 days), which blocks buying and selling until it's given (app/services/rating_service.py)
+async function showPendingRatings() {
+    document.getElementById("ratings-banner")?.remove();
+    if (!currentUser) return;
+    const pending = await fetch("/api/ratings/pending").then(r => r.ok ? r.json() : []).catch(() => []);
+    if (!pending.length) return;
+    const overdue = pending.some(p => p.overdue);
+    const banner = document.createElement("div");
+    banner.id = "ratings-banner";
+    banner.className = `alert ${overdue ? "alert-danger" : "alert-warning"} py-2 small`;
+    banner.setAttribute("role", "status");
+    banner.innerHTML = `<strong>${esc(t(overdue ? "ratings_overdue_title" : "ratings_pending_title", { count: pending.length }))}</strong>
+        ${pending.map(p => `<a href="/messages?c=${p.conversation_id}" class="ms-2">${esc(t("rate_link", { user: p.other_username, game: p.title }))}</a>`).join("")}`;
+    const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl");
+    container?.querySelector(":scope > div")?.after(banner);
 }

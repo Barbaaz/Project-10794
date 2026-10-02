@@ -38,3 +38,20 @@ def new_listing(m, photos=3, **fields):
             "description": "Jogado uma vez.", **fields}
     data["photos"] = [(io.BytesIO(jpeg(gps=True)), f"p{i}.jpg") for i in range(photos)]
     return m["client"].post("/api/listings", data=data, headers=HEADERS, content_type="multipart/form-data")
+
+
+def completed_purchase(m, seller="seller", buyer="buyer"):
+    """A listing by `seller` bought by `buyer`, all steps done (buyer logged in at the end): the conversation id."""
+    client = m["client"]
+    sign_up(client, seller)
+    listing = new_listing(m).get_json()
+    sign_up(client, buyer)
+    step = lambda cid, action: client.post(f"/api/conversations/{cid}/steps", json={"action": action}, headers=HEADERS)
+    conversation_id = client.post(f"/api/listings/{listing['id']}/conversation", json={"buy": True},
+                                  headers=HEADERS).get_json()["id"]
+    log_in(client, seller)
+    step(conversation_id, "accept")
+    step(conversation_id, "sent")
+    log_in(client, buyer)
+    assert step(conversation_id, "received").get_json()["deal_status"] == "completed"
+    return conversation_id

@@ -12,7 +12,7 @@ from flask import Flask, abort, request, jsonify, redirect, render_template, sen
 from werkzeug.exceptions import HTTPException
 
 from app.config import COOKIE_SECURE, SECRET_KEY
-from app.routes import auth, chat, favorites, games, listings, prices, stores
+from app.routes import auth, chat, favorites, games, listings, prices, ratings, stores
 from app.services.game_service import game_exists, merged_into
 from app.services.photo_storage import MAX_UPLOAD_BYTES, storage
 
@@ -27,7 +27,7 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
     MAX_CONTENT_LENGTH=11 * MAX_UPLOAD_BYTES,  # a listing's photos (up to 10) in one request
 )
-for blueprint in (auth.bp, chat.bp, favorites.bp, games.bp, listings.bp, prices.bp, stores.bp):
+for blueprint in (auth.bp, chat.bp, favorites.bp, games.bp, listings.bp, prices.bp, ratings.bp, stores.bp):
     app.register_blueprint(blueprint)
 
 CHANGING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -78,6 +78,12 @@ def listing_page(listing_id):
 def messages_page():
     """The user's conversations; ?c=<id> opens one."""
     return render_template("messages.html")
+
+
+@app.route("/user/<username>")
+def profile_page(username):
+    """A user's public profile: rating, ratings received, listings."""
+    return render_template("profile.html", username=username)
 
 
 @app.route("/media/<path:key>")

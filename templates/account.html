@@ -156,7 +156,7 @@ async function load() {
     document.getElementById("logged-in").classList.remove("d-none");
 
     const mine = await fetch("/api/listings/mine").then(r => r.json()).catch(() => []);
-    document.getElementById("my-listings-grid").innerHTML = mine.map(l => listingCard(l, { showGame: true })).join("");
+    document.getElementById("my-listings-grid").innerHTML = mine.map(l => listingCard(l, { showSeller: false })).join("");
     document.getElementById("my-listings-empty").classList.toggle("d-none", mine.length > 0);
     document.getElementById("my-listings").classList.remove("d-none");
 }

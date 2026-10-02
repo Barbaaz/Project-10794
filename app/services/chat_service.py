@@ -12,6 +12,7 @@ the purchase steps (deal_status) in the same conversation:
 Each step also adds a message from the site (sender NULL, `event`), so both see the history.
 """
 from app.services.photo_storage import storage
+from app.services.rating_service import check_not_blocked, ratings_of_conversation
 from db import connection, fetch_all, fetch_one
 
 MAX_MESSAGE = 2000
@@ -102,6 +103,8 @@ def deal_step(user_id, conversation_id, action):
     role = _role(conversation, user_id)
     if action not in available_steps(conversation, role):
         raise ChatError("step_not_allowed", 409)
+    if action == "request":
+        check_not_blocked(user_id, ChatError)      # a rating overdue: rate first
     status = "cancelled" if action == "cancel" else STEPS[action][2]
 
     with connection() as conn:
@@ -196,6 +199,8 @@ def get_conversation(user_id, conversation_id, after_id=0):
         conn.cursor().execute(f"UPDATE conversations SET {read_column} = SYSUTCDATETIME() WHERE id = ?", conversation_id)
     result = _for_user(conversation, user_id)
     result["messages"] = messages
+    if conversation["deal_status"] == "completed":
+        result["ratings"] = ratings_of_conversation(user_id, conversation_id)
     return result
 
 

@@ -89,7 +89,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `POST /api/auth/login` `{login, password}` | Log in with username or email; locked for 15 min after 5 wrong passwords |
 | `POST /api/auth/logout` · `GET /api/auth/me` | Log out · the logged-in user (or `null`) |
 | `GET /api/listings?game_id=` · `GET /api/listings/<id>` | Pre-owned copies people sell (active / reserved), with photos; never the seller's email |
-| `GET /api/listings?platform=&sort=newest\|price_asc\|price_desc&page=` | Every active listing, paged (the "Used" tab) |
+| `GET /api/listings?platform=&sort=newest\|price_asc\|price_desc&page=` | The "Used" tab: one group per game edition with its sellers' active listings, paged |
 | `GET /api/listings/mine` | The logged-in seller's listings |
 | `POST /api/listings` (multipart: `game_id, edition_id, price, condition, description` + 3–10 `photos`) | Put a game up for sale; photos are re-saved without EXIF (no GPS location), 1600 px + thumbnail |
 | `PATCH /api/listings/<id>` `{price?, condition?, description?, status?}` | The seller changes it (status: active / reserved / sold / removed) |
@@ -100,6 +100,10 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `POST /api/conversations/<id>/steps` `{action}` | Purchase step: `request`, `accept` (reserves), `decline`, `sent`, `received` (sold), `problem`, `cancel`; 7 days after `sent` it completes by itself |
 | `GET /api/favorites` · `PUT` / `DELETE /api/favorites/<edition_id>` | The logged-in user's favourite editions (ids) · star / unstar |
 | `POST /api/favorites/import` `{ids}` | Favourites kept in the browser before accounts, moved into the account (merged editions followed) |
+| `GET /api/ratings/pending` | Completed purchases the user still has to rate (`overdue` after 14 days: buying and selling blocked until rated) |
+| `POST /api/conversations/<id>/rating` `{stars, comment?}` | Rate the other side of a completed purchase (changeable for 14 days) |
+| `POST /api/ratings/<id>/reply` `{reply}` | The rated user answers a rating |
+| `GET /api/users/<username>` | Public profile: average rating, ratings received, listings (never the email) |
 
 Requests that change something (POST / PUT / DELETE) must send the header `X-Requested-With: fetch`
 (the pages' `api()` helper in `static/common.js` does): another site can't add it, so it can't act

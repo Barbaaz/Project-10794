@@ -5,7 +5,8 @@ Only the seller changes a listing. A listing always has MIN_PHOTOS..MAX_PHOTOS p
 from decimal import Decimal, InvalidOperation
 
 from app.services.photo_storage import PhotoError, process_photo, storage
-from app.services.common import page_result
+from app.services.common import EDITION_CARD_COLUMNS, card_group, page_result
+from app.services.rating_service import check_not_blocked, rating_columns
 from db import connection, fetch_all, fetch_one, placeholders
 
 CONDITIONS = ("new", "like_new", "good", "fair", "poor")
@@ -15,12 +16,13 @@ MIN_PHOTOS, MAX_PHOTOS = 3, 10
 MIN_PRICE, MAX_PRICE = Decimal("0.50"), Decimal("10000")
 MAX_DESCRIPTION = 2000
 
-# A listing as everyone sees it: never the seller's email
-LISTING_COLUMNS = """
+# A listing as everyone sees it (with the seller's rating): never the seller's email
+LISTING_COLUMNS = f"""
     l.id, l.user_id, l.game_id, l.edition_id, l.price, l.condition, l.description, l.status,
     l.created_at, l.updated_at, l.sold_at,
     g.title, p.code AS platform, p.name AS platform_name, e.name AS edition,
-    u.username AS seller_username, u.display_name AS seller_name, u.created_at AS seller_since
+    u.username AS seller_username, u.display_name AS seller_name, u.created_at AS seller_since,
+    {rating_columns("l.user_id", "seller_")}
 """
 LISTING_JOINS = """
     FROM user_listings l
@@ -42,6 +44,7 @@ class ListingError(Exception):
 
 def create_listing(user_id, game_id, edition_id, price, condition, description, photos):
     """photos: the uploaded files' bytes. Returns the new listing."""
+    check_not_blocked(user_id, ListingError)       # a rating overdue: rate first
     fields = _checked_fields(price, condition, description)
     game_id, edition_id = _checked_game(game_id, edition_id)
     if not MIN_PHOTOS <= len(photos) <= MAX_PHOTOS:
@@ -70,22 +73,40 @@ def listings_for_game(game_id):
 
 
 BROWSE_SORTS = {
-    "newest": "l.created_at DESC, l.id DESC",
-    "price_asc": "l.price, l.created_at DESC",
-    "price_desc": "l.price DESC, l.created_at DESC",
+    "newest": "u.newest DESC, g.title",
+    "price_asc": "u.min_price, g.title",
+    "price_desc": "u.min_price DESC, g.title",
 }
 
 
 def browse(platform=None, sort="newest", page=1, per_page=48):
-    """The market tab: every active listing (optionally one platform's), one page at a time."""
-    where = "l.status = 'active' AND (? IS NULL OR p.code = ?)"
-    total = fetch_one(f"SELECT COUNT(*) AS total {LISTING_JOINS} WHERE {where}", platform, platform)["total"]
-    rows = fetch_all(
-        f"SELECT {LISTING_COLUMNS} {LISTING_JOINS} WHERE {where} "
+    """
+    The market tab: one group per game edition users sell (a game can have several sellers),
+    each with its active listings, cheapest first; editions with the newest listing first, or
+    by their cheapest price. Paged by edition.
+    """
+    used = """
+        WITH u AS (
+            SELECT edition_id, MIN(price) AS min_price, MAX(created_at) AS newest
+            FROM user_listings WHERE status = 'active' AND edition_id IS NOT NULL GROUP BY edition_id
+        )"""
+    joins = """
+        FROM u JOIN game_editions e ON e.id = u.edition_id
+        JOIN games g ON g.id = e.game_id JOIN platforms p ON p.id = g.platform_id
+        WHERE (? IS NULL OR p.code = ?)"""
+    total = fetch_one(f"{used} SELECT COUNT(*) AS total {joins}", platform, platform)["total"]
+    editions = fetch_all(
+        f"{used} SELECT {EDITION_CARD_COLUMNS}, g.image_url AS image {joins} "
         f"ORDER BY {BROWSE_SORTS.get(sort, BROWSE_SORTS['newest'])} OFFSET ? ROWS FETCH NEXT ? ROWS ONLY",
         platform, platform, (page - 1) * per_page, per_page,
     )
-    return page_result(page, per_page, total, listings=_with_photos(rows))
+    ids = [e["edition_id"] for e in editions]
+    listings = _with_photos(fetch_all(
+        f"SELECT {LISTING_COLUMNS} {LISTING_JOINS} WHERE l.status = 'active' AND l.edition_id IN ({placeholders(ids)}) "
+        "ORDER BY l.price, l.created_at", *ids)) if ids else []
+    groups = [card_group(e, [], image=e["image"], listings=[l for l in listings if l["edition_id"] == e["edition_id"]])
+              for e in editions]
+    return page_result(page, per_page, total, groups=groups)
 
 
 def used_summaries(edition_ids):
@@ -106,6 +127,16 @@ def used_summaries(edition_ids):
     )
     return {r["edition_id"]: {"count": r["count"], "price": r["price"], "listing_id": r["listing_id"]}
             for r in rows if r["rn"] == 1}
+
+
+def listings_of_user(user_id):
+    """A seller's listings everyone can see (their profile page), newest first."""
+    rows = fetch_all(
+        f"SELECT {LISTING_COLUMNS} {LISTING_JOINS} WHERE l.user_id = ? AND l.status IN ('active', 'reserved') "
+        "ORDER BY l.created_at DESC",
+        user_id,
+    )
+    return _with_photos(rows)
 
 
 def my_listings(user_id):

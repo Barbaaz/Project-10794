@@ -20,22 +20,32 @@ function sellerName(listing) {
         ? `${listing.seller_name} (@${listing.seller_username})` : `@${listing.seller_username}`;
 }
 
-// A card linking to the listing: first photo, price, condition, seller (or the game, for "my listings")
-function listingCard(listing, { showGame = false } = {}) {
+// "★ 4,5 (12)" next to a seller's name; nothing until they have a rating
+function ratingBadge(rating, count) {
+    if (!count) return "";
+    return `<span class="text-warning-emphasis" title="${esc(t("rating_title", { rating: fmtNumber(rating), count }))}">★ ${fmtNumber(rating)} (${count})</span>`;
+}
+
+// A card linking to the listing. Like the catalogue cards: the game's name first under the photo,
+// then platform, price (and status), condition, and the seller with their rating
+// (showSeller: false on the seller's own "my listings")
+function listingCard(listing, { showSeller = true } = {}) {
     const photo = listing.photos[0];
-    const subtitle = showGame
-        ? `${esc(listing.title)}${listing.edition && listing.edition !== "Standard" ? ` — ${esc(listing.edition)}` : ""} · ${esc(listing.platform_name)}`
-        : esc(sellerName(listing));
+    const edition = listing.edition && listing.edition !== "Standard" ? ` — ${listing.edition}` : "";
+    const name = listing.title + edition;
     return `
         <div class="col">
             <a href="/listing/${listing.id}" class="card h-100 shadow-sm text-decoration-none listing-card">
                 <img src="${esc(photo?.thumb_url || "")}" alt="" loading="lazy" class="card-img-top">
-                <div class="card-body p-2">
-                    <div class="d-flex justify-content-between align-items-center gap-1">
+                <div class="card-body p-2 d-flex flex-column">
+                    <div class="fw-semibold listing-title" title="${esc(name)}">${esc(name)}</div>
+                    <div class="small text-body-secondary mb-1">${esc(listing.platform_name)}</div>
+                    <div class="d-flex justify-content-between align-items-center gap-1 mt-auto">
                         <strong class="fs-5">${eur.format(listing.price)}</strong>${statusBadge(listing.status)}
                     </div>
                     <div class="small">${esc(conditionLabel(listing.condition))}</div>
-                    <div class="small text-body-secondary text-truncate">${subtitle}</div>
+                    ${showSeller ? `<div class="small text-body-secondary text-truncate">${esc(sellerName(listing))}
+                        ${ratingBadge(listing.seller_rating, listing.seller_rating_count)}</div>` : ""}
                 </div>
             </a>
         </div>`;

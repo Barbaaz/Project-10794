@@ -36,6 +36,7 @@ DESCRIPTIONS = [
     "Edição completa, inclui o código de DLC (não usado).",
 ]
 LISTINGS = 15
+GAMES = 9            # 15 listings over 9 games: some games have two sellers
 CONDITION_SHARE = {"new": 0.95, "like_new": 0.80, "good": 0.70, "fair": 0.55, "poor": 0.40}
 DEMO_USERS = "username LIKE 'demo[_]%' AND email LIKE '%@demo.invalid'"   # never a real user
 
@@ -52,10 +53,12 @@ def remove():
     with connection() as conn:
         c = conn.cursor()
         conversations = f"SELECT id FROM conversations WHERE buyer_id IN ({ids}) OR seller_id IN ({ids})"
+        c.execute(f"DELETE FROM user_ratings WHERE conversation_id IN ({conversations})")
         c.execute(f"DELETE FROM messages WHERE conversation_id IN ({conversations})")
         c.execute(f"DELETE FROM conversations WHERE buyer_id IN ({ids}) OR seller_id IN ({ids})")
         c.execute(f"DELETE lp FROM listing_photos lp JOIN user_listings l ON l.id = lp.listing_id WHERE l.user_id IN ({ids})")
         c.execute(f"DELETE FROM user_listings WHERE user_id IN ({ids})")
+        c.execute(f"DELETE FROM user_favorites WHERE user_id IN ({ids})")
         c.execute(f"DELETE FROM users WHERE id IN ({ids})")
     for key in keys:
         storage.delete(key)
@@ -98,7 +101,7 @@ def add():
 
     # Popular games in stock: the editions with the most stores, each with its best store price
     games = fetch_all(f"""
-        SELECT TOP ({LISTINGS}) g.id AS game_id, e.id AS edition_id, g.title, p.name AS platform, MIN(o.price) AS price
+        SELECT TOP ({GAMES}) g.id AS game_id, e.id AS edition_id, g.title, p.name AS platform, MIN(o.price) AS price
         FROM current_offers o
         JOIN games g ON g.id = o.game_id JOIN platforms p ON p.id = g.platform_id
         JOIN game_editions e ON e.id = o.edition_id
@@ -109,8 +112,9 @@ def add():
     """)
     sellers = list(users)
     listings = []
-    for i, g in enumerate(games):
-        seller = sellers[i % len(sellers)]
+    for i in range(LISTINGS):
+        g = games[i % len(games)]
+        seller = sellers[i % len(sellers)]          # a game's second listing has another seller
         condition = rng.choice(list(CONDITION_SHARE))
         price = round(g["price"] * CONDITION_SHARE[condition] / 0.5) * 0.5 - 0.01
         colour = rng.choice([(120, 85, 60), (60, 70, 90), (90, 110, 80), (140, 130, 120)])
