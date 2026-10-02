@@ -1,0 +1,5 @@
+/* Shared by every page (each page keeps its own styles in <style>). */
+
+/* Tabs are solid buttons too (no outline-only buttons): the selected one blue, the others grey */
+.nav-pills .nav-link:not(.active) { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); }
+.nav-pills .nav-link:not(.active):hover { background: var(--bs-tertiary-bg); }

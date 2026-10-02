@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Game Price Tracker</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/common.css" rel="stylesheet">
+    <script src="/static/common.js"></script>
+    <script src="/static/i18n.js"></script>
+</head>
+<body class="bg-body-tertiary">
+
+<div class="container py-4" style="max-width: 520px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <a href="/" class="btn btn-sm btn-primary" data-i18n="home"></a>
+        <div class="d-flex gap-2">
+            <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
+            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
+        </div>
+    </div>
+
+    <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
+
+    <!-- Logged out: log in or create an account -->
+    <section id="logged-out" class="card shadow-sm d-none">
+        <div class="card-body">
+            <ul class="nav nav-pills mb-3 gap-1" role="tablist">
+                <li class="nav-item"><button class="nav-link active" data-form="login" role="tab" data-i18n="log_in"></button></li>
+                <li class="nav-item"><button class="nav-link" data-form="register" role="tab" data-i18n="create_account"></button></li>
+            </ul>
+
+            <form id="login-form" novalidate>
+                <div class="mb-3">
+                    <label class="form-label" for="login" data-i18n="username_or_email"></label>
+                    <input id="login" name="login" class="form-control" autocomplete="username" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="login-password" data-i18n="password"></label>
+                    <input id="login-password" name="password" type="password" class="form-control" autocomplete="current-password" required>
+                </div>
+                <div class="alert alert-danger d-none py-2" role="alert"></div>
+                <button type="submit" class="btn btn-primary w-100" data-i18n="log_in"></button>
+            </form>
+
+            <form id="register-form" class="d-none" novalidate>
+                <div class="mb-3">
+                    <label class="form-label" for="username" data-i18n="username"></label>
+                    <input id="username" name="username" class="form-control" autocomplete="username" required
+                           minlength="3" maxlength="30" pattern="[A-Za-z0-9_.\-]{3,30}" aria-describedby="username-help">
+                    <div id="username-help" class="form-text" data-i18n="username_help"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="email" data-i18n="email"></label>
+                    <input id="email" name="email" type="email" class="form-control" autocomplete="email" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="display_name" data-i18n="display_name"></label>
+                    <input id="display_name" name="display_name" class="form-control" autocomplete="name" maxlength="100"
+                           aria-describedby="display-help">
+                    <div id="display-help" class="form-text" data-i18n="display_name_help"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="register-password" data-i18n="password"></label>
+                    <input id="register-password" name="password" type="password" class="form-control" autocomplete="new-password"
+                           required minlength="8" aria-describedby="password-help">
+                    <div id="password-help" class="form-text" data-i18n="password_help"></div>
+                </div>
+                <div class="alert alert-danger d-none py-2" role="alert"></div>
+                <button type="submit" class="btn btn-primary w-100" data-i18n="create_account"></button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Logged in: the account (listings, messages and ratings come here next) -->
+    <section id="logged-in" class="card shadow-sm d-none">
+        <div class="card-body">
+            <h1 class="h4 mb-3" data-i18n="my_account"></h1>
+            <dl id="account-facts" class="row mb-3"></dl>
+            <button type="button" id="logout" class="btn btn-secondary" data-i18n="log_out"></button>
+        </div>
+    </section>
+</div>
+
+<script>
+// After logging in: back to where the visitor came from (only our own pages, never another site)
+function nextPage() {
+    const next = new URLSearchParams(location.search).get("next") || "/";
+    return next.startsWith("/") && !next.startsWith("//") ? next : "/";
+}
+
+function showForm(name) {
+    document.querySelectorAll("[data-form]").forEach(b => {
+        const selected = b.dataset.form === name;
+        b.classList.toggle("active", selected);
+        b.setAttribute("aria-selected", selected);
+    });
+    document.getElementById("login-form").classList.toggle("d-none", name !== "login");
+    document.getElementById("register-form").classList.toggle("d-none", name !== "register");
+}
+
+document.querySelectorAll("[data-form]").forEach(b => b.onclick = () => showForm(b.dataset.form));
+
+function handleForm(id, path) {
+    const form = document.getElementById(id);
+    const error = form.querySelector(".alert");
+    form.onsubmit = async event => {
+        event.preventDefault();
+        error.classList.add("d-none");
+        const button = form.querySelector("button[type=submit]");
+        button.disabled = true;
+        const { ok, data } = await api(path, { body: Object.fromEntries(new FormData(form)) });
+        button.disabled = false;
+        if (ok) return location.assign(nextPage());
+        error.textContent = t(`error_${data?.error || "unknown"}`);
+        error.classList.remove("d-none");
+    };
+}
+
+handleForm("login-form", "/api/auth/login");
+handleForm("register-form", "/api/auth/register");
+
+async function load() {
+    const user = await fetch("/api/auth/me").then(r => r.json()).catch(() => null);
+    document.getElementById("loading").classList.add("d-none");
+    if (!user) {
+        document.getElementById("logged-out").classList.remove("d-none");
+        if (location.hash === "#register") showForm("register");
+        return;
+    }
+    const facts = [
+        [t("username"), user.username],
+        [t("display_name"), user.display_name],
+        [t("email"), user.email],
+        [t("member_since"), new Date(user.created_at).toLocaleDateString(LOCALE)],
+    ];
+    document.getElementById("account-facts").innerHTML = facts.map(([k, v]) =>
+        `<dt class="col-sm-4 text-body-secondary">${esc(k)}</dt><dd class="col-sm-8">${esc(v)}</dd>`).join("");
+    document.getElementById("logout").onclick = async () => {
+        await api("/api/auth/logout");
+        location.assign("/");
+    };
+    document.getElementById("logged-in").classList.remove("d-none");
+}
+
+applyI18n();
+load();
+</script>
+</body>
+</html>

@@ -7,6 +7,7 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/common.css" rel="stylesheet">
     <script src="/static/common.js"></script>
     <script src="/static/i18n.js"></script>
 
@@ -39,9 +40,6 @@
         .offer-btn .store { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .offer-btn .price { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
         .offer-btn .was { font-weight: 400; text-decoration: line-through; opacity: .75; margin-right: .2rem; }
-        /* Tabs as solid buttons too (Bootstrap pills are plain text until selected) */
-        .nav-pills .nav-link:not(.active) { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); }
-        .nav-pills .nav-link:not(.active):hover { background: var(--bs-tertiary-bg); }
         .discount-badge { position: absolute; top: .4rem; left: .4rem; font-size: .8rem; }
         .release-date { width: 3.2rem; }
         .release-item img { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: #000; }
@@ -58,6 +56,7 @@
         <div class="d-flex gap-2">
             <!-- Back to the front page; shown while search results are on screen -->
             <button id="home-btn" onclick="goHome()" class="btn btn-sm btn-primary d-none" data-i18n="home">🏠 Início</button>
+            <div id="account-area" class="d-flex gap-2"></div>
             <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
             <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
         </div>
@@ -766,6 +765,7 @@ function toggleFavorite(group) {
 }
 
 applyI18n();
+renderAccountArea();
 
 // /?q=zelda opens with that search, so searches can be bookmarked or shared
 loadFilters().then(() => {

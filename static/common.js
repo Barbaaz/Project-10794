@@ -48,3 +48,39 @@ function toggleDark() {
 }
 
 document.documentElement.setAttribute("data-bs-theme", savedTheme());
+
+// Calls to our API that change something: JSON in and out, with the header the server
+// requires on such requests (it can't be added by another site: app/web.py).
+// Resolves to {ok, status, data}; data.error is a code for t("error_" + code).
+async function api(path, { method = "POST", body } = {}) {
+    const response = await fetch(path, {
+        method,
+        headers: { "X-Requested-With": "fetch", ...(body !== undefined ? { "Content-Type": "application/json" } : {}) },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    let data = null;
+    try { data = await response.json(); } catch (e) {}
+    return { ok: response.ok, status: response.status, data };
+}
+
+// The account part of the header: "Entrar" when logged out, the username and "Sair" when logged in.
+// After logging in / out, the page reloads so everything shows the right state.
+let currentUser = null;
+
+async function renderAccountArea() {
+    const box = document.getElementById("account-area");
+    if (!box) return;
+    try { currentUser = await fetch("/api/auth/me").then(r => r.json()); } catch (e) { currentUser = null; }
+    if (!currentUser) {
+        const next = encodeURIComponent(location.pathname + location.search);
+        box.innerHTML = `<a href="/account?next=${next}" class="btn btn-sm btn-primary">${t("log_in")}</a>`;
+        return;
+    }
+    box.innerHTML = `
+        <a href="/account" class="btn btn-sm btn-secondary" title="${esc(t("my_account"))}">👤 ${esc(currentUser.username || currentUser.display_name)}</a>
+        <button type="button" class="btn btn-sm btn-secondary" id="logout-btn">${t("log_out")}</button>`;
+    box.querySelector("#logout-btn").onclick = async () => {
+        await api("/api/auth/logout");
+        location.reload();
+    };
+}

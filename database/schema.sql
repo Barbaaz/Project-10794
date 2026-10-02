@@ -131,7 +131,7 @@ IF OBJECT_ID('dbo.users', 'U') IS NULL
 CREATE TABLE dbo.users (
     id             INT IDENTITY(1,1) PRIMARY KEY,
     email          NVARCHAR(255) NOT NULL UNIQUE,
-    password_hash  NVARCHAR(255) NOT NULL,       -- never store plain passwords
+    password_hash  NVARCHAR(255) NULL,           -- never store plain passwords; NULL = Google / Microsoft only
     display_name   NVARCHAR(100) NOT NULL,
     location       NVARCHAR(100) NULL,           -- e.g. city, for local pickup
     is_active      BIT           NOT NULL DEFAULT 1,
@@ -244,4 +244,20 @@ BEGIN
     JOIN dbo.game_editions e ON e.id = sp.edition_id
     WHERE s.slug IN ('press_start', 'mega-mania') AND e.edition_key <> '' AND sp.details_checked_at IS NOT NULL;
 END
+GO
+
+-- Accounts (Phase 3): log in with username or email. password_hash is NULL for an account
+-- that only signs in with Google / Microsoft. Usernames are unique (case-insensitive, like
+-- the database's collation); the filtered index lets older rows without one exist.
+IF COL_LENGTH('dbo.users', 'username') IS NULL
+    ALTER TABLE dbo.users ADD
+        username      NVARCHAR(30) NULL,
+        is_admin      BIT          NOT NULL DEFAULT 0,   -- moderation
+        last_login_at DATETIME2    NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ux_users_username')
+    CREATE UNIQUE INDEX ux_users_username ON dbo.users (username) WHERE username IS NOT NULL;
+GO
+IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.users') AND name = 'password_hash' AND is_nullable = 0)
+    ALTER TABLE dbo.users ALTER COLUMN password_hash NVARCHAR(255) NULL;
 GO

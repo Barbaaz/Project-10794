@@ -5,20 +5,41 @@ scheduler fills (python -m scheduler.run_all_scrapers). Nothing here scrapes the
     python app.py                     # development server, http://127.0.0.1:5000
     waitress-serve app.web:app        # production server (Docker uses this)
 """
+from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, request, jsonify, redirect, render_template
+from flask import Flask, abort, request, jsonify, redirect, render_template
 from werkzeug.exceptions import HTTPException
 
-from app.routes import games, prices, stores
+from app.config import COOKIE_SECURE, SECRET_KEY
+from app.routes import auth, games, prices, stores
 from app.services.game_service import game_exists, merged_into
 
 ROOT = Path(__file__).resolve().parent.parent
 
 app = Flask(__name__, template_folder=str(ROOT / "templates"), static_folder=str(ROOT / "static"))
-app.register_blueprint(games.bp)
-app.register_blueprint(prices.bp)
-app.register_blueprint(stores.bp)
+app.config.update(
+    SECRET_KEY=SECRET_KEY,
+    SESSION_COOKIE_HTTPONLY=True,           # page scripts can't read the login cookie
+    SESSION_COOKIE_SAMESITE="Lax",          # not sent with requests started by other sites
+    SESSION_COOKIE_SECURE=COOKIE_SECURE,    # HTTPS only, once served over HTTPS
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+)
+for blueprint in (auth.bp, games.bp, prices.bp, stores.bp):
+    app.register_blueprint(blueprint)
+
+CHANGING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+@app.before_request
+def only_our_pages_change_things():
+    """
+    Requests that change something must come from our own pages' scripts: they send the
+    X-Requested-With header, which another site can't add to a request to us (no CORS here).
+    Together with the SameSite cookie, this stops other sites acting as a logged-in visitor.
+    """
+    if request.method in CHANGING_METHODS and request.headers.get("X-Requested-With") != "fetch":
+        abort(403, description="missing_request_header")
 
 
 @app.errorhandler(HTTPException)
@@ -31,6 +52,12 @@ def json_error(e):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/account")
+def account_page():
+    """Log in / create an account; the account itself when logged in."""
+    return render_template("account.html")
 
 
 @app.route("/favicon.ico")

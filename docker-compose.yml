@@ -17,6 +17,8 @@ services:
       - db
     environment:
       DB_CONNECTION_STRING: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=db,1433;DATABASE=Project10794;UID=sa;PWD=${DB_PASSWORD};TrustServerCertificate=yes;"
+      # Signs the login cookie; keep it secret and the same between restarts
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env (copy .env.example)}
       # Optional: only needed to look up new games on IGDB (pipeline/igdb.py)
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}

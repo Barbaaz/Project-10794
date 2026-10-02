@@ -20,7 +20,7 @@ Express and the site in containers and creates the database by itself.
    cd Project-10794
    ```
 2. Copy `.env.example` to `.env` and set your own `DB_PASSWORD` in it (8+ characters with upper
-   case, lower case and a number).
+   case, lower case and a number) and a long random `SECRET_KEY` (the file says how to make one).
 3. **Demo data** (recommended): if you were given a `demo.json.gz` file, put it in `database/demo/`.
    It holds the games and prices collected so far, so you don't have to scrape the stores. It isn't
    in the repository (it contains the stores' descriptions), so ask for it.
@@ -81,6 +81,13 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/games/editions?ids=12,34` | Favourites: these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
 | `GET /api/stores` | Active stores with `last_updated`, `last_status` / `last_error` of the latest run and `is_stale` (no update in 36 h) |
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |
+| `POST /api/auth/register` `{username, email, password, display_name?}` | Create an account and log in (the session cookie) |
+| `POST /api/auth/login` `{login, password}` | Log in with username or email; locked for 15 min after 5 wrong passwords |
+| `POST /api/auth/logout` · `GET /api/auth/me` | Log out · the logged-in user (or `null`) |
+
+Requests that change something (POST / PUT / DELETE) must send the header `X-Requested-With: fetch`
+(the pages' `api()` helper in `static/common.js` does): another site can't add it, so it can't act
+as a logged-in visitor.
 
 An offer has `price`, `in_stock`, `condition` (`new`/`used`), `url`, and — only when the
 discount is real — `was_price` and `discount_percent`. Errors are `{"error": "..."}`
