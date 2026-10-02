@@ -33,6 +33,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/deals?limit=12&min_percent=15` | Editions clearly cheaper at one store than at the next cheapest (15–60% gap, a comparison, not a discount); shown while there are no real discounts |
 | `GET /api/preorders?platform=` | Games on pre-order, one group per edition, soonest release first |
 | `GET /api/releases?platform=` | Games coming out from today on, by release date (`date_is_estimate` for "31/12" dates) |
+| `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special` | The whole catalogue: every edition with an offer in stock, paged; `editions=special` = only editions above Standard |
 | `GET /api/games/editions?ids=12,34` | Favourites: these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
 | `GET /api/stores` | Active stores with `last_updated`, `last_status` / `last_error` of the latest run and `is_stale` (no update in 36 h) |
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |
@@ -44,8 +45,11 @@ with status 400 or 404. `per_page` is at most 100.
 ## Front page
 
 Tabs, the visitor's choice remembered in the browser (or opened with `/?tab=…`):
-`discounts` (featured real discounts), `preorders`, `releases` (calendar by month / day) and
-`favorites` (starred editions with their offers and historical low). Favourites that came
+`discounts` (featured real discounts, or best prices between stores until there are some),
+`preorders`, `releases` (calendar by month / day), `catalog` (everything in stock, by platform,
+sortable, 48 at a time), `special` (only editions above Standard) and `favorites` (starred
+editions with their offers and historical low). The game page's back button returns to the
+search or tab the game was opened from. Favourites that came
 back in stock show as a banner. Favourites are stored in the browser for now.
 
 ## Games and editions

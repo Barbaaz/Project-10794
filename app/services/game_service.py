@@ -234,6 +234,85 @@ def editions_with_offers(edition_ids):
     return groups
 
 
+CATALOG_SORTS = {
+    "name": "g.title, p.sort_order, CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, e.name",
+    "price_asc": "ed.best_price, g.title",
+    "price_desc": "ed.best_price DESC, g.title",
+}
+
+
+def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False):
+    """
+    The whole catalogue: every edition with at least one offer in stock, as card groups
+    (same shape as /search), one page at a time. sort: name / price_asc / price_desc.
+    special_only: only editions above Standard (Deluxe, Collector's, Steelbook...). Keys are
+    "" for Standard and "|Game Key Card" for a Standard that only differs in format.
+    """
+    order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS["name"])
+    in_stock_editions = """
+        WITH offers AS (
+            SELECT sp.edition_id, last.price
+            FROM store_products sp
+            CROSS APPLY (SELECT TOP 1 price, in_stock FROM price_snapshots ps
+                         WHERE ps.store_product_id = sp.id ORDER BY ps.scraped_at DESC, ps.id DESC) last
+            WHERE sp.is_active = 1 AND last.in_stock = 1 AND sp.edition_id IS NOT NULL
+        ),
+        ed AS (SELECT edition_id, MIN(price) AS best_price FROM offers GROUP BY edition_id)
+    """
+    filters = "(? IS NULL OR p.code = ?)"
+    if special_only:
+        filters += " AND e.edition_key <> '' AND e.edition_key NOT LIKE '|%'"
+
+    total = fetch_one(
+        f"""{in_stock_editions}
+        SELECT COUNT(*) AS total FROM ed
+        JOIN game_editions e ON e.id = ed.edition_id
+        JOIN games g ON g.id = e.game_id
+        JOIN platforms p ON p.id = g.platform_id
+        WHERE {filters}""",
+        platform, platform,
+    )["total"]
+
+    page_editions = fetch_all(
+        f"""{in_stock_editions}
+        SELECT e.id AS edition_id, e.name AS edition, e.edition_key, g.id AS game_id, g.title,
+               p.code AS console, p.name AS platform_name
+        FROM ed
+        JOIN game_editions e ON e.id = ed.edition_id
+        JOIN games g ON g.id = e.game_id
+        JOIN platforms p ON p.id = g.platform_id
+        WHERE {filters}
+        ORDER BY {order_by}
+        OFFSET ? ROWS FETCH NEXT ? ROWS ONLY""",
+        platform, platform, (page - 1) * per_page, per_page,
+    )
+
+    groups = []
+    if page_editions:
+        ids = [e["edition_id"] for e in page_editions]
+        # Two steps on purpose (see search_offers): filter current_offers by id, not by a join
+        offers = fetch_all(
+            f"""
+            SELECT {OFFER_COLUMNS}
+            FROM current_offers o JOIN stores s ON s.id = o.store_id
+            WHERE o.is_active = 1 AND o.in_stock = 1 AND o.edition_id IN ({",".join("?" * len(ids))})
+            ORDER BY o.price
+            """,
+            *ids,
+        )
+        for e in page_editions:
+            groups.append({
+                "edition_id": e["edition_id"],
+                "game_id": e["game_id"],
+                "name": e["title"] if e["edition_key"] == "" else f"{e['title']} — {e['edition']}",
+                "console": e["console"],
+                "platform_name": e["platform_name"],
+                "offers": [o for o in offers if o["edition_id"] == e["edition_id"]],
+            })
+
+    return {"page": page, "per_page": per_page, "total": total, "groups": groups}
+
+
 def game_exists(game_id):
     return fetch_one("SELECT 1 AS found FROM games WHERE id = ?", game_id) is not None
 

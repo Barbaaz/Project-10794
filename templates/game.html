@@ -55,8 +55,7 @@
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div class="d-flex gap-2">
-            <a href="/" onclick="if (document.referrer.includes(location.host)) { history.back(); return false; }"
-               class="btn btn-sm btn-secondary">← Pesquisa</a>
+            <a href="/" id="back-link" class="btn btn-sm btn-secondary">← Voltar</a>
             <a href="/" class="btn btn-sm btn-primary">🏠 Início</a>
         </div>
         <button onclick="toggleDark()" class="btn btn-sm btn-secondary" aria-label="Modo escuro">🌙</button>
@@ -389,6 +388,18 @@ function toggleDark() {
     try { localStorage.setItem("theme", next); } catch (e) {}
     if (game) render();   // charts read their colors from CSS, so redraw them
 }
+
+// Back to the search or front page tab this game was opened from (remembered by the
+// search page for this browser tab); works after reloads and doesn't rely on browser history
+function setBackLink() {
+    let last = null;
+    try { last = sessionStorage.getItem("lastListPage"); } catch (e) {}
+    if (!last || !last.startsWith("/?")) return;   // only our own pages
+    const link = document.getElementById("back-link");
+    link.href = last;
+    if (new URLSearchParams(last.slice(1)).get("q")) link.textContent = "← Pesquisa";
+}
+setBackLink();
 
 function savedTheme() {
     let theme = null;

@@ -82,6 +82,8 @@
             <li class="nav-item"><button class="nav-link" data-tab="discounts" role="tab">🔥 Descontos e melhores preços</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="preorders" role="tab">📦 Pré-reservas</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="releases" role="tab">📅 Calendário de lançamentos</button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="catalog" role="tab">📚 Catálogo</button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="special" role="tab">💎 Edições especiais</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="favorites" role="tab">⭐ Favoritos</button></li>
         </ul>
         <div id="front-loading" class="text-center my-4 d-none"><div class="spinner-border text-primary"></div></div>
@@ -187,6 +189,79 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
 // Front page tabs
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Catalogue tabs: every edition in stock (or only special editions), 48 at a time,
+// filtered by the platform selector on the server, sortable
+// ---------------------------------------------------------------------------
+
+const CATALOG_PAGE = 48;
+let catalogSort = "name";
+try { catalogSort = localStorage.getItem("catalogSort") || "name"; } catch (e) {}
+
+function catalogTab(special, empty) {
+    return {
+        platformAware: true,
+        paged: true,
+        load: platform => loadCatalogPage(special, platform, 1),
+        render: renderCatalog,
+        empty,
+    };
+}
+
+async function loadCatalogPage(special, platform, page) {
+    const params = new URLSearchParams({ sort: catalogSort, page, per_page: CATALOG_PAGE });
+    if (platform) params.set("platform", platform);
+    if (special) params.set("editions", "special");
+    const data = await fetch(`/api/games/catalog?${params}`).then(r => r.json());
+    return { ...data, special, platform };
+}
+
+function renderCatalog(data) {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <span class="small text-body-secondary me-auto">${data.total.toLocaleString("pt-PT")}
+                ${data.special ? "edições especiais" : "edições"} em stock</span>
+            <label class="small text-body-secondary" for="catalog-sort">Ordenar:</label>
+            <select id="catalog-sort" class="form-select form-select-sm w-auto">
+                <option value="name">Nome (A–Z)</option>
+                <option value="price_asc">Preço: mais barato primeiro</option>
+                <option value="price_desc">Preço: mais caro primeiro</option>
+            </select>
+        </div>`;
+
+    const select = wrap.querySelector("#catalog-sort");
+    select.value = catalogSort;
+    select.onchange = async () => {
+        catalogSort = select.value;
+        try { localStorage.setItem("catalogSort", catalogSort); } catch (e) {}
+        frontData[frontTab] = await loadCatalogPage(data.special, data.platform, 1);
+        renderFront();
+    };
+
+    const grid = cardGrid();
+    data.groups.forEach(g => grid.appendChild(makeCard(g)));
+    wrap.appendChild(grid);
+
+    if (data.groups.length < data.total) {
+        const more = document.createElement("button");
+        more.className = "btn btn-primary w-100 mt-3";
+        more.textContent = `Carregar mais (${(data.total - data.groups.length).toLocaleString("pt-PT")} restantes)`;
+        more.onclick = async () => {
+            more.disabled = true;
+            more.textContent = "A carregar…";
+            const next = await loadCatalogPage(data.special, data.platform, data.page + 1);
+            data.groups.push(...next.groups);
+            data.page = next.page;
+            const scroll = window.scrollY;
+            renderFront();
+            window.scrollTo({ top: scroll });
+        };
+        wrap.appendChild(more);
+    }
+    return wrap;
+}
+
 const FRONT_TABS = {
     discounts: {
         // Real discounts need 30 days of history; until there are some, show the biggest
@@ -207,6 +282,8 @@ const FRONT_TABS = {
     },
     preorders: { url: "/api/preorders", render: renderPreorders, empty: "Sem jogos em pré-reserva de momento." },
     releases: { url: "/api/releases", render: renderReleases, empty: "Ainda sem datas de lançamento anunciadas." },
+    catalog: catalogTab(false, "Sem jogos em stock para esta plataforma."),
+    special: catalogTab(true, "Sem edições especiais em stock para esta plataforma."),
     favorites: {
         // the list changes as the visitor stars games, so it's fetched every time
         url: () => `/api/games/editions?ids=${favorites.join(",")}`,
@@ -240,9 +317,18 @@ function releaseLabel(iso, isEstimate) {
     return `${day.getDate()} ${MONTHS[day.getMonth()].slice(0, 3)} ${day.getFullYear()}`;
 }
 
+// Keep the address bar in step with what's on screen (/?q=… or /?tab=…), and remember it
+// for this browser tab so the game page's back button returns exactly here
+function setPageUrl(url) {
+    history.replaceState(null, "", url);
+    try { sessionStorage.setItem("lastListPage", url); } catch (e) {}
+}
+
 async function selectFrontTab(tab) {
     frontTab = tab;
     try { localStorage.setItem("frontTab", tab); } catch (e) {}
+    // not while a search is on screen (or being loaded from /?q=…)
+    if (!document.getElementById("q").value.trim()) setPageUrl(`/?tab=${tab}`);
     document.querySelectorAll("[data-tab]").forEach(b => {
         b.classList.toggle("active", b.dataset.tab === tab);
         b.setAttribute("aria-selected", b.dataset.tab === tab);
@@ -277,14 +363,26 @@ async function selectFrontTab(tab) {
 
 // The platform filter applies to the front page too
 function renderFront() {
+    const config = FRONT_TABS[frontTab];
+    const content = document.getElementById("front-content");
+    const empty = document.getElementById("front-empty");
+    content.innerHTML = "";
+
+    // Catalogue tabs: one page of results, already filtered by platform on the server
+    if (config.paged) {
+        const data = frontData[frontTab];
+        const hasGroups = Boolean(data?.groups?.length);
+        if (hasGroups) content.appendChild(config.render(data));
+        empty.textContent = config.empty;
+        empty.classList.toggle("d-none", hasGroups);
+        return;
+    }
+
     const selected = document.getElementById("consoleFilter").value;
     const items = (frontData[frontTab] || []).filter(i => !selected || (i.console || i.platform) === selected);
 
-    const content = document.getElementById("front-content");
-    content.innerHTML = "";
-    if (items.length) content.appendChild(FRONT_TABS[frontTab].render(items));
+    if (items.length) content.appendChild(config.render(items));
 
-    const empty = document.getElementById("front-empty");
     empty.textContent = selected && frontData[frontTab]?.length ? "Nada para esta plataforma." : FRONT_TABS[frontTab].empty;
     empty.classList.toggle("d-none", items.length > 0);
 }
@@ -504,7 +602,7 @@ async function search() {
         currentData = [];
         document.getElementById("results").innerHTML = "";
         document.getElementById("empty").classList.add("d-none");
-        history.replaceState(null, "", location.pathname);
+        setPageUrl(`/?tab=${frontTab}`);
         showFront(true);
         return;
     }
@@ -516,7 +614,7 @@ async function search() {
     document.getElementById("empty").classList.add("d-none");
     document.getElementById("results").innerHTML = "";
 
-    history.replaceState(null, "", `?q=${encodeURIComponent(query)}`);
+    setPageUrl(`/?q=${encodeURIComponent(query)}`);
 
     try {
         const res = await fetch(`/search?q=${encodeURIComponent(query)}`);

@@ -17,6 +17,21 @@ def list_games():
     ))
 
 
+@bp.get("/catalog")
+def catalog():
+    """
+    /api/games/catalog?platform=PS5&sort=name|price_asc|price_desc&page=1&per_page=48&editions=special
+    editions=special: only editions above Standard (Deluxe, Collector's...)
+    """
+    sort = request.args.get("sort", "name")
+    if sort not in game_service.CATALOG_SORTS:
+        abort(400, description=f"'sort' must be one of: {', '.join(game_service.CATALOG_SORTS)}")
+    page = int_arg("page", 1, minimum=1)
+    per_page = int_arg("per_page", 48, minimum=1, maximum=100)
+    special_only = request.args.get("editions") == "special"
+    return jsonify(game_service.catalog(request.args.get("platform") or None, sort, page, per_page, special_only))
+
+
 @bp.get("/editions")
 def editions():
     """/api/games/editions?ids=12,34: these editions with their offers (the favourites tab)."""
