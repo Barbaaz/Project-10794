@@ -198,14 +198,65 @@ const CATALOG_PAGE = 48;
 let catalogSort = "name";
 try { catalogSort = localStorage.getItem("catalogSort") || "name"; } catch (e) {}
 
+// /?tab=catalog&page=3 opens on that page (bookmarks, the game page's back button)
+let pageFromUrl = Number(new URLSearchParams(location.search).get("page")) || 1;
+
 function catalogTab(special, empty) {
     return {
         platformAware: true,
         paged: true,
-        load: platform => loadCatalogPage(special, platform, 1),
+        load: platform => {
+            const page = pageFromUrl;
+            pageFromUrl = 1;    // only for the first load
+            return loadCatalogPage(special, platform, page);
+        },
         render: renderCatalog,
         empty,
     };
+}
+
+async function showCatalogPage(page) {
+    const data = frontData[frontTab];
+    frontData[frontTab] = await loadCatalogPage(data.special, data.platform, page);
+    setPageUrl(page > 1 ? `/?tab=${frontTab}&page=${page}` : `/?tab=${frontTab}`);
+    renderFront();
+    document.getElementById("front").scrollIntoView({ block: "start" });
+}
+
+// « Anterior  1 … 4 5 [6] 7 8 … 75  Seguinte »  (solid buttons, current page in blue)
+function pagination(page, pages) {
+    const nav = document.createElement("nav");
+    nav.className = "d-flex flex-wrap justify-content-center gap-1 mt-4";
+    nav.setAttribute("aria-label", "Páginas");
+    if (pages <= 1) return nav;
+
+    const shown = new Set([1, pages]);
+    for (let p = page - 2; p <= page + 2; p++) if (p >= 1 && p <= pages) shown.add(p);
+    const numbers = [...shown].sort((a, b) => a - b);
+
+    const button = (label, target, { current = false, disabled = false } = {}) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = `btn btn-sm ${current ? "btn-primary" : "btn-secondary"}`;
+        b.textContent = label;
+        b.disabled = disabled;
+        if (current) b.setAttribute("aria-current", "page");
+        if (!disabled && !current) b.onclick = () => showCatalogPage(target);
+        return b;
+    };
+
+    nav.appendChild(button("« Anterior", page - 1, { disabled: page === 1 }));
+    numbers.forEach((p, i) => {
+        if (i > 0 && p - numbers[i - 1] > 1) {
+            const gap = document.createElement("span");
+            gap.className = "px-1 align-self-center text-body-secondary";
+            gap.textContent = "…";
+            nav.appendChild(gap);
+        }
+        nav.appendChild(button(String(p), p, { current: p === page }));
+    });
+    nav.appendChild(button("Seguinte »", page + 1, { disabled: page === pages }));
+    return nav;
 }
 
 async function loadCatalogPage(special, platform, page) {
@@ -221,7 +272,7 @@ function renderCatalog(data) {
     wrap.innerHTML = `
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
             <span class="small text-body-secondary me-auto">${data.total.toLocaleString("pt-PT")}
-                ${data.special ? "edições especiais" : "edições"} em stock</span>
+                ${data.special ? "edições especiais" : "edições"} em stock · página ${data.page} de ${data.pages}</span>
             <label class="small text-body-secondary" for="catalog-sort">Ordenar:</label>
             <select id="catalog-sort" class="form-select form-select-sm w-auto">
                 <option value="name">Nome (A–Z)</option>
@@ -235,30 +286,20 @@ function renderCatalog(data) {
     select.onchange = async () => {
         catalogSort = select.value;
         try { localStorage.setItem("catalogSort", catalogSort); } catch (e) {}
-        frontData[frontTab] = await loadCatalogPage(data.special, data.platform, 1);
-        renderFront();
+        await showCatalogPage(1);
     };
 
+    // Games not out yet: "Pré-reserva" on the cover, release date next to the platform
     const grid = cardGrid();
-    data.groups.forEach(g => grid.appendChild(makeCard(g)));
+    data.groups.forEach(g => {
+        if (!g.is_preorder) return grid.appendChild(makeCard(g));
+        const card = { ...g, platform_name: `${g.platform_name} · 📅 ${releaseLabel(g.release_date, g.date_is_estimate)}` };
+        grid.appendChild(makeCard(card, {
+            coverBadge: `<span class="badge text-bg-primary discount-badge">Pré-reserva</span>`,
+        }));
+    });
     wrap.appendChild(grid);
-
-    if (data.groups.length < data.total) {
-        const more = document.createElement("button");
-        more.className = "btn btn-primary w-100 mt-3";
-        more.textContent = `Carregar mais (${(data.total - data.groups.length).toLocaleString("pt-PT")} restantes)`;
-        more.onclick = async () => {
-            more.disabled = true;
-            more.textContent = "A carregar…";
-            const next = await loadCatalogPage(data.special, data.platform, data.page + 1);
-            data.groups.push(...next.groups);
-            data.page = next.page;
-            const scroll = window.scrollY;
-            renderFront();
-            window.scrollTo({ top: scroll });
-        };
-        wrap.appendChild(more);
-    }
+    wrap.appendChild(pagination(data.page, data.pages));
     return wrap;
 }
 
@@ -327,8 +368,6 @@ function setPageUrl(url) {
 async function selectFrontTab(tab) {
     frontTab = tab;
     try { localStorage.setItem("frontTab", tab); } catch (e) {}
-    // not while a search is on screen (or being loaded from /?q=…)
-    if (!document.getElementById("q").value.trim()) setPageUrl(`/?tab=${tab}`);
     document.querySelectorAll("[data-tab]").forEach(b => {
         b.classList.toggle("active", b.dataset.tab === tab);
         b.setAttribute("aria-selected", b.dataset.tab === tab);
@@ -357,6 +396,12 @@ async function selectFrontTab(tab) {
         }
         document.getElementById("front-loading").classList.add("d-none");
         if (tab !== frontTab) return;   // the visitor switched tabs while this was loading
+    }
+
+    // Address bar: /?tab=… (+ &page=… on catalogue pages), not while a search is on screen
+    if (!document.getElementById("q").value.trim()) {
+        const page = config.paged ? frontData[tab]?.page || 1 : 1;
+        setPageUrl(page > 1 ? `/?tab=${tab}&page=${page}` : `/?tab=${tab}`);
     }
     renderFront();
 }

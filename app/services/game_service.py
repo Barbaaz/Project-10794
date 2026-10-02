@@ -310,7 +310,18 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False)
                 "offers": [o for o in offers if o["edition_id"] == e["edition_id"]],
             })
 
-    return {"page": page, "per_page": per_page, "total": total, "groups": groups}
+        # Games not out yet: their release date, so the card can say so
+        from app.services.release_service import game_release_dates   # avoids a circular import
+        pre_order_games = {g["game_id"] for g in groups if g["offers"] and all(o["is_preorder"] for o in g["offers"])}
+        dates = game_release_dates(list(pre_order_games))
+        for g in groups:
+            g["is_preorder"] = g["game_id"] in pre_order_games
+            release = dates.get(g["game_id"]) or {}
+            g["release_date"] = release.get("release_date")
+            g["date_is_estimate"] = release.get("date_is_estimate", False)
+
+    pages = max(1, -(-total // per_page))
+    return {"page": page, "per_page": per_page, "pages": pages, "total": total, "groups": groups}
 
 
 def game_exists(game_id):

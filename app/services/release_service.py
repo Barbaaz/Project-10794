@@ -40,12 +40,19 @@ def _cached(key, compute):
 
 def game_release_date(game_id):
     """{release_date, date_is_estimate} for one game, or None."""
+    return game_release_dates([game_id]).get(game_id)
+
+
+def game_release_dates(game_ids):
+    """{game_id: {release_date, date_is_estimate}} for these games (those with a known date)."""
+    if not game_ids:
+        return {}
     rows = fetch_all(
-        f"WITH {GAME_RELEASE_DATES} SELECT release_date, CAST(date_is_estimate AS BIT) AS date_is_estimate "
-        "FROM game_release WHERE game_id = ?",
-        game_id,
+        f"WITH {GAME_RELEASE_DATES} SELECT game_id, release_date, CAST(date_is_estimate AS BIT) AS date_is_estimate "
+        f"FROM game_release WHERE game_id IN ({','.join('?' * len(game_ids))})",
+        *game_ids,
     )
-    return rows[0] if rows else None
+    return {r.pop("game_id"): r for r in rows}
 
 
 def preorders():
