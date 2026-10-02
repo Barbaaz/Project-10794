@@ -24,7 +24,7 @@ _failures = {}   # (ip, login) → [times of recent failures]
 
 # What a user sees about their own account (never the password hash). Other people see less:
 # never the email (see the marketplace's seller info)
-OWN_FIELDS = ("id", "username", "display_name", "email", "location", "is_admin", "created_at")
+OWN_FIELDS = ("id", "username", "display_name", "email", "location", "role", "created_at")
 
 
 class AccountError(Exception):

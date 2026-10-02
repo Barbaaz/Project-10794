@@ -87,7 +87,7 @@ def ratings_of_conversation(user_id, conversation_id):
     with session() as s:
         now = _now(s)
         ratings = [
-            fields(r, "id", "rater_id", "stars", "comment", "reply", "created_at",
+            fields(r, "id", "rater_id", "stars", "comment", "reply", "created_at", "hidden",
                    editable=now - r.created_at <= timedelta(days=EDIT_DAYS))
             for r in s.scalars(select(Rating).where(Rating.conversation_id == conversation_id))
         ]
@@ -120,13 +120,16 @@ def check_not_blocked(user_id, error_class):
 
 
 def summaries(user_ids):
-    """{user_id: (average stars to one decimal, number of ratings)} for these users (rated ones only)."""
+    """
+    {user_id: (average stars to one decimal, number of ratings)} for these users (rated ones only);
+    ratings hidden by a moderator don't count.
+    """
     if not user_ids:
         return {}
     average = cast(func.avg(cast(Rating.stars, Numeric(3, 2))), Numeric(3, 1))
     with session() as s:
         rows = s.execute(select(Rating.rated_id, average, func.count())
-                         .where(Rating.rated_id.in_(set(user_ids))).group_by(Rating.rated_id)).all()
+                         .where(Rating.rated_id.in_(set(user_ids)), ~Rating.hidden).group_by(Rating.rated_id)).all()
     return {user_id: (float(avg), count) for user_id, avg, count in rows}
 
 
@@ -138,7 +141,8 @@ def profile(username):
         if not user:
             return None
         result = fields(user, "id", "username", "display_name", "created_at")
-        ratings = s.scalars(select(Rating).where(Rating.rated_id == user.id).order_by(Rating.created_at.desc())).all()
+        ratings = s.scalars(select(Rating).where(Rating.rated_id == user.id, ~Rating.hidden)
+                            .order_by(Rating.created_at.desc())).all()
         result["ratings"] = [
             fields(r, "id", "stars", "comment", "reply", "created_at",
                    rater_username=r.rater.username,

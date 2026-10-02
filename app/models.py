@@ -18,7 +18,10 @@ NOW = func.sysutcdatetime()      # the database's clock, in UTC
 
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages",
-                 "user_favorites", "user_ratings"}
+                 "user_favorites", "user_ratings", "reports", "moderation_log"}
+
+# user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
+ROLES = ("user", "moderator", "admin")
 
 
 class Base(DeclarativeBase):
@@ -70,10 +73,14 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(Unicode(255))      # None: Google / Microsoft only
     display_name: Mapped[str] = mapped_column(Unicode(100))
     location: Mapped[str | None] = mapped_column(Unicode(100))
-    is_active: Mapped[bool] = mapped_column(Boolean, server_default="1")
-    is_admin: Mapped[bool] = mapped_column(Boolean, server_default="0")
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default="1")      # False: blocked
+    role: Mapped[str] = mapped_column(String(10), server_default="user")
     last_login_at = mapped_column(DATETIME2)
     created_at = created_at()
+
+    @property
+    def is_moderator(self):
+        return self.role in ("moderator", "admin")
 
 
 class Listing(Base):
@@ -90,6 +97,7 @@ class Listing(Base):
     condition: Mapped[str] = mapped_column(String(10))
     description: Mapped[str | None] = mapped_column(Unicode(2000))
     status: Mapped[str] = mapped_column(String(10), server_default="active")
+    removed_by_moderator: Mapped[bool] = mapped_column(Boolean, server_default="0")   # the seller can't undo it
     created_at = created_at()
     updated_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
     sold_at = mapped_column(DATETIME2)
@@ -163,12 +171,52 @@ class Rating(Base):
     stars: Mapped[int] = mapped_column(TINYINT)
     comment: Mapped[str | None] = mapped_column(Unicode(500))
     reply: Mapped[str | None] = mapped_column(Unicode(500))
+    hidden: Mapped[bool] = mapped_column(Boolean, server_default="0")   # by a moderator: not shown, not counted
     created_at = created_at()
     updated_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
 
     rater: Mapped[User] = relationship(foreign_keys=[rater_id], lazy="joined")
     conversation: Mapped[Conversation] = relationship(lazy="joined")
 
+
+
+# --- moderation --------------------------------------------------------------------------
+
+REPORT_KINDS = ("listing", "user", "rating")
+REPORT_REASONS = ("fake", "scam", "offensive", "wrong_game", "prohibited", "other")
+
+
+class Report(Base):
+    """Someone reports a listing, a user or a rating; a moderator resolves or dismisses it."""
+    __tablename__ = "reports"
+    __table_args__ = (Index("ix_reports_status", "status", "created_at"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    kind: Mapped[str] = mapped_column(String(10))          # REPORT_KINDS
+    target_id: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(20))        # REPORT_REASONS
+    details: Mapped[str | None] = mapped_column(Unicode(1000))
+    status: Mapped[str] = mapped_column(String(10), server_default="open")   # open / resolved / dismissed
+    created_at = created_at()
+    resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    resolved_at = mapped_column(DATETIME2)
+    resolution: Mapped[str | None] = mapped_column(Unicode(500))
+
+    reporter: Mapped[User] = relationship(foreign_keys=[reporter_id], lazy="joined")
+
+
+class ModerationLog(Base):
+    """Every moderator action: who did what to which thing, and why."""
+    __tablename__ = "moderation_log"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    moderator_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    action: Mapped[str] = mapped_column(String(30))
+    kind: Mapped[str] = mapped_column(String(10))
+    target_id: Mapped[int] = mapped_column(Integer)
+    note: Mapped[str | None] = mapped_column(Unicode(500))
+    created_at = created_at()
+
+    moderator: Mapped[User] = relationship(lazy="joined")
 
 def fields(obj, *names, **extra):
     """{name: value} of these attributes, JSON-ready (as the API sends them), plus `extra`."""

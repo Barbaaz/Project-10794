@@ -7,7 +7,7 @@ from helpers import HEADERS
 
 @pytest.fixture
 def client(web_client, test_db):
-    for table in ("user_ratings", "messages", "conversations", "listing_photos", "user_listings", "user_favorites", "users"):
+    for table in ("moderation_log", "reports", "user_ratings", "messages", "conversations", "listing_photos", "user_listings", "user_favorites", "users"):
         test_db.conn.cursor().execute(f"DELETE FROM {table}")
     auth_service._failures.clear()
     return web_client

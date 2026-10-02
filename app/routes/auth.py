@@ -31,6 +31,25 @@ def login_required(view):
     return wrapper
 
 
+def role_required(*roles):
+    """401 without a logged-in user, 403 when their role isn't one of `roles`."""
+    def decorator(view):
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            user = current_user()
+            if user is None:
+                abort(401, description="login_required")
+            if user["role"] not in roles:
+                abort(403, description="not_allowed")
+            return view(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+moderator_required = role_required("moderator", "admin")
+admin_required = role_required("admin")
+
+
 def log_in(user):
     session.clear()            # a new session on login (no reuse of one set before)
     session["user_id"] = user["id"]

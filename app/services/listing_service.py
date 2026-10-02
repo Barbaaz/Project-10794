@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import case, func, select
 
-from app.models import NOW, Conversation, Game, GameEdition, Listing, ListingPhoto, Platform, fields
+from app.models import NOW, Conversation, Game, GameEdition, Listing, ListingPhoto, Platform, User, fields
 from app.services.common import card_group, page_result
 from app.services.photo_storage import PhotoError, process_photo, storage
 from app.services.rating_service import check_not_blocked, summaries
@@ -20,6 +20,9 @@ MIN_PRICE, MAX_PRICE = Decimal("0.50"), Decimal("10000")
 MAX_DESCRIPTION = 2000
 
 BROWSE_SORTS = ("newest", "price_asc", "price_desc")
+
+# Listings of a blocked seller (moderation) aren't shown to anyone
+SELLER_ACTIVE = Listing.user_id.in_(select(User.id).where(User.is_active))
 
 
 class ListingError(Exception):
@@ -62,13 +65,14 @@ def _listings(*conditions, order_by):
 
 def listings_for_game(game_id):
     """The game's listings everyone can see (active first, cheapest first), each with its photos."""
-    return _listings(Listing.game_id == game_id, Listing.status.in_(VISIBLE),
+    return _listings(Listing.game_id == game_id, Listing.status.in_(VISIBLE), SELLER_ACTIVE,
                      order_by=(case((Listing.status == "active", 0), else_=1), Listing.price))
 
 
 def listings_of_user(user_id):
     """A seller's listings everyone can see (their profile page), newest first."""
-    return _listings(Listing.user_id == user_id, Listing.status.in_(VISIBLE), order_by=(Listing.created_at.desc(),))
+    return _listings(Listing.user_id == user_id, Listing.status.in_(VISIBLE), SELLER_ACTIVE,
+                     order_by=(Listing.created_at.desc(),))
 
 
 def my_listings(user_id):
@@ -90,6 +94,8 @@ def get_listing(listing_id, viewer_id=None):
             Conversation.listing_id == listing_id, Conversation.buyer_id == viewer_id).limit(1))
         if listing.status not in VISIBLE and listing.user_id != viewer_id and not talked:
             return None
+        if not listing.seller.is_active and listing.user_id != viewer_id:
+            return None                       # a blocked seller's listing
         return as_dicts([listing])[0]
 
 
@@ -101,7 +107,7 @@ def browse(platform=None, sort="newest", page=1, per_page=48):
     """
     used = (select(Listing.edition_id, func.min(Listing.price).label("min_price"),
                    func.max(Listing.created_at).label("newest"))
-            .where(Listing.status == "active", Listing.edition_id.is_not(None))
+            .where(Listing.status == "active", Listing.edition_id.is_not(None), SELLER_ACTIVE)
             .group_by(Listing.edition_id).subquery())
     editions = (select(GameEdition, Game, Platform)
                 .join(used, used.c.edition_id == GameEdition.id)
@@ -115,7 +121,8 @@ def browse(platform=None, sort="newest", page=1, per_page=48):
         total = s.scalar(select(func.count()).select_from(editions.subquery()))
         rows = s.execute(editions.order_by(*order).offset((page - 1) * per_page).limit(per_page)).all()
         ids = [edition.id for edition, _, _ in rows]
-        listings = as_dicts(s.scalars(select(Listing).where(Listing.status == "active", Listing.edition_id.in_(ids))
+        listings = as_dicts(s.scalars(select(Listing).where(Listing.status == "active", Listing.edition_id.in_(ids),
+                                                          SELLER_ACTIVE)
                                       .order_by(Listing.price, Listing.created_at)).unique().all()) if ids else []
     groups = [card_group({"edition_id": edition.id, "game_id": game.id, "title": game.title,
                           "edition_key": edition.edition_key, "edition": edition.name,
@@ -136,7 +143,7 @@ def used_summaries(edition_ids):
         Listing.edition_id, Listing.price, Listing.id,
         func.count().over(partition_by=Listing.edition_id).label("count"),
         func.row_number().over(partition_by=Listing.edition_id, order_by=(Listing.price, Listing.id)).label("rn"),
-    ).where(Listing.status == "active", Listing.edition_id.in_(edition_ids)).subquery()
+    ).where(Listing.status == "active", Listing.edition_id.in_(edition_ids), SELLER_ACTIVE).subquery()
     with session() as s:
         rows = s.execute(select(ranked).where(ranked.c.rn == 1)).all()
     return {r.edition_id: {"count": r.count, "price": json_value(r.price), "listing_id": r.id} for r in rows}
@@ -172,6 +179,8 @@ def update_listing(user_id, listing_id, changes):
     """The seller changes price / condition / description / status."""
     with session() as s:
         listing = _own_listing(s, user_id, listing_id)
+        if listing.removed_by_moderator:
+            raise ListingError("removed_by_moderator", 403)     # only a moderator can bring it back
         checked = _checked_fields(changes.get("price", listing.price), changes.get("condition", listing.condition),
                                   changes.get("description", listing.description))
         status = changes.get("status", listing.status)
