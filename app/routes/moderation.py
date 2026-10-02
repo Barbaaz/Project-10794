@@ -5,7 +5,7 @@ moderators: admin). See app/services/moderation_service.py.
 from flask import Blueprint, jsonify, request
 
 from app.routes.auth import admin_required, current_user, login_required, moderator_required
-from app.services import moderation_service
+from app.services import match_service, moderation_service
 from app.services.moderation_service import ModerationError
 
 bp = Blueprint("moderation", __name__, url_prefix="/api")
@@ -75,3 +75,34 @@ def set_role():
     """{username, role: moderator | user}"""
     data = body()
     return jsonify(moderation_service.set_role(current_user()["id"], data.get("username"), data.get("role")))
+
+
+# --- fixing wrong matches (app/services/match_service.py) -------------------------------
+
+@bp.get("/mod/matches")
+@moderator_required
+def find_matches():
+    """?q=words: games with their editions and store products."""
+    return jsonify(match_service.find(request.args.get("q", "")))
+
+
+@bp.post("/mod/matches")
+@moderator_required
+def move_products():
+    """{product_ids, edition_id} or {product_ids, game_id, new_edition}: move and pin them there."""
+    data = body()
+    edition_id = match_service.move(current_user()["id"], data.get("product_ids"), data.get("edition_id"),
+                                    data.get("game_id"), data.get("new_edition"))
+    return jsonify(edition_id=edition_id)
+
+
+@bp.get("/mod/pins")
+@moderator_required
+def pins():
+    return jsonify(match_service.pins())
+
+
+@bp.delete("/mod/pins/<int:product_id>")
+@moderator_required
+def unpin(product_id):
+    return jsonify(match_service.unpin(current_user()["id"], product_id))

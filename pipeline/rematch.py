@@ -23,7 +23,7 @@ from core.editions import edition_key_of, is_excluded
 from db import session
 from pipeline.igdb import IGDB_COLUMNS
 from pipeline.matcher import GameMatcher
-from scheduler.jobs import setup_logging
+from pipeline.process_scraped_data import pinned_editions
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ def rematch_all(dry_run=False):
         platform_ids = dict(s.execute(select(Platform.code, Platform.id)).all())
         codes = {v: k for k, v in platform_ids.items()}
         products = s.scalars(select(StoreProduct).order_by(StoreProduct.id)).all()
+        pinned = pinned_editions(s)       # moderators' pins: these products stay where they are
 
         rekeyed = rekey_editions(s)
         matcher = GameMatcher(s, platform_ids)
@@ -53,13 +54,17 @@ def rematch_all(dry_run=False):
                 changed += 1
                 continue
 
-            product = {"external_name": sp.external_name, "console": codes.get(sp.platform_id), "image": sp.image_url}
-            game_id, edition_id, title, edition_name = matcher.match_details(product)
+            if sp.id in pinned:
+                (game_id, edition_id), title, edition_name = pinned[sp.id], None, None    # names: as they are
+            else:
+                product = {"external_name": sp.external_name, "console": codes.get(sp.platform_id), "image": sp.image_url}
+                game_id, edition_id, title, edition_name = matcher.match_details(product)
 
             if game_id:
                 if title:
                     game_titles[game_id][title] += 1
-                edition_names[edition_id][edition_name] += 1
+                if edition_name:
+                    edition_names[edition_id][edition_name] += 1
 
             if (game_id, edition_id) != (old_game, old_edition):
                 sp.game_id, sp.edition_id = game_id, edition_id
@@ -205,5 +210,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dry-run", action="store_true", help="list the merges, change nothing")
     args = parser.parse_args()
+    from scheduler.jobs import setup_logging
     setup_logging()
     rematch_all(dry_run=args.dry_run)

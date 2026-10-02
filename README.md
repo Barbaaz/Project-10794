@@ -111,6 +111,8 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `POST /api/mod/actions` `{action, target_id, note?}` | Moderators: `hide_listing` / `restore_listing`, `hide_rating` / `restore_rating`, `block_user` / `unblock_user`, `dismiss` (target = the report) |
 | `GET /api/mod/conversations/<id>` | Moderators: a purchase's messages, read-only |
 | `GET` / `POST /api/mod/staff` `{username, role: moderator\|user}` | Admins: the moderators and admins · name or remove a moderator |
+| `GET /api/mod/matches?q=` · `POST /api/mod/matches` `{product_ids, edition_id \| game_id + new_edition}` | Moderators: a game's editions with their store products · move products to an edition and pin them there (the daily update and `pipeline.rematch` leave pinned products alone; an edition left empty is merged) |
+| `GET /api/mod/pins` · `DELETE /api/mod/pins/<product_id>` | Moderators: pinned products · unpin (the next rematch goes by the name) |
 
 **Moderation.** Users have a role: `user`, `moderator` or `admin`. Moderators and admins get a 🛡️
 button in the header that opens `/admin` (reports, problem purchases, the log; admins also the

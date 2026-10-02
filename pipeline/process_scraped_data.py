@@ -4,7 +4,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select, update
 
-from app.models import NOW, Platform, PriceSnapshot, Store, StoreProduct
+from app.models import NOW, GameEdition, MatchOverride, Platform, PriceSnapshot, Store, StoreProduct
 from core.editions import is_excluded
 from db import json_or_none, session
 from pipeline.deduplicator import deduplicate
@@ -45,14 +45,16 @@ def process_products(store_slug, products, full_catalog=True):
         known = {product_key(sp.url, sp.condition): sp
                  for sp in s.scalars(select(StoreProduct).where(StoreProduct.store_id == store.id))}
         latest = latest_prices(s, store.id)
+        pinned = pinned_editions(s, StoreProduct.store_id == store.id)
 
         for p in products:
             if len(p["url"]) > 800:
                 log.warning("[%s] URL too long, skipped: %s", store_slug, p["url"][:100])
                 continue
 
-            game_id, edition_id = matcher.match(p)
             sp = known.get(product_key(p["url"], p["condition"]))
+            # a product a moderator pinned to an edition stays there (app/services/match_service.py)
+            game_id, edition_id = pinned[sp.id] if sp is not None and sp.id in pinned else matcher.match(p)
             if sp is None:
                 sp = StoreProduct(store_id=store.id, url=p["url"], condition=p["condition"])
                 s.add(sp)
@@ -104,6 +106,14 @@ def update_product(sp, p, game_id, edition_id, platform_id):
         sp.details_checked_at = NOW
     sp.last_seen_at = NOW
     sp.is_active = True
+
+
+def pinned_editions(s, *where):
+    """{store_product_id: (game_id, edition_id)} of the products pinned by a moderator (match_overrides)."""
+    rows = s.execute(select(MatchOverride.store_product_id, GameEdition.game_id, GameEdition.id)
+                     .join(GameEdition, GameEdition.id == MatchOverride.edition_id)
+                     .join(StoreProduct, StoreProduct.id == MatchOverride.store_product_id).where(*where))
+    return {sp_id: (game_id, edition_id) for sp_id, game_id, edition_id in rows}
 
 
 def latest_prices(s, store_id):

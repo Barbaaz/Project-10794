@@ -30,6 +30,7 @@
         <ul class="nav nav-pills mb-3" role="tablist">
             <li class="nav-item"><button class="nav-link active" data-tab="reports" role="tab" data-i18n="mod_tab_reports"></button></li>
             <li class="nav-item"><button class="nav-link" data-tab="problems" role="tab" data-i18n="mod_tab_problems"></button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="matches" role="tab" data-i18n="mod_tab_matches"></button></li>
             <li class="nav-item"><button class="nav-link" data-tab="log" role="tab" data-i18n="mod_tab_log"></button></li>
             <li class="nav-item d-none" id="staff-tab"><button class="nav-link" data-tab="staff" role="tab" data-i18n="mod_tab_staff"></button></li>
         </ul>
@@ -59,6 +60,19 @@
         </section>
 
         <!-- Admins only: name or remove moderators (admins are made from the command line) -->
+        <!-- Wrong matches: move store products to the right edition (pinned there) -->
+        <section id="tab-matches" role="tabpanel" class="d-none">
+            <p class="small text-body-secondary" data-i18n="match_intro"></p>
+            <form id="match-search" class="input-group input-group-sm mb-3" style="max-width: 32rem;" role="search">
+                <input name="q" required class="form-control" data-i18n-placeholder="match_search_placeholder"
+                       data-i18n-aria-label="match_search_placeholder">
+                <button class="btn btn-primary" data-i18n="search"></button>
+            </form>
+            <div id="match-results" class="d-flex flex-column gap-3 mb-4"></div>
+            <h2 class="h6" data-i18n="match_pins"></h2>
+            <ul id="pins" class="list-group list-group-flush small"></ul>
+        </section>
+
         <section id="tab-staff" role="tabpanel" class="d-none">
             <ul id="staff" class="list-group mb-3"></ul>
             <form id="staff-form" class="row g-2 align-items-end" style="max-width: 32rem;">
@@ -206,6 +220,98 @@ async function loadLog() {
         : `<tr><td colspan="5" class="text-body-secondary">${esc(t("mod_no_log"))}</td></tr>`;
 }
 
+// --- wrong matches ----------------------------------------------------------------------------
+let lastMatchQuery = "";
+
+function matchCard(game) {
+    const options = game.editions.map(e => `<option value="${e.id}">${esc(e.name)} (#${e.id})</option>`).join("");
+    return `
+        <div class="card" data-game="${game.id}">
+            <div class="card-body">
+                <h3 class="h6"><a href="/game/${game.id}">${esc(game.title)}</a>
+                    <span class="text-body-secondary small">· ${esc(game.platform)} · #${game.id}</span></h3>
+                ${game.editions.map(e => `
+                    <div class="mb-2">
+                        <div class="fw-semibold small">${esc(e.name)} <span class="text-body-secondary">#${e.id} · ${esc(e.key || "standard")}</span></div>
+                        ${e.products.map(p => `<label class="d-flex gap-2 small ms-2">
+                            <input type="checkbox" class="form-check-input" value="${p.id}">
+                            <span>${esc(p.store)}: <a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>
+                                ${p.pinned ? `<span class="badge text-bg-info">${esc(t("match_pinned"))}</span>` : ""}
+                                ${p.is_active ? "" : `<span class="badge text-bg-secondary">${esc(t("match_inactive"))}</span>`}</span>
+                        </label>`).join("") || `<div class="small text-body-secondary ms-2">${esc(t("match_no_products"))}</div>`}
+                    </div>`).join("")}
+                <form class="move-form row g-2 align-items-end mt-1">
+                    <div class="col-12 col-sm-auto">
+                        <label class="form-label small">${esc(t("match_move_to"))}</label>
+                        <select name="target" class="form-select form-select-sm">
+                            ${options}
+                            <option value="new">${esc(t("match_new_edition"))}</option>
+                            <option value="other">${esc(t("match_other_edition"))}</option>
+                        </select>
+                    </div>
+                    <div class="col d-none" data-for="new">
+                        <input name="name" maxlength="200" class="form-control form-control-sm"
+                               placeholder="${esc(t("match_new_name"))}" aria-label="${esc(t("match_new_name"))}">
+                    </div>
+                    <div class="col d-none" data-for="other">
+                        <input name="edition" type="number" min="1" class="form-control form-control-sm"
+                               placeholder="${esc(t("match_edition_number"))}" aria-label="${esc(t("match_edition_number"))}">
+                    </div>
+                    <div class="col-auto"><button class="btn btn-sm btn-primary">${esc(t("match_move"))}</button></div>
+                </form>
+            </div>
+        </div>`;
+}
+
+async function searchMatches(q) {
+    lastMatchQuery = q;
+    const games = await getJSON(`/api/mod/matches?q=${encodeURIComponent(q)}`);
+    const box = document.getElementById("match-results");
+    box.innerHTML = games.length ? games.map(matchCard).join("") : `<p class="text-body-secondary small">${esc(t("no_results"))}</p>`;
+    box.querySelectorAll(".move-form").forEach(form => {
+        const card = form.closest("[data-game]");
+        const target = form.querySelector("[name=target]");
+        target.onchange = () => form.querySelectorAll("[data-for]").forEach(el =>
+            el.classList.toggle("d-none", el.dataset.for !== target.value));
+        form.onsubmit = async e => {
+            e.preventDefault();
+            const productIds = [...card.querySelectorAll("input[type=checkbox]:checked")].map(c => Number(c.value));
+            if (!productIds.length) return showMessage(false, t("match_choose_products"));
+            const body = { product_ids: productIds };
+            if (target.value === "new") {
+                Object.assign(body, { game_id: Number(card.dataset.game), new_edition: form.querySelector("[name=name]").value });
+            } else {
+                body.edition_id = Number(target.value === "other" ? form.querySelector("[name=edition]").value : target.value);
+            }
+            const { ok, data } = await api("/api/mod/matches", { body });
+            showMessage(ok, ok ? t("match_moved", { count: productIds.length, id: data.edition_id })
+                               : t(`error_${data?.error || "unknown"}`));
+            if (ok) { searchMatches(lastMatchQuery); loadPins(); }
+        };
+    });
+}
+
+async function loadPins() {
+    const pins = await getJSON("/api/mod/pins");
+    const list = document.getElementById("pins");
+    list.innerHTML = pins.length ? pins.map(p => `
+        <li class="list-group-item px-0 d-flex justify-content-between gap-2">
+            <span>${esc(p.store)}: ${esc(p.name)} → <a href="/game/${p.game_id}">${esc(p.game)}</a> · ${esc(p.edition)}</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-unpin="${p.product_id}">${esc(t("match_unpin"))}</button>
+        </li>`).join("") : `<li class="list-group-item px-0 text-body-secondary">${esc(t("match_no_pins"))}</li>`;
+    list.querySelectorAll("[data-unpin]").forEach(b => b.onclick = async () => {
+        const { ok, data } = await api(`/api/mod/pins/${b.dataset.unpin}`, { method: "DELETE" });
+        showMessage(ok, ok ? t("match_unpinned") : t(`error_${data?.error || "unknown"}`));
+        loadPins();
+        if (lastMatchQuery) searchMatches(lastMatchQuery);
+    });
+}
+
+document.getElementById("match-search").onsubmit = e => {
+    e.preventDefault();
+    searchMatches(e.target.querySelector("[name=q]").value.trim());
+};
+
 // --- staff (admins) ---------------------------------------------------------------------------
 function renderStaff(staff) {
     const list = document.getElementById("staff");
@@ -230,7 +336,7 @@ document.getElementById("staff-form").onsubmit = e => {
 };
 
 // --- tabs -------------------------------------------------------------------------------------
-const LOADERS = { reports: loadReports, problems: loadProblems, log: loadLog,
+const LOADERS = { reports: loadReports, problems: loadProblems, log: loadLog, matches: loadPins,
                   staff: async () => renderStaff(await getJSON("/api/mod/staff")) };
 
 function showTab(name) {
