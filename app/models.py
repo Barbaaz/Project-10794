@@ -331,6 +331,9 @@ class CollectionItem(Base):
     status: Mapped[str | None] = mapped_column(String(10))        # PLAY_STATUSES (owned)
     hours = mapped_column(Numeric(6, 1))
     notes: Mapped[str | None] = mapped_column(Unicode(1000))
+    achievements: Mapped[int | None] = mapped_column(Integer)          # done (owned)
+    achievements_total: Mapped[int | None] = mapped_column(Integer)
+    wish_price = mapped_column(Numeric(10, 2))                         # best new price when wished (wishlist)
     created_at = created_at()
     updated_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
 

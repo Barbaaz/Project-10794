@@ -1,7 +1,9 @@
 """
-A user's game collection: editions they own (physical / digital, play status, hours, notes)
-and a wishlist. Each item shows the edition's current prices (stores, used copies, a real
-discount, the historical low), so the wishlist says when to buy. Statistics: per platform and
+A user's game collection: editions they own (physical / digital, play status, hours,
+achievements, notes) and a wishlist. Each item shows the edition's current prices (stores, used
+copies, a real discount, the historical low); a wish also remembers the price it was added at, so
+a drop shows. A wish on sale, at its historical low or cheaper than when added is a good deal
+(counted on the 📚 header button). Statistics: per platform and
 status, hours, and what the owned games are worth today. Private unless the user makes it
 public (it then shows on their profile). When games / editions are merged, items follow
 (pipeline/rematch.py).
@@ -28,25 +30,44 @@ class CollectionError(Exception):
 
 def collection(user_id):
     """{items, stats, public}: the user's collection with each edition's prices."""
-    from app.services.game_service import editions_with_offers     # game_service → listing_service → …
     with session() as s:
         user = s.get(User, user_id)
         items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                           .order_by(CollectionItem.kind, CollectionItem.updated_at.desc())).all()
-        rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "edition_id", "game_id", "created_at",
-                       "updated_at") for i in items]
+        rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "achievements", "achievements_total",
+                       "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
         public = user.collection_public
+    rows = with_prices(rows)                       # stats() needs the prices
+    return {"items": rows, "stats": stats(rows), "public": public}
+
+
+def with_prices(rows):
+    """Add each item's edition (name, platform, cover) and current prices; for wishes, whether it's a good deal."""
+    from app.services.game_service import editions_with_offers     # game_service → listing_service → …
     prices = {g["edition_id"]: g for g in editions_with_offers(list({r["edition_id"] for r in rows}))}
     for r in rows:
         g = prices.get(r["edition_id"], {})
         offers = [o for o in g.get("offers", []) if o["in_stock"] and o["condition"] == "new"]
+        best = min(offers, key=lambda o: o["price"]) if offers else None
         r.update(name=g.get("name"), platform=g.get("console"),
                  platform_name=g.get("platform_name"), image=g.get("image"),
-                 best_price=min((o["price"] for o in offers), default=None),
-                 best_store=min(offers, key=lambda o: o["price"])["store_name"] if offers else None,
+                 best_price=best["price"] if best else None, best_store=best["store_name"] if best else None,
                  on_sale=any(o["is_discount"] for o in offers),
                  at_historical_low=g.get("at_historical_low", False), used=g.get("used"))
-    return {"items": rows, "stats": stats(rows), "public": public}
+        wished = r.get("wish_price")
+        r["price_drop"] = round(wished - r["best_price"], 2) if wished and best and best["price"] < wished else None
+        r["good_deal"] = r["kind"] == "wishlist" and bool(r["on_sale"] or r["at_historical_low"] or r["price_drop"])
+    return rows
+
+
+def good_deals(user_id):
+    """{count, items}: the wishes that are a good deal now (on sale, at the historical low, cheaper than
+    when added), for the 📚 header button."""
+    with session() as s:
+        rows = [fields(i, "id", "kind", "edition_id", "game_id", "wish_price") for i in s.scalars(
+            select(CollectionItem).where(CollectionItem.user_id == user_id, CollectionItem.kind == "wishlist"))]
+    deals = [r for r in with_prices(rows) if r["good_deal"]] if rows else []
+    return {"count": len(deals), "items": [{k: r[k] for k in ("id", "name", "best_price", "price_drop")} for r in deals]}
 
 
 def item_ids(user_id):
@@ -75,6 +96,9 @@ def stats(rows):
         "worth_new": round(sum(new_prices), 2), "priced_new": len(new_prices),
         "worth_used": round(sum(used_prices), 2), "priced_used": len(used_prices),
         "completed": sum(r["status"] in ("completed", "platinum") for r in owned),
+        # achievements over the games that have a total (as a share of all their achievements)
+        "achievements": sum(r["achievements"] or 0 for r in owned if r["achievements_total"]),
+        "achievements_total": sum(r["achievements_total"] for r in owned if r["achievements_total"]),
     }
 
 
@@ -92,7 +116,8 @@ def add(user_id, edition_id, kind, **changes):
             if s.query(CollectionItem).filter(CollectionItem.user_id == user_id).count() >= MAX_ITEMS:
                 raise CollectionError("collection_full")
             item = CollectionItem(user_id=user_id, game_id=edition.game_id, edition_id=edition.id, kind=kind,
-                                  format="physical" if kind == "owned" else None)
+                                  format="physical" if kind == "owned" else None,
+                                  wish_price=best_new_price(edition.id) if kind == "wishlist" else None)
             s.add(item)
         _apply(item, changes)
         s.flush()
@@ -112,10 +137,18 @@ def update(user_id, item_id, changes):
                                                          CollectionItem.edition_id == item.edition_id)).first():
                 s.delete(item)                   # already owned: the wish is just done
                 return None
-            item.kind, item.format = "owned", "physical"
+            item.kind, item.format, item.wish_price = "owned", "physical", None
         _apply(item, changes)
         item.updated_at = NOW
         return item.id
+
+
+def best_new_price(edition_id):
+    """The edition's cheapest new copy in stock at a store now, or None."""
+    from app.services.game_service import editions_with_offers
+    groups = editions_with_offers([edition_id])
+    prices = [o["price"] for g in groups for o in g["offers"] if o["in_stock"] and o["condition"] == "new"]
+    return Decimal(str(min(prices))) if prices else None
 
 
 def remove(user_id, item_id):
@@ -162,6 +195,12 @@ def _apply(item, changes):
         item.status = (changes["status"] or None) if item.kind == "owned" else None
     if "hours" in changes:
         item.hours = _hours(changes["hours"])
+    if "achievements" in changes or "achievements_total" in changes:
+        done = _count(changes.get("achievements", item.achievements))
+        total = _count(changes.get("achievements_total", item.achievements_total))
+        if done is not None and total is not None and done > total:
+            raise CollectionError("achievements_invalid")
+        item.achievements, item.achievements_total = (done, total) if item.kind == "owned" else (None, None)
     if "notes" in changes:
         notes = (changes["notes"] or "").strip() or None
         if notes and len(notes) > MAX_NOTES:
@@ -179,6 +218,19 @@ def _hours(value):
     if not 0 <= hours <= MAX_HOURS:
         raise CollectionError("hours_invalid")
     return hours
+
+
+def _count(value):
+    """A number of achievements: a whole number from 0 to 99999, or None when empty."""
+    if value in (None, ""):
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise CollectionError("achievements_invalid")
+    if not 0 <= number <= 99999:
+        raise CollectionError("achievements_invalid")
+    return number
 
 
 def _int(value):

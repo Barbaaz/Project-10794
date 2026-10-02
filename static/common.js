@@ -79,14 +79,15 @@ async function renderAccountArea() {
     const staff = ["moderator", "admin"].includes(currentUser.role);
     box.innerHTML = `
         ${staff ? `<a href="/admin" class="btn btn-sm btn-secondary" title="${esc(t("mod_title"))}" aria-label="${esc(t("mod_title"))}">🛡️</a>` : ""}
-        <a href="/collection" class="btn btn-sm btn-secondary" title="${esc(t("collection_title"))}"
-           aria-label="${esc(t("collection_title"))}">📚</a>
+        <a href="/collection" class="btn btn-sm btn-secondary position-relative" id="collection-link"
+           title="${esc(t("collection_title"))}" aria-label="${esc(t("collection_title"))}">📚</a>
         <a href="/messages" class="btn btn-sm btn-secondary position-relative" id="messages-link"
            title="${esc(t("messages"))}" aria-label="${esc(t("messages"))}">💬</a>
         <a href="/account" class="btn btn-sm btn-secondary" title="${esc(t("my_account"))}">👤 ${esc(currentUser.username || currentUser.display_name)}</a>
         <button type="button" class="btn btn-sm btn-secondary" id="logout-btn">${t("log_out")}</button>`;
     showUnreadCount();
     showPendingRatings();
+    showWishlistDeals();
     box.querySelector("#logout-btn").onclick = async () => {
         await api("/api/auth/logout");
         location.reload();
@@ -103,6 +104,18 @@ async function showUnreadCount() {
         link.insertAdjacentHTML("beforeend", `<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger">${count}</span>`);
         link.setAttribute("aria-label", `${t("messages")} (${t("unread_count", { count })})`);
     }
+}
+
+// Wishes that are a good deal now (on sale, at the historical low, cheaper than when added) on the 📚 button
+async function showWishlistDeals() {
+    const link = document.getElementById("collection-link");
+    if (!link) return;
+    const { count } = await fetch("/api/collection/deals").then(r => r.ok ? r.json() : { count: 0 }).catch(() => ({ count: 0 }));
+    if (!count) return;
+    link.href = "/collection?tab=wishlist";
+    link.insertAdjacentHTML("beforeend", `<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-success">${count}</span>`);
+    link.title = t("wishlist_deals", { count });
+    link.setAttribute("aria-label", `${t("collection_title")} (${t("wishlist_deals", { count })})`);
 }
 
 function forget(key, storage = "localStorage") {

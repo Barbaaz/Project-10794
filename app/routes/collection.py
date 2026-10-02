@@ -7,7 +7,7 @@ from app.services.collection_service import CollectionError
 
 bp = Blueprint("collection", __name__, url_prefix="/api")
 
-EDITABLE = ("format", "status", "hours", "notes")
+EDITABLE = ("format", "status", "hours", "achievements", "achievements_total", "notes")
 
 
 @bp.errorhandler(CollectionError)
@@ -24,6 +24,13 @@ def body():
 def mine():
     """{items, stats, public}"""
     return jsonify(collection_service.collection(current_user()["id"]))
+
+
+@bp.get("/collection/deals")
+@login_required
+def deals():
+    """{count, items}: wishes that are a good deal now (the 📚 header button's badge)"""
+    return jsonify(collection_service.good_deals(current_user()["id"]))
 
 
 @bp.get("/collection/editions")

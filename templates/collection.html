@@ -81,6 +81,8 @@ function renderStats() {
         stat(t("collection_wishlist_count"), fmtNumber(s.wishlist)),
         stat(t("collection_completed"), s.owned ? `${fmtNumber(s.completed)} <span class="small fw-normal">(${Math.round(100 * s.completed / s.owned)}%)</span>` : "—"),
         stat(t("collection_hours"), fmtNumber(Math.round(s.hours * 10) / 10)),
+        stat(t("collection_achievements"), s.achievements_total
+            ? `${fmtNumber(s.achievements)} / ${fmtNumber(s.achievements_total)} <span class="small fw-normal">(${Math.round(100 * s.achievements / s.achievements_total)}%)</span>` : "—"),
         stat(t("collection_worth_new"), s.priced_new ? `${eur.format(s.worth_new)} <span class="small fw-normal text-body-secondary">(${s.priced_new})</span>` : "—"),
         stat(t("collection_worth_used"), s.priced_used ? `${eur.format(s.worth_used)} <span class="small fw-normal text-body-secondary">(${s.priced_used})</span>` : "—"),
     ].join("") + (s.platforms.length ? `<div class="w-100 small text-body-secondary">${s.platforms.map(([p, n]) => `${esc(p)} ${n}`).join(" · ")}${statuses ? ` — ${esc(statuses)}` : ""}</div>` : "");
@@ -94,7 +96,8 @@ function priceLine(item) {
     if (item.best_price !== null) {
         parts.push(`${t("collection_best_now")} <strong>${eur.format(item.best_price)}</strong> · ${esc(item.best_store)}
             ${item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}</span>` : ""}
-            ${item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : ""}`);
+            ${item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : ""}
+            ${item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : ""}`);
     } else {
         parts.push(`<span class="text-body-secondary">${t("collection_no_store_price")}</span>`);
     }
@@ -123,6 +126,16 @@ function ownedControls(item) {
                     <span class="input-group-text">h</span>
                 </div>
             </div>
+            <div class="col-6 col-sm-auto">
+                <div class="input-group input-group-sm" style="max-width: 11rem;" title="${esc(t("collection_achievements"))}">
+                    <span class="input-group-text">🏆</span>
+                    <input type="number" min="0" class="form-control" data-field="achievements" value="${item.achievements ?? ""}"
+                           aria-label="${esc(t("collection_achievements_done"))}" placeholder="0">
+                    <span class="input-group-text">/</span>
+                    <input type="number" min="0" class="form-control" data-field="achievements_total" value="${item.achievements_total ?? ""}"
+                           aria-label="${esc(t("collection_achievements_total"))}" placeholder="—">
+                </div>
+            </div>
             <div class="col-12 col-sm">
                 <input type="text" maxlength="1000" class="form-control form-control-sm" data-field="notes" value="${esc(item.notes || "")}"
                        placeholder="${esc(t("collection_notes"))}" aria-label="${esc(t("collection_notes"))}">
@@ -133,7 +146,7 @@ function ownedControls(item) {
 function itemRow(item) {
     const owned = item.kind === "owned";
     return `
-        <div class="list-group-item" data-id="${item.id}">
+        <div class="list-group-item ${item.good_deal ? "border-start border-success border-4" : ""}" data-id="${item.id}">
             <div class="d-flex gap-3">
                 <a href="/game/${item.game_id}"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
                 <div class="flex-grow-1 min-w-0">
@@ -178,7 +191,8 @@ function renderItems() {
             const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { [input.dataset.field]: input.value } });
             if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
             const item = data.items.find(i => String(i.id) === id);
-            item[input.dataset.field] = input.dataset.field === "hours" ? (input.value ? Number(input.value.replace(",", ".")) : null) : input.value || null;
+            const numeric = ["hours", "achievements", "achievements_total"].includes(input.dataset.field);
+            item[input.dataset.field] = numeric ? (input.value ? Number(input.value.replace(",", ".")) : null) : input.value || null;
             data.stats = recount();
             renderStats();
         });
@@ -200,8 +214,11 @@ function recount() {
     const owned = data.items.filter(i => i.kind === "owned");
     const statuses = {};
     owned.forEach(i => { if (i.status) statuses[i.status] = (statuses[i.status] || 0) + 1; });
+    const withTotal = owned.filter(i => i.achievements_total);
     return { ...data.stats, statuses, hours: owned.reduce((sum, i) => sum + (i.hours || 0), 0),
-             completed: owned.filter(i => ["completed", "platinum"].includes(i.status)).length };
+             completed: owned.filter(i => ["completed", "platinum"].includes(i.status)).length,
+             achievements: withTotal.reduce((sum, i) => sum + (i.achievements || 0), 0),
+             achievements_total: withTotal.reduce((sum, i) => sum + i.achievements_total, 0) };
 }
 
 function renderPublicLink() {

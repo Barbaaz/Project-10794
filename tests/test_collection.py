@@ -94,3 +94,47 @@ def test_worth_counts_store_and_used_prices(market):
     stats = mine(client)["stats"]
     assert (stats["worth_used"], stats["priced_used"]) == (15.0, 1)
     assert (stats["worth_new"], stats["priced_new"]) == (0, 0)          # no store sells the test game
+
+
+def test_achievements(market):
+    client = market["client"]
+    sign_up(client, "achiever")
+    item = add(client, market["edition"], achievements=10, achievements_total=40).get_json()["id"]
+    add(client, market["other_edition"], achievements=5)                       # no total: not counted
+    stats = mine(client)["stats"]
+    assert (stats["achievements"], stats["achievements_total"]) == (10, 40)
+    patch = lambda data: client.patch(f"/api/collection/{item}", json=data, headers=HEADERS)
+    assert patch({"achievements": 41}).get_json()["error"] == "achievements_invalid"     # more than the total
+    assert patch({"achievements_total": "x"}).get_json()["error"] == "achievements_invalid"
+    assert patch({"achievements": 40}).status_code == 200
+    assert mine(client)["stats"]["achievements"] == 40
+
+
+def test_a_wish_remembers_its_price(market, monkeypatch):
+    """A wish keeps the best price it was added at; a lower price later is a drop, and a good deal."""
+    import app.services.game_service as games
+    real = games.editions_with_offers
+    store_price = {"now": 59.99}
+
+    def with_a_store(ids):           # as if a store sold the edition new, in stock, at store_price
+        groups = real(ids)
+        for g in groups:
+            g["offers"] = [{"price": store_price["now"], "in_stock": True, "condition": "new", "store_name": "Loja",
+                            "is_discount": False}]
+        return groups
+    monkeypatch.setattr(games, "editions_with_offers", with_a_store)
+
+    client = market["client"]
+    sign_up(client, "bargain_hunter")
+    wish = add(client, market["edition"], kind="wishlist").get_json()["id"]
+    item = mine(client)["items"][0]
+    assert (item["wish_price"], item["best_price"], item["price_drop"], item["good_deal"]) == (59.99, 59.99, None, False)
+    assert client.get("/api/collection/deals").get_json() == {"count": 0, "items": []}
+
+    store_price["now"] = 44.99
+    deals = client.get("/api/collection/deals").get_json()
+    assert deals["count"] == 1 and deals["items"][0]["price_drop"] == 15.0
+
+    # bought: no longer a wish, no wish price
+    client.patch(f"/api/collection/{wish}", json={"kind": "owned"}, headers=HEADERS)
+    assert market["db"].execute("SELECT wish_price FROM collection_items WHERE id = ?", wish).fetchone()[0] is None
