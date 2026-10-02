@@ -4,11 +4,15 @@ import re
 from bs4 import BeautifulSoup
 
 from app.utils.utils import detetar_plataforma
-from scrapers.base.parser_utils import parse_price, parse_release_date, detect_condition, html_to_text
+from scrapers.base.parser_utils import (
+    parse_price, parse_release_date, detect_condition, html_to_text, html_images, photo_list, absolute_url,
+)
 from .selectors import (
     PRODUCT_CARD, NAME, IMAGE, PRICE, PRICE_VALUE, OLD_PRICE, LINK, STOCK, PREORDER_FLAG,
-    DESCRIPTION, DESCRIPTION_SHORT,
+    DESCRIPTION, DESCRIPTION_SHORT, GALLERY,
 )
+
+BASE_URL = "https://www.pressstart.pt"
 
 log = logging.getLogger(__name__)
 
@@ -59,7 +63,8 @@ def parse_release_date_page(html):
 def parse_product_page(html):
     """
     From a product page: release date ("Data prevista de lançamento: 2026-12-31"),
-    description (what a special edition includes is usually at the top) and the data sheet.
+    description (what a special edition includes is usually at the top), the data sheet
+    and the photos besides the cover (special editions: what's in the box).
     """
     soup = BeautifulSoup(html, "html.parser")
     text = soup.get_text(" ", strip=True)
@@ -75,10 +80,14 @@ def parse_product_page(html):
         if key and value and key.lower() != "etiqueta":
             details[key] = value
 
+    gallery = [absolute_url(BASE_URL, img.get("data-image-large-src") or img.get("src")) for img in soup.select(GALLERY)]
+    in_description = html_images(str(description), BASE_URL) if description else []
+
     return {
         "release_date": parse_release_date(match.group(1)) if match else None,
         "description": html_to_text(str(description)) if description else None,
         "details": details or None,
+        "images": photo_list(gallery[1:] + in_description, exclude=gallery[:1]),
     }
 
 

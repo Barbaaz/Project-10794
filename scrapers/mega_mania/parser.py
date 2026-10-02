@@ -3,7 +3,9 @@ import logging
 from bs4 import BeautifulSoup
 
 from app.utils.utils import detetar_plataforma
-from scrapers.base.parser_utils import parse_price, parse_release_date, detect_condition, absolute_url, html_to_text
+from scrapers.base.parser_utils import (
+    parse_price, parse_release_date, detect_condition, absolute_url, html_to_text, html_images, photo_list,
+)
 from .selectors import (
     PRODUCT_CARD, NAME, IMAGE, LINK, BUY_BUTTON, BUY_LABEL, PRICE, OLD_PRICE, OUT_OF_STOCK, RELEASE_DATE,
     DESCRIPTION,
@@ -50,9 +52,16 @@ def parse_products(html, console=None):
 
 
 def parse_product_page(html):
-    """Description from a product page (the release date is already on the listing)."""
+    """
+    Description from a product page (the release date is already on the listing), and the
+    photos in it (special editions: "Conteúdo desta edição" with a picture of the contents).
+    """
     tag = BeautifulSoup(html, "html.parser").select_one(DESCRIPTION)
-    return {"description": html_to_text(str(tag)) if tag else None, "details": None}
+    return {
+        "description": html_to_text(str(tag)) if tag else None,
+        "details": None,
+        "images": photo_list(html_images(str(tag), BASE_URL)) if tag else [],
+    }
 
 
 def parse_stock(card):

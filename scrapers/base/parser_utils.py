@@ -1,6 +1,6 @@
 import re
 from datetime import date
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 USED_PATTERN = re.compile(r"\b(usado|usada|semi[\s-]?novo|seminovo|pre[\s-]?owned)\b", re.IGNORECASE)
 
@@ -92,3 +92,33 @@ def absolute_url(base_url, url):
     if not url:
         return None
     return urljoin(base_url, url)
+
+
+MAX_PHOTOS = 12
+PHOTO_PATTERN = re.compile(r"\.(jpe?g|png|webp)(\?|$)", re.IGNORECASE)
+
+
+def html_images(html, base_url):
+    """The pictures inside a store's HTML description, as absolute URLs."""
+    if not html:
+        return []
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    return [absolute_url(base_url, img.get("data-src") or img.get("src")) for img in soup.find_all("img")
+            if img.get("data-src") or img.get("src")]
+
+
+def photo_list(urls, exclude=()):
+    """
+    A product's photos for the game page: photos only (no icons / svg), no repeats,
+    without the cover (`exclude`), spaces in file names encoded ("TOMB RAIDER S.jpg").
+    """
+    result = []
+    for url in urls:
+        if not url or not url.startswith("http") or not PHOTO_PATTERN.search(url):
+            continue
+        url = quote(url, safe=":/?=&%#+,;@~")
+        if url not in result and url not in exclude:
+            result.append(url)
+    return result[:MAX_PHOTOS]

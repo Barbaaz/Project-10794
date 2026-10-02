@@ -91,7 +91,7 @@ def get_game(game_id):
         """
         SELECT g.id, g.title, p.code AS platform, p.name AS platform_name, g.image_url AS image,
                g.igdb_id, g.summary, g.genres, g.publishers, g.developers, g.first_release_date,
-               g.rating, g.pegi, g.cover_image_id, g.screenshot_ids
+               g.rating, g.pegi, g.cover_image_id, g.screenshot_ids, g.video_ids AS videos
         FROM games g JOIN platforms p ON p.id = g.platform_id
         WHERE g.id = ?
         """,
@@ -100,6 +100,7 @@ def get_game(game_id):
     if not game:
         return None
     game["screenshot_ids"] = json.loads(game["screenshot_ids"]) if game["screenshot_ids"] else []
+    game["videos"] = json.loads(game["videos"]) if game["videos"] else []
 
     editions = fetch_all(
         "SELECT id, name FROM game_editions WHERE game_id = ? ORDER BY CASE WHEN edition_key = '' THEN 0 ELSE 1 END, name",
@@ -117,6 +118,7 @@ def get_game(game_id):
 
     lowest = lowest_prices(game_id)
     descriptions = store_descriptions(game_id)
+    photos = store_photos(game_id)
 
     for edition in editions:
         edition["offers"] = [o for o in offers if o["edition_id"] == edition["id"]]
@@ -126,6 +128,8 @@ def get_game(game_id):
         # What the stores say about this edition (special editions: what's in the box)
         edition["descriptions"] = [d for d in descriptions if d["edition_id"] == edition["id"]]
         edition["digital_code"] = any(DIGITAL_CODE.search(d["text"]) for d in edition["descriptions"])
+        # The stores' photos besides the cover (special editions: what's in the box)
+        edition["photos"] = photos.get(edition["id"], [])
 
     # Store details (publisher, genre...) merged across stores, first value wins
     game["store_details"] = {}
@@ -161,6 +165,26 @@ def store_descriptions(game_id):
         seen.add((r["edition_id"], r["store"]))
         r["details"] = json.loads(r["details"]) if r["details"] else None
         result.append(r)
+    return result
+
+
+def store_photos(game_id, limit=12):
+    """{edition_id: [{url, store}]}: the stores' photos of each edition, no repeats, at most `limit`."""
+    rows = fetch_all(
+        """
+        SELECT sp.edition_id, s.slug AS store, sp.image_urls
+        FROM store_products sp JOIN stores s ON s.id = sp.store_id
+        WHERE sp.game_id = ? AND sp.is_active = 1 AND sp.image_urls IS NOT NULL
+        ORDER BY s.slug
+        """,
+        game_id,
+    )
+    result = {}
+    for r in rows:
+        photos = result.setdefault(r["edition_id"], [])
+        for url in json.loads(r["image_urls"]):
+            if len(photos) < limit and all(p["url"] != url for p in photos):
+                photos.append({"url": url, "store": r["store"]})
     return result
 
 

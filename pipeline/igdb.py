@@ -1,9 +1,10 @@
 """
 Game information from IGDB (summary, genres, publisher, developer, PEGI, rating, cover,
-screenshots) for the game page. Each game is looked up once; new games each day.
+screenshots, YouTube trailers) for the game page. Each game is looked up once; new games each day.
 
     python -m pipeline.igdb                  # games not looked up yet (up to 300)
     python -m pipeline.igdb --limit 5000     # first fill
+    python -m pipeline.igdb --videos         # trailers for games matched before videos were kept
 
 Credentials: a Twitch developer app, in the environment variables IGDB_CLIENT_ID and
 IGDB_CLIENT_SECRET (never in the code). IGDB allows 4 requests per second; we stay under it.
@@ -38,7 +39,9 @@ NOT_A_GAME = {1, 5, 13, 14}
 FIELDS = ("name,version_parent,game_type,first_release_date,summary,genres.name,"
           "involved_companies.company.name,involved_companies.publisher,involved_companies.developer,"
           "age_ratings.rating_category.rating,age_ratings.organization.name,"
-          "cover.image_id,screenshots.image_id,total_rating")
+          "cover.image_id,screenshots.image_id,videos.video_id,videos.name,total_rating")
+MAX_VIDEOS = 6
+BATCH = 500                 # games per request when filling videos by IGDB id (IGDB's maximum)
 
 
 def credentials():
@@ -156,7 +159,18 @@ def game_info(g):
         "pegi": pegi,
         "cover_image_id": (g.get("cover") or {}).get("image_id"),
         "screenshot_ids": json.dumps([s["image_id"] for s in g.get("screenshots", [])][:12]) or None,
+        "video_ids": video_list(g),
     }
+
+
+def video_list(g):
+    """
+    YouTube videos of an IGDB game as JSON [{"id", "name"}], trailers first
+    ("Announcement Trailer", "Launch Trailer"), then gameplay and the rest. "[]" when there are none.
+    """
+    videos = [{"id": v["video_id"], "name": v.get("name") or ""} for v in g.get("videos", []) if v.get("video_id")]
+    videos.sort(key=lambda v: "trailer" not in v["name"].lower())
+    return json.dumps(videos[:MAX_VIDEOS])
 
 
 def enrich_games(limit=300):
@@ -190,7 +204,7 @@ def enrich_games(limit=300):
                 cursor.execute(
                     """UPDATE games SET igdb_id = ?, summary = ?, genres = ?, publishers = ?, developers = ?,
                        first_release_date = ?, rating = ?, pegi = ?, cover_image_id = ?, screenshot_ids = ?,
-                       igdb_checked_at = SYSUTCDATETIME() WHERE id = ?""",
+                       video_ids = ?, igdb_checked_at = SYSUTCDATETIME() WHERE id = ?""",
                     *info.values(), game_id,
                 )
                 matched += 1
@@ -204,11 +218,43 @@ def enrich_games(limit=300):
         conn.close()
 
 
+def fill_videos(client=None):
+    """
+    Videos for games matched before videos were kept (video_ids still NULL), asked by
+    IGDB id, 500 games per request. Does nothing once every matched game has them.
+    """
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        ids = [r[0] for r in cursor.execute(
+            "SELECT DISTINCT igdb_id FROM games WHERE igdb_id IS NOT NULL AND video_ids IS NULL").fetchall()]
+        if not ids:
+            return 0
+        client = client or IGDBClient()
+        for start in range(0, len(ids), BATCH):
+            batch = ids[start:start + BATCH]
+            found = {g["id"]: g for g in client.query(
+                f"fields id,videos.video_id,videos.name; where id = ({','.join(map(str, batch))}); limit {BATCH};")}
+            for igdb_id in batch:
+                # A game IGDB no longer returns gets "[]" too, so it isn't asked again every day
+                cursor.execute("UPDATE games SET video_ids = ? WHERE igdb_id = ?",
+                               video_list(found.get(igdb_id, {})), igdb_id)
+            conn.commit()
+        log.info("IGDB: videos filled for %d games", len(ids))
+        return len(ids)
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     from scheduler.jobs import setup_logging
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--limit", type=int, default=300)
+    parser.add_argument("--videos", action="store_true", help="only fill videos of games already matched")
     args = parser.parse_args()
     setup_logging()
-    enrich_games(args.limit)
+    if args.videos:
+        fill_videos()
+    else:
+        enrich_games(args.limit)

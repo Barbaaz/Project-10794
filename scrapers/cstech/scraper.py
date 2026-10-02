@@ -2,7 +2,7 @@ import logging
 
 from app.utils.utils import detetar_plataforma
 from scrapers.base.base_scraper import BaseScraper
-from scrapers.base.parser_utils import parse_price, detect_condition, html_to_text
+from scrapers.base.parser_utils import parse_price, detect_condition, html_to_text, html_images, photo_list
 
 log = logging.getLogger(__name__)
 
@@ -80,6 +80,8 @@ class ShopifyScraper(BaseScraper):
             # The description comes with the catalogue, no extra request
             "description": html_to_text(item.get("body_html")),
             "details": {"Editora": item["vendor"]} if item.get("vendor") else None,
+            "images": photo_list([i["src"] for i in images[1:]] + html_images(item.get("body_html"), self.base_url),
+                                 exclude=[images[0]["src"]] if images else ()),
             "details_checked": True,
             "url": f"{self.base_url}/products/{item['handle']}",
             "image": images[0]["src"] if images else None,

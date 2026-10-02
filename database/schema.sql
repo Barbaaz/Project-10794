@@ -85,6 +85,7 @@ CREATE TABLE dbo.store_products (
     description    NVARCHAR(MAX)  NULL,          -- the store's product description, as plain text
     details        NVARCHAR(MAX)  NULL,          -- JSON {"Editora": "...", "Género": "..."} from the store's data sheet
     details_checked_at DATETIME2  NULL,          -- when the product page was read (read once)
+    image_urls     NVARCHAR(MAX)  NULL,          -- JSON list: the store's photos besides the cover
     first_seen_at  DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
     last_seen_at   DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
     is_active      BIT            NOT NULL DEFAULT 1, -- 0 when it disappears from the store
@@ -211,4 +212,24 @@ GO
 
 IF COL_LENGTH('dbo.user_listings', 'edition_id') IS NULL
     ALTER TABLE dbo.user_listings ADD edition_id INT NULL REFERENCES dbo.game_editions(id);
+GO
+
+-- IGDB trailers (pipeline/igdb.py): JSON list of {"id": YouTube id, "name": "Trailer"};
+-- NULL = not looked up yet, "[]" = IGDB has none
+IF COL_LENGTH('dbo.games', 'video_ids') IS NULL
+    ALTER TABLE dbo.games ADD video_ids NVARCHAR(MAX) NULL;
+GO
+
+-- The store's photos of a product besides the cover (special editions: what's in the box),
+-- JSON list of URLs, read with the description
+IF COL_LENGTH('dbo.store_products', 'image_urls') IS NULL
+BEGIN
+    ALTER TABLE dbo.store_products ADD image_urls NVARCHAR(MAX) NULL;
+    -- Special editions whose page was read before photos were kept: read them again
+    UPDATE sp SET details_checked_at = NULL
+    FROM dbo.store_products sp
+    JOIN dbo.stores s ON s.id = sp.store_id
+    JOIN dbo.game_editions e ON e.id = sp.edition_id
+    WHERE s.slug IN ('press_start', 'mega-mania') AND e.edition_key <> '' AND sp.details_checked_at IS NOT NULL;
+END
 GO

@@ -128,7 +128,8 @@ def test_product_pages_read_only_when_needed():
     scraper = PressStartScraper(fresh_release_urls={"https://x/fresh"},
                                 known_detail_urls={"https://x/fresh", "https://x/out"})
     scraper.fetch_product_page = lambda url: fetched.append(url) or {
-        "release_date": date(2026, 11, 20), "description": "Conteúdo: estátua", "details": {"Género": "Ação"}}
+        "release_date": date(2026, 11, 20), "description": "Conteúdo: estátua", "details": {"Género": "Ação"},
+        "images": ["https://x/box.jpg"]}
 
     products = [
         product("https://x/new"),
@@ -141,6 +142,7 @@ def test_product_pages_read_only_when_needed():
     assert fetched == ["https://x/new"]     # once, even though it's in two categories
     assert [p["release_date"] for p in products] == [date(2026, 11, 20), None, None, date(2026, 11, 20)]
     assert products[0]["description"] == products[3]["description"] == "Conteúdo: estátua"
+    assert products[0]["images"] == ["https://x/box.jpg"] and "images" not in products[1]
     assert products[0]["details_checked"] and "details_checked" not in products[1]
 
 
@@ -174,6 +176,48 @@ def test_press_start_product_page():
         "Conteúdo da Collector's Edition:", "- Jogo Completo (Download Digital)", "- Estátua de 38cm",
         "Embarca numa missão inspiradora."]
     assert page["details"] == {"Género": "Ação"}
+    assert page["images"] == []
+
+
+def test_press_start_product_photos():
+    from scrapers.press_start.parser import parse_product_page
+
+    # Gallery: the cover first, then photos of the box contents; one more photo in the description
+    html = """
+    <div id="thumb-gallery">
+      <img src="https://www.pressstart.pt/1-small_default/x.jpg" data-image-large-src="https://www.pressstart.pt/1-large_default/x.jpg">
+      <img src="https://www.pressstart.pt/2-small_default/x.jpg" data-image-large-src="https://www.pressstart.pt/2-large_default/x.jpg">
+      <img src="https://www.pressstart.pt/3-small_default/x.jpg" data-image-large-src="https://www.pressstart.pt/3-large_default/x.jpg">
+    </div>
+    <div id="description"><div class="product-description">
+      <p>Conteúdo:</p><img src="/img/cms/conteudo.png"><img src="/img/cms/pegi.svg"></div></div>"""
+    assert parse_product_page(html)["images"] == [
+        "https://www.pressstart.pt/2-large_default/x.jpg",
+        "https://www.pressstart.pt/3-large_default/x.jpg",
+        "https://www.pressstart.pt/img/cms/conteudo.png",
+    ]
+
+
+def test_mega_mania_product_photos():
+    from scrapers.mega_mania.parser import parse_product_page
+
+    html = """
+    <div class="produto-imagem"><a href="/upload/product/9169-tomb.jpeg"><img src="/upload/product/9169-tomb.jpeg"></a></div>
+    <div id="descricao-produto"><p>Conteúdo desta edição:</p>
+      <div><img src="/upload/photo/1781125850TOMB RAIDER COLLECTORS S.jpg"></div></div>"""
+    page = parse_product_page(html)
+    assert page["description"] == "Conteúdo desta edição:"
+    # the cover isn't in the description; spaces in the file name are encoded
+    assert page["images"] == ["https://mega-mania.com.pt/upload/photo/1781125850TOMB%20RAIDER%20COLLECTORS%20S.jpg"]
+
+
+def test_photo_list():
+    from scrapers.base.parser_utils import photo_list
+
+    urls = ["https://a/cover.jpg", "https://a/1.jpg", "https://a/1.jpg", "https://a/icon.svg",
+            "data:image/png;base64,xx", None, "https://a/2.webp?v=3"]
+    assert photo_list(urls, exclude=["https://a/cover.jpg"]) == ["https://a/1.jpg", "https://a/2.webp?v=3"]
+    assert len(photo_list([f"https://a/{n}.jpg" for n in range(30)])) == 12
 
 
 # --- CSTech (Shopify JSON) -------------------------------------------------
@@ -207,6 +251,18 @@ def test_cstech_pre_order_tag():
     product = CSTechScraper().parse_item(item)
     assert product["is_preorder"] is True
     assert product["release_date"] is None
+
+
+def test_cstech_photos():
+    item = {
+        "title": "Game Collector's Edition PS5", "handle": "game-ce", "product_type": "Jogos PS5", "tags": [],
+        "images": [{"src": "https://cdn.shopify.com/cover.jpg"}, {"src": "https://cdn.shopify.com/box.jpg"}],
+        "body_html": '<p>Inclui:</p><img src="https://cdn.shopify.com/statue.png">',
+        "variants": [{"title": "Default Title", "price": "199.99", "compare_at_price": None, "available": True}],
+    }
+    product = CSTechScraper().parse_item(item)
+    assert product["image"] == "https://cdn.shopify.com/cover.jpg"
+    assert product["images"] == ["https://cdn.shopify.com/box.jpg", "https://cdn.shopify.com/statue.png"]
 
 
 def test_cstech_ignores_compare_at_price_not_above_price():

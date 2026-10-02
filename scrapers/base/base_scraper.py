@@ -15,7 +15,7 @@ class BaseScraper:
         price, old_price, in_stock, url, image,
         is_preorder, release_date (date or None), release_date_checked (date was looked up this run)
     and, when the product page was read this run (or the listing has it, like CSTech):
-        description (plain text), details (dict), details_checked
+        description (plain text), details (dict), images (photos besides the cover), details_checked
 
     Subclasses set store_slug / base_url and implement:
         parse_listing(html, console=None) -> list of products from one listing page
@@ -53,7 +53,7 @@ class BaseScraper:
     def fetch_product_page(self, url):
         """
         Stores with useful product pages override this and return
-        {"description": str | None, "details": dict | None, "release_date": date | None}.
+        {"description": str | None, "details": dict | None, "release_date": date | None, "images": [url]}.
         """
         return None
 
@@ -126,6 +126,7 @@ class BaseScraper:
             if self.needs_details(p):
                 p["description"] = page.get("description")
                 p["details"] = page.get("details")
+                p["images"] = page.get("images")
                 p["details_checked"] = True
 
     def crawl(self, make_url, console=None):

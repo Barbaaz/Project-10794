@@ -124,10 +124,15 @@ python -m pytest
   product page once, at most 100 pages per store per daily run, special editions first.
   CSTech's come with its catalogue. Speed up the first fill with
   `python -m pipeline.fill_descriptions <store> --limit 100`.
-- **IGDB** (summary, genres, publisher, developer, PEGI, rating, cover, screenshots): looked up
-  once per game, new games after each daily run. Needs a Twitch developer app in the
-  environment variables `IGDB_CLIENT_ID` / `IGDB_CLIENT_SECRET` (never in the code).
-  First fill: `python -m pipeline.igdb --limit 6000`.
+- **Store photos**: the product's photos besides the cover (on special editions, what's in the
+  box), read with the description: Press Start's gallery, pictures inside Mega Mania's
+  description, CSTech's catalogue images. Shown under each special edition's "What's included".
+- **IGDB** (summary, genres, publisher, developer, PEGI, rating, cover, screenshots, YouTube
+  trailers): looked up once per game, new games after each daily run. Needs a Twitch developer
+  app in the environment variables `IGDB_CLIENT_ID` / `IGDB_CLIENT_SECRET` (never in the code).
+  First fill: `python -m pipeline.igdb --limit 6000`; trailers for games matched before they were
+  kept: `python -m pipeline.igdb --videos`. The game page shows thumbnails and loads the
+  YouTube player (youtube-nocookie) only when a video is clicked.
 
 ## Not getting blocked by the stores
 

@@ -43,9 +43,11 @@ def fill_descriptions(slug, limit):
                 log.warning("[%s] %s: %s", slug, url, e)
                 continue
             details = json.dumps(page["details"], ensure_ascii=False) if page.get("details") else None
+            images = json.dumps(page["images"]) if page.get("images") else None
             cursor.execute(
-                "UPDATE store_products SET description = ?, details = ?, details_checked_at = SYSUTCDATETIME() WHERE id = ?",
-                page.get("description"), details, sp_id,
+                "UPDATE store_products SET description = ?, details = ?, image_urls = ?, "
+                "details_checked_at = SYSUTCDATETIME() WHERE id = ?",
+                page.get("description"), details, images, sp_id,
             )
             conn.commit()
             filled += 1

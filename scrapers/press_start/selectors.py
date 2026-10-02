@@ -11,3 +11,4 @@ PREORDER_FLAG = ".product-flag.pslabel-pre-reserva"      # "PRÉ-RESERVA"
 #   release date in the text: "Data prevista de lançamento: 2026-12-31"
 DESCRIPTION = "#description .product-description"       # full description ("Conteúdo da Collector's Edition: - ...")
 DESCRIPTION_SHORT = "#product-description-short"        # fallback
+GALLERY = "#thumb-gallery img"                           # product photos; the first one is the cover

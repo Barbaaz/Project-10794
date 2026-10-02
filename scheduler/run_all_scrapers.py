@@ -11,7 +11,7 @@ import sys
 
 from scheduler.jobs import SCRAPERS, RanRecently, active_store_slugs, run_store, setup_logging
 from scheduler.notify import notify, run_summary
-from pipeline.igdb import enrich_games
+from pipeline.igdb import enrich_games, fill_videos
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ def main():
     # Game information for games added today (IGDB); never blocks the run
     try:
         enrich_games(limit=300)
+        fill_videos()
     except Exception as e:
         log.warning("IGDB lookup skipped: %s", e)
 
