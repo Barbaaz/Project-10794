@@ -8,12 +8,13 @@ scheduler fills (python -m scheduler.run_all_scrapers). Nothing here scrapes the
 from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, abort, request, jsonify, redirect, render_template
+from flask import Flask, abort, request, jsonify, redirect, render_template, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 from app.config import COOKIE_SECURE, SECRET_KEY
-from app.routes import auth, games, prices, stores
+from app.routes import auth, games, listings, prices, stores
 from app.services.game_service import game_exists, merged_into
+from app.services.photo_storage import MAX_UPLOAD_BYTES, storage
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -24,8 +25,9 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",          # not sent with requests started by other sites
     SESSION_COOKIE_SECURE=COOKIE_SECURE,    # HTTPS only, once served over HTTPS
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+    MAX_CONTENT_LENGTH=11 * MAX_UPLOAD_BYTES,  # a listing's photos (up to 10) in one request
 )
-for blueprint in (auth.bp, games.bp, prices.bp, stores.bp):
+for blueprint in (auth.bp, games.bp, listings.bp, prices.bp, stores.bp):
     app.register_blueprint(blueprint)
 
 CHANGING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -58,6 +60,12 @@ def index():
 def account_page():
     """Log in / create an account; the account itself when logged in."""
     return render_template("account.html")
+
+
+@app.route("/media/<path:key>")
+def media(key):
+    """Uploaded photos kept on this computer (app/services/photo_storage.py); no paths outside it."""
+    return send_from_directory(storage.root, key, max_age=7 * 24 * 3600)
 
 
 @app.route("/favicon.ico")

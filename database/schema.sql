@@ -261,3 +261,29 @@ GO
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.users') AND name = 'password_hash' AND is_nullable = 0)
     ALTER TABLE dbo.users ALTER COLUMN password_hash NVARCHAR(255) NULL;
 GO
+
+-- Listings may also be new (still sealed)
+IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'ck_user_listings_condition'
+           AND definition NOT LIKE '%''new''%')
+BEGIN
+    ALTER TABLE dbo.user_listings DROP CONSTRAINT ck_user_listings_condition;
+    ALTER TABLE dbo.user_listings ADD CONSTRAINT ck_user_listings_condition
+        CHECK (condition IN ('new', 'like_new', 'good', 'fair', 'poor'));
+END
+GO
+
+-- A listing's photos (at least 3), in the order the seller chose. The files are kept by
+-- app/services/photo_storage.py; these are their keys there (photo and thumbnail).
+IF OBJECT_ID('dbo.listing_photos', 'U') IS NULL
+CREATE TABLE dbo.listing_photos (
+    id          INT IDENTITY(1,1) PRIMARY KEY,
+    listing_id  INT            NOT NULL REFERENCES dbo.user_listings(id),
+    position    INT            NOT NULL,
+    photo_key   NVARCHAR(200)  NOT NULL,
+    thumb_key   NVARCHAR(200)  NOT NULL,
+    created_at  DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME()
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_listing_photos_listing')
+    CREATE INDEX ix_listing_photos_listing ON dbo.listing_photos (listing_id, position);
+GO
