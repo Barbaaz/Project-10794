@@ -228,7 +228,7 @@ function pagination(page, pages) {
     const nav = document.createElement("nav");
     nav.className = "d-flex flex-wrap justify-content-center gap-1 mt-4";
     nav.setAttribute("aria-label", "Páginas");
-    if (pages <= 1) return nav;
+    if (!Number.isInteger(pages) || pages <= 1) return nav;
 
     const shown = new Set([1, pages]);
     for (let p = page - 2; p <= page + 2; p++) if (p >= 1 && p <= pages) shown.add(p);
@@ -264,7 +264,9 @@ async function loadCatalogPage(special, platform, page) {
     if (platform) params.set("platform", platform);
     if (special) params.set("editions", "special");
     const data = await fetch(`/api/games/catalog?${params}`).then(r => r.json());
-    return { ...data, special, platform };
+    // pages is computed here too, in case the server is older than this page
+    const pages = data.pages || Math.max(1, Math.ceil(data.total / (data.per_page || CATALOG_PAGE)));
+    return { ...data, pages, special, platform };
 }
 
 function renderCatalog(data) {

@@ -40,4 +40,5 @@ def search():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, use_reloader=False)
+    # Development server; restarts by itself when a .py file changes
+    app.run(debug=True)
