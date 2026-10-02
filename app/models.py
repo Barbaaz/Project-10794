@@ -22,7 +22,7 @@ NOW = func.sysutcdatetime()      # the database's clock, in UTC
 
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages",
-                 "user_favorites", "user_ratings", "reports", "moderation_log"}
+                 "user_favorites", "user_ratings", "reports", "moderation_log", "match_overrides"}
 
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
 ROLES = ("user", "moderator", "admin")
@@ -292,6 +292,19 @@ class ModerationLog(Base):
     created_at = created_at()
 
     moderator: Mapped[User] = relationship(lazy="joined")
+
+
+class MatchOverride(Base):
+    """A moderator pinned this store product to this edition: matching and rematch leave it there
+    (app/services/match_service.py). Removing it lets the next rematch decide again."""
+    __tablename__ = "match_overrides"
+    __table_args__ = (Index("ix_match_overrides_edition", "edition_id"),)
+    store_product_id: Mapped[int] = mapped_column(ForeignKey("store_products.id", ondelete="CASCADE"),
+                                                  primary_key=True, autoincrement=False)
+    edition_id: Mapped[int] = mapped_column(ForeignKey("game_editions.id"))
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at = created_at()
+
 
 def fields(obj, *names, **extra):
     """{name: value} of these attributes, JSON-ready (as the API sends them), plus `extra`."""
