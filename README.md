@@ -118,6 +118,17 @@ python -m pytest
 - The discount rule runs against a throwaway SQL Server database created and dropped by the
   tests (skipped when SQL Server isn't available).
 
+## Game information
+
+- **Store descriptions** (Portuguese; what each special edition includes): read from each
+  product page once, at most 100 pages per store per daily run, special editions first.
+  CSTech's come with its catalogue. Speed up the first fill with
+  `python -m pipeline.fill_descriptions <store> --limit 100`.
+- **IGDB** (summary, genres, publisher, developer, PEGI, rating, cover, screenshots): looked up
+  once per game, new games after each daily run. Needs a Twitch developer app in the
+  environment variables `IGDB_CLIENT_ID` / `IGDB_CLIENT_SECRET` (never in the code).
+  First fill: `python -m pipeline.igdb --limit 6000`.
+
 ## Not getting blocked by the stores
 
 All scraper requests go through `scrapers/base/http_client.py`:

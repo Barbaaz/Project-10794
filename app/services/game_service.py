@@ -1,5 +1,12 @@
+import json
+import re
+
 from core.normalizer import normalize_name
 from db import fetch_all, fetch_one
+
+# A special edition whose game is a download code, not a disc ("Jogo Completo (Download Digital)")
+DIGITAL_CODE = re.compile(r"download\s+digital|digital\s+download|c[oó]digo\s+(de\s+)?(download|digital|descarga)",
+                          re.IGNORECASE)
 
 # A favourite that came back in stock is flagged for this many days
 RESTOCK_ALERT_DAYS = 14
@@ -82,7 +89,9 @@ def get_game(game_id):
     """A game with its editions, each with its store offers (cheapest in-stock first)."""
     game = fetch_one(
         """
-        SELECT g.id, g.title, p.code AS platform, p.name AS platform_name, g.image_url AS image
+        SELECT g.id, g.title, p.code AS platform, p.name AS platform_name, g.image_url AS image,
+               g.igdb_id, g.summary, g.genres, g.publishers, g.developers, g.first_release_date,
+               g.rating, g.pegi, g.cover_image_id, g.screenshot_ids
         FROM games g JOIN platforms p ON p.id = g.platform_id
         WHERE g.id = ?
         """,
@@ -90,6 +99,7 @@ def get_game(game_id):
     )
     if not game:
         return None
+    game["screenshot_ids"] = json.loads(game["screenshot_ids"]) if game["screenshot_ids"] else []
 
     editions = fetch_all(
         "SELECT id, name FROM game_editions WHERE game_id = ? ORDER BY CASE WHEN edition_key = '' THEN 0 ELSE 1 END, name",
@@ -106,12 +116,22 @@ def get_game(game_id):
     )
 
     lowest = lowest_prices(game_id)
+    descriptions = store_descriptions(game_id)
 
     for edition in editions:
         edition["offers"] = [o for o in offers if o["edition_id"] == edition["id"]]
         in_stock = [o["price"] for o in edition["offers"] if o["in_stock"]]
         edition["best_price"] = min(in_stock) if in_stock else None
         edition["lowest_price"] = lowest.get(edition["id"])
+        # What the stores say about this edition (special editions: what's in the box)
+        edition["descriptions"] = [d for d in descriptions if d["edition_id"] == edition["id"]]
+        edition["digital_code"] = any(DIGITAL_CODE.search(d["text"]) for d in edition["descriptions"])
+
+    # Store details (publisher, genre...) merged across stores, first value wins
+    game["store_details"] = {}
+    for d in descriptions:
+        for key, value in (d["details"] or {}).items():
+            game["store_details"].setdefault(key, value)
 
     # Editions whose products all left the stores have nothing to show
     game["editions"] = [e for e in editions if e["offers"]]
@@ -121,6 +141,27 @@ def get_game(game_id):
     game["release_date"] = release.get("release_date")
     game["date_is_estimate"] = release.get("date_is_estimate", False)
     return game
+
+
+def store_descriptions(game_id):
+    """The stores' product descriptions for a game, longest first, one per store and edition."""
+    rows = fetch_all(
+        """
+        SELECT sp.edition_id, s.slug AS store, s.name AS store_name, sp.description AS text, sp.details
+        FROM store_products sp JOIN stores s ON s.id = sp.store_id
+        WHERE sp.game_id = ? AND sp.is_active = 1 AND sp.description IS NOT NULL AND LEN(sp.description) > 20
+        ORDER BY LEN(sp.description) DESC
+        """,
+        game_id,
+    )
+    seen, result = set(), []
+    for r in rows:
+        if (r["edition_id"], r["store"]) in seen:
+            continue
+        seen.add((r["edition_id"], r["store"]))
+        r["details"] = json.loads(r["details"]) if r["details"] else None
+        result.append(r)
+    return result
 
 
 def lowest_prices(game_id):

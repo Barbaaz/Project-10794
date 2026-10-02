@@ -178,6 +178,22 @@ IF COL_LENGTH('dbo.store_products', 'is_preorder') IS NULL
         release_date_checked_at DATETIME2 NULL;
 GO
 
+-- Game information from IGDB (pipeline/igdb.py); igdb_checked_at is set even when no match was found
+IF COL_LENGTH('dbo.games', 'igdb_id') IS NULL
+    ALTER TABLE dbo.games ADD
+        igdb_id INT NULL,
+        igdb_checked_at DATETIME2 NULL,
+        summary NVARCHAR(MAX) NULL,          -- in English
+        genres NVARCHAR(500) NULL,           -- "Adventure, Shooter"
+        publishers NVARCHAR(500) NULL,
+        developers NVARCHAR(500) NULL,
+        first_release_date DATE NULL,
+        rating INT NULL,                     -- IGDB total rating 0-100
+        pegi NVARCHAR(10) NULL,              -- "16"
+        cover_image_id NVARCHAR(50) NULL,
+        screenshot_ids NVARCHAR(MAX) NULL;   -- JSON list of IGDB image ids
+GO
+
 IF COL_LENGTH('dbo.store_products', 'description') IS NULL
     ALTER TABLE dbo.store_products ADD
         description NVARCHAR(MAX) NULL,

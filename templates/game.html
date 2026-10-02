@@ -47,6 +47,14 @@
         .swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
         .low-badge { background: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); border: 1px solid var(--bs-success-border-subtle); }
         table.prices td, table.prices th { font-variant-numeric: tabular-nums; }
+        .facts { display: grid; grid-template-columns: auto 1fr; column-gap: .75rem; row-gap: .1rem; }
+        .facts dt { font-weight: 600; color: var(--bs-secondary-color); }
+        .facts dd { margin: 0; }
+        .clamped { display: -webkit-box; -webkit-line-clamp: var(--lines); -webkit-box-orient: vertical; overflow: hidden; }
+        .clamped.open { display: block; }
+        .screenshots { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .25rem; }
+        .screenshots img { height: 120px; border-radius: .375rem; }
+        .edition-info ul { padding-left: 1.2rem; }
     </style>
 </head>
 <body class="bg-body-tertiary">
@@ -71,9 +79,21 @@
                 <h1 id="title" class="h3 mb-1"></h1>
                 <span id="platform" class="badge text-bg-secondary"></span>
                 <span id="release" class="badge text-bg-primary d-none"></span>
+                <span id="pegi" class="badge text-bg-dark border d-none"></span>
+                <div id="genres" class="mt-2"></div>
+                <dl id="facts" class="facts small mt-2 mb-0"></dl>
                 <p id="history-note" class="text-body-secondary small mt-2 mb-0"></p>
             </div>
         </div>
+
+        <!-- About the game: the store's description (Portuguese) and/or IGDB's summary, screenshots -->
+        <section id="about" class="card shadow-sm mb-4 d-none">
+            <div class="card-body">
+                <h2 class="h5 mb-2">Sobre o jogo</h2>
+                <div id="about-text"></div>
+                <div id="screenshots" class="screenshots mt-3"></div>
+            </div>
+        </section>
 
         <!-- Período do gráfico: um filtro para todos os gráficos da página -->
         <div class="btn-group btn-group-sm mb-3" role="group" aria-label="Período">
@@ -146,9 +166,13 @@ function render() {
         release.classList.remove("d-none");
     }
 
-    const cover = game.image || game.editions.flatMap(e => e.offers).find(o => o.image)?.image;
+    const cover = game.image || game.editions.flatMap(e => e.offers).find(o => o.image)?.image
+        || (game.cover_image_id ? igdbImage(game.cover_image_id, "t_cover_big") : null);
     if (cover) document.getElementById("cover").src = cover;
     else document.getElementById("cover").classList.add("d-none");
+
+    renderFacts();
+    renderAbout();
 
     const firstDate = history.flatMap(o => o.history).map(p => p.date).sort()[0];
     document.getElementById("history-note").textContent = firstDate
@@ -161,6 +185,128 @@ function render() {
     drawCharts();
 
     document.getElementById("game").classList.remove("d-none");
+}
+
+function igdbImage(id, size) {
+    return `https://images.igdb.com/igdb/image/upload/${size}/${encodeURIComponent(id)}.jpg`;
+}
+
+// PEGI, genres and facts (publisher, developer, release, rating) from IGDB, with the
+// stores' data sheet filling the gaps
+function renderFacts() {
+    const sd = game.store_details || {};
+    if (game.pegi) {
+        const pegi = document.getElementById("pegi");
+        pegi.textContent = `PEGI ${game.pegi}`;
+        pegi.classList.remove("d-none");
+    }
+
+    const genres = (game.genres || sd["Género"] || "").split(",").map(g => g.trim()).filter(Boolean);
+    document.getElementById("genres").innerHTML =
+        genres.map(g => `<span class="badge rounded-pill text-bg-secondary me-1">${esc(g)}</span>`).join("");
+
+    const released = game.first_release_date;
+    const facts = [
+        ["Editora", game.publishers || sd["Editora"]],
+        ["Produtora", game.developers || sd["Produtora"]],
+        ["Lançamento", released && new Date(released + "T12:00:00") <= new Date() ? fmtDate(released + "T12:00:00") : null],
+        ["Classificação", game.rating ? `${game.rating}/100 (IGDB)` : null],
+    ].filter(([, value]) => value);
+    document.getElementById("facts").innerHTML =
+        facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+}
+
+// The store's Portuguese description of the standard edition if there is one; otherwise
+// the longest store description; IGDB's English summary shown too (or on its own)
+function renderAbout() {
+    const parts = [];
+    const storeText = aboutStoreText();
+
+    if (storeText) {
+        parts.push(`${clampedText(storeText.text, 6)}
+            <div class="small text-body-secondary mt-1">Descrição da ${esc(storeName(storeText.store))}</div>`);
+    }
+    if (game.summary) {
+        const summary = clampedText(game.summary, storeText ? 3 : 6);
+        parts.push(storeText
+            ? `<details class="mt-2"><summary class="small">Resumo do IGDB (em inglês)</summary><div class="mt-1">${summary}</div></details>`
+            : `${summary}<div class="small text-body-secondary mt-1">Resumo do IGDB (em inglês)</div>`);
+    }
+
+    const shots = game.screenshot_ids || [];
+    document.getElementById("screenshots").innerHTML = shots.map(id => `
+        <a href="${igdbImage(id, "t_1080p")}" target="_blank" rel="noopener">
+            <img src="${igdbImage(id, "t_screenshot_med")}" alt="Imagem do jogo" loading="lazy"></a>`).join("");
+
+    document.getElementById("about-text").innerHTML = parts.join("");
+    document.getElementById("about").classList.toggle("d-none", !parts.length && !shots.length);
+    document.querySelectorAll(".clamp-toggle").forEach(btn => btn.onclick = () => {
+        const text = btn.previousElementSibling;
+        const open = text.classList.toggle("open");
+        btn.textContent = open ? "Ler menos" : "Ler mais";
+    });
+}
+
+// A store description about the game itself: the standard edition's, or a special edition's
+// without its contents list ("Conteúdo da Collector's Edition: - ..." belongs to "O que inclui")
+function aboutStoreText() {
+    const standard = game.editions.find(e => e.name === "Standard");
+    if (standard?.descriptions.length) return standard.descriptions[0];
+    for (const d of game.editions.flatMap(e => e.descriptions)) {
+        const text = withoutContents(d.text);
+        if (text.length >= 150) return { ...d, text };
+    }
+    return null;
+}
+
+function withoutContents(text) {
+    const lines = text.split("\n");
+    const start = lines.findIndex(l => /conte[uú]do|inclui|includes|cont[eé]m/i.test(l));
+    if (start < 0) return text;
+    let end = start + 1;
+    while (end < lines.length && /^\s*[-–•*·]/.test(lines[end])) end++;
+    return [...lines.slice(0, start), ...lines.slice(end)].join("\n").trim();
+}
+
+// Long text shown on N lines with a "Ler mais" button
+function clampedText(text, lines) {
+    const long = text.length > lines * 90;
+    const html = esc(text).replace(/\n/g, "<br>");
+    return `<div class="clamped" style="--lines:${lines}">${html}</div>`
+        + (long ? `<button type="button" class="btn btn-sm btn-secondary mt-1 clamp-toggle">Ler mais</button>` : "");
+}
+
+// "Conteúdo da Collector's Edition: - Estátua - Artbook ..." → ["Estátua", "Artbook", ...]
+function editionContents(text) {
+    const lines = text.split("\n");
+    const start = lines.findIndex(l => /conte[uú]do|inclui|includes|cont[eé]m/i.test(l));
+    if (start < 0) return [];
+    const items = [];
+    // items on the same line: "Conteúdo: - A - B - C"
+    const sameLine = lines[start].split(/\s[-–•]\s/).slice(1);
+    if (sameLine.length > 1) return sameLine.map(s => s.trim()).filter(Boolean);
+    for (const line of lines.slice(start + 1)) {
+        const m = line.match(/^\s*[-–•*·]\s*(.+)/);
+        if (!m) { if (items.length) break; else continue; }
+        items.push(m[1].trim());
+    }
+    return items;
+}
+
+// What a special edition includes, from the store descriptions
+function editionInfo(edition) {
+    if (edition.name === "Standard" || !edition.descriptions.length) return "";
+    const withList = edition.descriptions.map(d => ({ ...d, items: editionContents(d.text) })).find(d => d.items.length);
+    const source = withList || edition.descriptions[0];
+    const body = withList
+        ? `<ul class="mb-1">${withList.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`
+        : clampedText(source.text, 4);
+    return `
+        <div class="edition-info mb-3">
+            <h3 class="h6 mb-1">O que inclui</h3>
+            ${body}
+            <div class="small text-body-secondary">Segundo a ${esc(storeName(source.store))}</div>
+        </div>`;
 }
 
 function renderEdition(edition, i) {
@@ -176,7 +322,11 @@ function renderEdition(edition, i) {
 
     card.innerHTML = `
         <div class="card-body">
-            <h2 class="h5 mb-3">${esc(edition.name)}</h2>
+            <h2 class="h5 mb-3">${esc(edition.name)}
+                ${edition.digital_code ? `<span class="badge text-bg-warning ms-1 align-middle"
+                    title="Segundo a descrição da loja, o jogo vem em código de download">⚠ Jogo em código digital (sem disco)</span>` : ""}</h2>
+
+            ${editionInfo(edition)}
 
             <div class="d-flex flex-wrap gap-2 mb-3">
                 ${best ? `<span class="badge bg-body-secondary text-body border fs-6 fw-normal">

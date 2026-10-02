@@ -11,6 +11,7 @@ import sys
 
 from scheduler.jobs import SCRAPERS, RanRecently, active_store_slugs, run_store, setup_logging
 from scheduler.notify import notify, run_summary
+from pipeline.igdb import enrich_games
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +34,12 @@ def main():
             log.info("%s, skipped", e)
         except Exception:
             failed.append(slug)
+
+    # Game information for games added today (IGDB); never blocks the run
+    try:
+        enrich_games(limit=300)
+    except Exception as e:
+        log.warning("IGDB lookup skipped: %s", e)
 
     # Tell the user on their desktop, so a broken store doesn't go unnoticed
     summary = run_summary(failed, warnings)
