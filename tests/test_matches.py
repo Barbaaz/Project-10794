@@ -94,7 +94,7 @@ def test_move_errors_and_access(mod):
     _, by_name = editions(client)
     some = by_name["Standard"]["products"][0]["id"]
     assert post({"product_ids": [some], "edition_id": 999999}).status_code == 404
-    assert post({"product_ids": [some], "game_id": 999999, "new_edition": "X"}).get_json()["error"] == "edition_invalid"
+    assert post({"product_ids": [some], "game_id": 999999, "new_edition": "X"}).get_json()["error"] == "new_edition_invalid"
     assert client.delete("/api/mod/pins/999999", headers=HEADERS).status_code == 404
 
     sign_up(client, "not_a_mod")

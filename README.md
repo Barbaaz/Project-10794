@@ -106,6 +106,9 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `POST /api/conversations/<id>/rating` `{stars, comment?}` | Rate the other side of a completed purchase (changeable for 14 days) |
 | `POST /api/ratings/<id>/reply` `{reply}` | The rated user answers a rating |
 | `GET /api/users/<username>` | Public profile: average rating, ratings received, listings (never the email) |
+| `GET /api/collection` · `GET /api/collection/editions` | The user's collection and wishlist with current prices and statistics (per platform / status, hours, worth new / used) · which editions they have (for the game page's Tenho / Quero) |
+| `POST /api/collection` `{edition_id, kind: owned\|wishlist, format?, status?, hours?, notes?}` · `PATCH` / `DELETE /api/collection/<id>` | Add (owning one takes it off the wishlist) · edit (`kind: owned` = bought it) / remove |
+| `PUT /api/collection/settings` `{public}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown) · a public collection |
 | `POST /api/reports` `{kind: listing\|user\|rating, target_id, reason, details?}` | Report something to the moderators (not your own; once while open; 20 a day) |
 | `GET /api/mod/reports` · `GET /api/mod/problems` · `GET /api/mod/log` | Moderators: open reports grouped by what was reported · purchases with a problem · past actions |
 | `POST /api/mod/actions` `{action, target_id, note?}` | Moderators: `hide_listing` / `restore_listing`, `hide_rating` / `restore_rating`, `block_user` / `unblock_user`, `dismiss` (target = the report) |

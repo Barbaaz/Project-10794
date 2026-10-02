@@ -117,7 +117,7 @@ async function searchGames(q) {
     list.querySelectorAll("[data-id]").forEach(b => b.onclick = () => chooseGame(Number(b.dataset.id)));
 }
 
-async function chooseGame(id) {
+async function chooseGame(id, editionId = null) {
     const data = await fetch(`/api/games/${id}`).then(r => r.ok ? r.json() : null);
     if (!data) return;
     game = data;
@@ -136,6 +136,7 @@ async function chooseGame(id) {
     const editions = document.getElementById("edition");
     editions.innerHTML = data.editions.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join("");
     editions.disabled = !data.editions.length;
+    if (editionId && data.editions.some(e => e.id === editionId)) editions.value = editionId;   // "Vender" from the collection
     editions.onchange = storePriceHint;
     storePriceHint();
 }
@@ -206,8 +207,9 @@ async function start() {
     if (!currentUser) return location.replace(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
     document.getElementById("condition").innerHTML =
         CONDITIONS.map(c => `<option value="${c}" ${c === "good" ? "selected" : ""}>${esc(conditionLabel(c))}</option>`).join("");
-    const gameId = Number(new URLSearchParams(location.search).get("game_id"));
-    if (gameId) chooseGame(gameId);
+    const params = new URLSearchParams(location.search);
+    const gameId = Number(params.get("game_id"));
+    if (gameId) chooseGame(gameId, Number(params.get("edition_id")) || null);
 }
 start();
 </script>

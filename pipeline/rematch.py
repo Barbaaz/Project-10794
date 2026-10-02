@@ -18,7 +18,7 @@ from collections import Counter, defaultdict
 from sqlalchemy import delete, exists, insert, literal, select, update
 from sqlalchemy.orm import aliased
 
-from app.models import Favorite, Game, GameEdition, Listing, MergedId, Platform, StoreProduct
+from app.models import CollectionItem, Favorite, Game, GameEdition, Listing, MergedId, Platform, StoreProduct
 from core.editions import edition_key_of, is_excluded
 from db import session
 from pipeline.igdb import IGDB_COLUMNS
@@ -144,6 +144,16 @@ def record_merges(s, moves):
                         Favorite.edition_id == old,
                         ~exists().where(other.user_id == Favorite.user_id, other.edition_id == new))))
                 s.execute(delete(Favorite).where(Favorite.edition_id == old))
+                # collection items too (one per user and kind: a copy they already have there wins),
+                # with the game of the edition they now point to
+                mine = aliased(CollectionItem)
+                s.execute(delete(CollectionItem).where(CollectionItem.edition_id == old, exists().where(
+                    mine.user_id == CollectionItem.user_id, mine.kind == CollectionItem.kind, mine.edition_id == new)))
+                s.execute(update(CollectionItem).where(CollectionItem.edition_id == old).values(
+                    edition_id=new,
+                    game_id=select(GameEdition.game_id).where(GameEdition.id == new).scalar_subquery()))
+            else:
+                s.execute(update(CollectionItem).where(CollectionItem.game_id == old).values(game_id=new))
 
     for old, new in merged["game"].items():
         replaced, replacement = s.get(Game, old), s.get(Game, new)
@@ -185,13 +195,14 @@ def refresh_names(s, model, column, max_len, candidates):
 
 
 def delete_orphans(s):
-    """Editions and games that no store product or user listing uses."""
+    """Editions and games that no store product, listing, favourite or collection uses."""
     s.flush()
     editions = s.execute(
         delete(GameEdition).where(
             no_store_product(GameEdition, "edition_id"),
             ~exists().where(Listing.edition_id == GameEdition.id),
             ~exists().where(Favorite.edition_id == GameEdition.id),
+            ~exists().where(CollectionItem.edition_id == GameEdition.id),
         ).execution_options(synchronize_session=False)
     ).rowcount
 
@@ -200,6 +211,7 @@ def delete_orphans(s):
             no_store_product(Game, "game_id"),
             ~exists().where(Listing.game_id == Game.id),
             ~exists().where(GameEdition.game_id == Game.id),
+            ~exists().where(CollectionItem.game_id == Game.id),
         ).execution_options(synchronize_session=False)
     ).rowcount
 

@@ -44,6 +44,13 @@
         <div id="ratings" class="list-group mb-4"></div>
         <p id="no-ratings" class="small text-body-secondary d-none" data-i18n="profile_no_ratings"></p>
 
+        <!-- Only when the user made their collection public -->
+        <section id="collection" class="mb-4 d-none">
+            <h2 class="h5" data-i18n="profile_collection"></h2>
+            <p id="collection-summary" class="small text-body-secondary"></p>
+            <ul id="collection-items" class="list-group list-group-flush small"></ul>
+        </section>
+
         <h2 class="h5" data-i18n="profile_listings"></h2>
         <div id="listings" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 g-2"></div>
         <p id="no-listings" class="small text-body-secondary d-none" data-i18n="profile_no_listings"></p>
@@ -99,6 +106,23 @@ async function load() {
     document.getElementById("listings").innerHTML = user.listings.map(l => listingCard(l, { showSeller: false })).join("");
     document.getElementById("no-listings").classList.toggle("d-none", user.listings.length > 0);
     document.getElementById("profile").classList.remove("d-none");
+    loadCollection();
+}
+
+// The user's collection, if they made it public (app/services/collection_service.py)
+async function loadCollection() {
+    const response = await fetch(`/api/users/${encodeURIComponent(USERNAME)}/collection`);
+    if (!response.ok) return;
+    const { items, stats } = await response.json();
+    document.getElementById("collection-summary").textContent =
+        t("profile_collection_summary", { owned: stats.owned, completed: stats.completed, wishlist: stats.wishlist });
+    const owned = items.filter(i => i.kind === "owned").sort((a, b) => (a.name || "").localeCompare(b.name || "", LOCALE));
+    document.getElementById("collection-items").innerHTML = owned.map(i => `
+        <li class="list-group-item px-0 d-flex justify-content-between gap-2">
+            <a href="/game/${i.game_id}">${esc(i.name || "")}</a>
+            <span class="text-body-secondary text-nowrap">${esc(i.platform_name || "")}${i.status ? ` · ${esc(t(`status_play_${i.status}`))}` : ""}</span>
+        </li>`).join("");
+    document.getElementById("collection").classList.remove("d-none");
 }
 
 applyI18n();

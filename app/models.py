@@ -22,7 +22,8 @@ NOW = func.sysutcdatetime()      # the database's clock, in UTC
 
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages",
-                 "user_favorites", "user_ratings", "reports", "moderation_log", "match_overrides"}
+                 "user_favorites", "user_ratings", "reports", "moderation_log", "match_overrides",
+                 "collection_items"}
 
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
 ROLES = ("user", "moderator", "admin")
@@ -150,6 +151,7 @@ class User(Base):
     location: Mapped[str | None] = mapped_column(Unicode(100))
     is_active: Mapped[bool] = mapped_column(Boolean, server_default="1")      # False: blocked
     role: Mapped[str] = mapped_column(String(10), server_default="user")
+    collection_public: Mapped[bool] = mapped_column(Boolean, server_default="0")   # shown on their profile
     last_login_at = mapped_column(DATETIME2)
     created_at = created_at()
 
@@ -304,6 +306,36 @@ class MatchOverride(Base):
     edition_id: Mapped[int] = mapped_column(ForeignKey("game_editions.id"))
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at = created_at()
+
+
+# --- game collection ---------------------------------------------------------------------
+
+COLLECTION_KINDS = ("owned", "wishlist")
+FORMATS = ("physical", "digital")
+PLAY_STATUSES = ("backlog", "playing", "completed", "platinum", "abandoned")
+
+
+class CollectionItem(Base):
+    """A game edition a user owns or wants (app/services/collection_service.py)."""
+    __tablename__ = "collection_items"
+    __table_args__ = (
+        Index("ux_collection_items", "user_id", "edition_id", "kind", unique=True),
+        Index("ix_collection_items_edition", "edition_id"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
+    edition_id: Mapped[int] = mapped_column(ForeignKey("game_editions.id"))
+    kind: Mapped[str] = mapped_column(String(10))                 # COLLECTION_KINDS
+    format: Mapped[str | None] = mapped_column(String(10))        # FORMATS (owned)
+    status: Mapped[str | None] = mapped_column(String(10))        # PLAY_STATUSES (owned)
+    hours = mapped_column(Numeric(6, 1))
+    notes: Mapped[str | None] = mapped_column(Unicode(1000))
+    created_at = created_at()
+    updated_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+
+    game: Mapped[Game] = relationship(lazy="joined")
+    edition: Mapped[GameEdition] = relationship(lazy="joined")
 
 
 def fields(obj, *names, **extra):

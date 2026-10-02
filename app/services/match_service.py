@@ -91,7 +91,7 @@ def _target_edition(s, edition_id, game_id, new_edition):
     name = (new_edition or "").strip()
     game = s.get(Game, int(game_id)) if game_id else None
     if not game or not name or len(name) > 200:
-        raise ModerationError("edition_invalid")
+        raise ModerationError("new_edition_invalid")
     key = edition_key_of(normalize_name(name))
     edition = s.scalars(select(GameEdition).where(GameEdition.game_id == game.id, GameEdition.edition_key == key)).first()
     if edition is None:
