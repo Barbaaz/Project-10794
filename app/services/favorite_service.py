@@ -2,8 +2,11 @@
 Favourite editions, per account. (Before accounts they lived in the browser: import_ids()
 moves those into the account at the first log-in, following merged editions.)
 """
+from sqlalchemy import select
+
+from app.models import Favorite, GameEdition
 from app.services.game_service import merged_into
-from db import connection, fetch_all, placeholders
+from db import session
 
 MAX_FAVORITES = 200     # the favourites tab asks for all of them at once
 
@@ -17,8 +20,9 @@ class FavoriteError(Exception):
 
 def list_ids(user_id):
     """The user's favourite edition ids, oldest first (the order they were starred)."""
-    return [r["edition_id"] for r in fetch_all(
-        "SELECT edition_id FROM user_favorites WHERE user_id = ? ORDER BY created_at, edition_id", user_id)]
+    with session() as s:
+        return list(s.scalars(select(Favorite.edition_id).where(Favorite.user_id == user_id)
+                              .order_by(Favorite.created_at, Favorite.edition_id)))
 
 
 def add(user_id, edition_id):
@@ -26,8 +30,10 @@ def add(user_id, edition_id):
 
 
 def remove(user_id, edition_id):
-    with connection() as conn:
-        conn.cursor().execute("DELETE FROM user_favorites WHERE user_id = ? AND edition_id = ?", user_id, edition_id)
+    with session() as s:
+        favorite = s.get(Favorite, (user_id, edition_id))
+        if favorite:
+            s.delete(favorite)
     return list_ids(user_id)
 
 
@@ -42,15 +48,14 @@ def import_ids(user_id, edition_ids, strict=False):
         raise FavoriteError("edition_invalid")
     merged = merged_into("edition", ids)
     ids = list(dict.fromkeys(merged.get(i, i) for i in ids))
-    known = {r["id"] for r in fetch_all(f"SELECT id FROM game_editions WHERE id IN ({placeholders(ids)})", *ids)} if ids else set()
-    if strict and len(known) < len(ids):
-        raise FavoriteError("not_found", 404)
 
-    current = set(list_ids(user_id))
-    new = [i for i in ids if i in known and i not in current]
-    if len(current) + len(new) > MAX_FAVORITES:
-        raise FavoriteError("favorites_full")
-    with connection() as conn:
-        for edition_id in new:
-            conn.cursor().execute("INSERT INTO user_favorites (user_id, edition_id) VALUES (?, ?)", user_id, edition_id)
+    with session() as s:
+        known = set(s.scalars(select(GameEdition.id).where(GameEdition.id.in_(ids)))) if ids else set()
+        if strict and len(known) < len(ids):
+            raise FavoriteError("not_found", 404)
+        current = set(s.scalars(select(Favorite.edition_id).where(Favorite.user_id == user_id)))
+        new = [i for i in ids if i in known and i not in current]
+        if len(current) + len(new) > MAX_FAVORITES:
+            raise FavoriteError("favorites_full")
+        s.add_all(Favorite(user_id=user_id, edition_id=i) for i in new)
     return list_ids(user_id)

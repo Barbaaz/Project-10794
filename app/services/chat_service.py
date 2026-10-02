@@ -9,11 +9,16 @@ the purchase steps (deal_status) in the same conversation:
 - accepting reserves the listing; cancelling an accepted purchase puts it back on sale;
 - completed = the buyer confirmed it arrived, or SENT_AUTO_COMPLETE_DAYS after "sent" without
   a problem reported; the listing is then sold and other open requests for it are declined.
-Each step also adds a message from the site (sender NULL, `event`), so both see the history.
+Each step also adds a message from the site (sender None, `event`), so both see the history.
 """
+from datetime import datetime
+
+from sqlalchemy import case, func, or_, select
+
+from app.models import NOW, Conversation, Listing, Message, fields
 from app.services.photo_storage import storage
-from app.services.rating_service import check_not_blocked, ratings_of_conversation
-from db import connection, fetch_all, fetch_one
+from app.services.rating_service import DAY, check_not_blocked, ratings_of_conversation
+from db import session
 
 MAX_MESSAGE = 2000
 SENT_AUTO_COMPLETE_DAYS = 7
@@ -30,23 +35,6 @@ STEPS = {
 # Cancelling: the buyer until it's sent, the seller once accepted (a request is declined instead)
 CANCEL_FROM = {"buyer": {"requested", "accepted"}, "seller": {"accepted"}}
 
-CONVERSATION_COLUMNS = """
-    c.id, c.listing_id, c.buyer_id, c.seller_id, c.deal_status, c.sent_at, c.completed_at,
-    c.last_message_at, c.created_at, c.buyer_read_at, c.seller_read_at,
-    l.price, l.status AS listing_status, l.condition, g.title, p.name AS platform_name,
-    (SELECT TOP 1 thumb_key FROM listing_photos lp WHERE lp.listing_id = l.id ORDER BY lp.position) AS thumb_key,
-    b.username AS buyer_username, b.display_name AS buyer_name,
-    s.username AS seller_username, s.display_name AS seller_name
-"""
-CONVERSATION_JOINS = """
-    FROM conversations c
-    JOIN user_listings l ON l.id = c.listing_id
-    JOIN games g ON g.id = l.game_id
-    JOIN platforms p ON p.id = g.platform_id
-    JOIN users b ON b.id = c.buyer_id
-    JOIN users s ON s.id = c.seller_id
-"""
-
 
 class ChatError(Exception):
     def __init__(self, code, status=400):
@@ -60,23 +48,21 @@ def start(user_id, listing_id, message=None, buy=False):
     The buyer opens (or reopens) the conversation about a listing, optionally with a first
     message and / or a purchase request (the Buy button). Returns the conversation id.
     """
-    listing = fetch_one("SELECT id, user_id, status FROM user_listings WHERE id = ?", listing_id)
-    if not listing or listing["status"] == "removed":
-        raise ChatError("not_found", 404)
-    if listing["user_id"] == user_id:
-        raise ChatError("own_listing")
-
-    existing = fetch_one("SELECT id FROM conversations WHERE listing_id = ? AND buyer_id = ?", listing_id, user_id)
-    if existing:
-        conversation_id = existing["id"]
-    else:
-        if listing["status"] != "active":
-            raise ChatError("listing_unavailable")       # reserved / sold: no new conversations
-        with connection() as conn:
-            conversation_id = conn.cursor().execute(
-                "INSERT INTO conversations (listing_id, buyer_id, seller_id) OUTPUT INSERTED.id VALUES (?, ?, ?)",
-                listing_id, user_id, listing["user_id"],
-            ).fetchone()[0]
+    with session() as s:
+        listing = s.get(Listing, listing_id)
+        if not listing or listing.status == "removed":
+            raise ChatError("not_found", 404)
+        if listing.user_id == user_id:
+            raise ChatError("own_listing")
+        conversation = s.scalars(select(Conversation).where(Conversation.listing_id == listing_id,
+                                                            Conversation.buyer_id == user_id)).first()
+        if not conversation:
+            if listing.status != "active":
+                raise ChatError("listing_unavailable")       # reserved / sold: no new conversations
+            conversation = Conversation(listing_id=listing_id, buyer_id=user_id, seller_id=listing.user_id)
+            s.add(conversation)
+            s.flush()
+        conversation_id = conversation.id
 
     if message:
         send_message(user_id, conversation_id, message)
@@ -86,99 +72,103 @@ def start(user_id, listing_id, message=None, buy=False):
 
 
 def send_message(user_id, conversation_id, body):
-    conversation = _participant(user_id, conversation_id)
     body = (body or "").strip()
-    if not body:
-        raise ChatError("message_empty")
-    if len(body) > MAX_MESSAGE:
-        raise ChatError("message_long")
-    with connection() as conn:
-        _add_message(conn.cursor(), conversation, sender_id=user_id, body=body)
+    with session() as s:
+        conversation = _participant(s, user_id, conversation_id)
+        if not body:
+            raise ChatError("message_empty")
+        if len(body) > MAX_MESSAGE:
+            raise ChatError("message_long")
+        _add_message(s, conversation, sender_id=user_id, body=body)
     return get_conversation(user_id, conversation_id)
 
 
 def deal_step(user_id, conversation_id, action):
     """Move the purchase one step (see STEPS / CANCEL_FROM); its effects on the listing included."""
-    conversation = _participant(user_id, conversation_id)
-    role = _role(conversation, user_id)
-    if action not in available_steps(conversation, role):
-        raise ChatError("step_not_allowed", 409)
-    if action == "request":
-        check_not_blocked(user_id, ChatError)      # a rating overdue: rate first
-    status = "cancelled" if action == "cancel" else STEPS[action][2]
+    with session() as s:
+        conversation = _participant(s, user_id, conversation_id)
+        role = _role(conversation, user_id)
+        if action not in available_steps(conversation.deal_status, role, conversation.listing.status):
+            raise ChatError("step_not_allowed", 409)
+        if action == "request":
+            check_not_blocked(user_id, ChatError)      # a rating overdue: rate first
+        status = "cancelled" if action == "cancel" else STEPS[action][2]
 
-    with connection() as conn:
-        cursor = conn.cursor()
-        listing_status = cursor.execute(
-            "SELECT status FROM user_listings WITH (UPDLOCK) WHERE id = ?", conversation["listing_id"]).fetchone()[0]
-        if action in ("request", "accept") and listing_status != "active":
+        # locked until the end: two buyers can't both get the same copy
+        listing = s.get(Listing, conversation.listing_id, with_for_update=True, populate_existing=True)
+        if action in ("request", "accept") and listing.status != "active":
             raise ChatError("listing_unavailable", 409)
 
-        cursor.execute(
-            "UPDATE conversations SET deal_status = ?, "
-            "sent_at = CASE WHEN ? = 'sent' THEN SYSUTCDATETIME() ELSE sent_at END WHERE id = ?",
-            status, status, conversation_id,
-        )
+        previous = conversation.deal_status
+        conversation.deal_status = status
+        if status == "sent":
+            conversation.sent_at = NOW
         if action == "accept":
-            _set_listing(cursor, conversation["listing_id"], "reserved")
-        elif action == "cancel" and conversation["deal_status"] == "accepted" and listing_status == "reserved":
-            _set_listing(cursor, conversation["listing_id"], "active")
-        _add_message(cursor, conversation, sender_id=None, event=action, actor_id=user_id)
+            _set_listing(listing, "reserved")
+        elif action == "cancel" and previous == "accepted" and listing.status == "reserved":
+            _set_listing(listing, "active")
+        _add_message(s, conversation, sender_id=None, event=action, actor_id=user_id)
         if status == "completed":
-            _complete(cursor, conversation)
+            _complete(s, conversation, listing)
     return get_conversation(user_id, conversation_id)
 
 
-def available_steps(conversation, role):
+def available_steps(deal_status, role, listing_status="active"):
     """The purchase steps this side can take now (for the buttons)."""
-    status = conversation["deal_status"]
-    steps = [a for a, (who, from_, _) in STEPS.items() if who == role and status in from_]
-    if status in CANCEL_FROM[role]:
+    steps = [a for a, (who, from_, _) in STEPS.items() if who == role and deal_status in from_]
+    if deal_status in CANCEL_FROM[role]:
         steps.append("cancel")
     # a reserved / sold listing takes no new requests, and can't be promised to a second buyer
-    if conversation.get("listing_status", "active") != "active":
+    if listing_status != "active":
         steps = [s for s in steps if s not in ("request", "accept")]
     return steps
 
 
 def complete_overdue():
     """Purchases sent SENT_AUTO_COMPLETE_DAYS ago without a problem reported: completed."""
-    overdue = fetch_all(
-        "SELECT id, listing_id, buyer_id, seller_id FROM conversations "
-        "WHERE deal_status = 'sent' AND sent_at < DATEADD(DAY, ?, SYSUTCDATETIME())",
-        -SENT_AUTO_COMPLETE_DAYS,
-    )
-    for conversation in overdue:
-        with connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("UPDATE conversations SET deal_status = 'completed' WHERE id = ? AND deal_status = 'sent'",
-                           conversation["id"])
-            if cursor.rowcount:
-                _add_message(cursor, conversation, sender_id=None, event="auto_completed")
-                _complete(cursor, conversation)
+    with session() as s:
+        overdue = s.scalars(select(Conversation.id).where(
+            Conversation.deal_status == "sent",
+            Conversation.sent_at < func.dateadd(DAY, -SENT_AUTO_COMPLETE_DAYS, NOW))).all()
+    for conversation_id in overdue:
+        with session() as s:
+            conversation = s.get(Conversation, conversation_id, with_for_update=True)
+            if conversation.deal_status != "sent":       # completed meanwhile by the buyer
+                continue
+            conversation.deal_status = "completed"
+            _add_message(s, conversation, sender_id=None, event="auto_completed")
+            _complete(s, conversation, s.get(Listing, conversation.listing_id))
     return len(overdue)
 
 
 def list_conversations(user_id):
-    """The user's conversations, latest first, each with its unread count and the other side."""
+    """The user's conversations, latest first, each with its unread count and last message."""
     complete_overdue()
-    rows = fetch_all(
-        f"""
-        SELECT {CONVERSATION_COLUMNS},
-               (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id
-                AND (m.sender_id IS NULL OR m.sender_id <> ?)
-                AND m.created_at > COALESCE(CASE WHEN c.buyer_id = ? THEN c.buyer_read_at ELSE c.seller_read_at END,
-                                            '1900-01-01')) AS unread,
-               (SELECT TOP 1 COALESCE(m.body, '') FROM messages m WHERE m.conversation_id = c.id
-                ORDER BY m.id DESC) AS last_body,
-               (SELECT TOP 1 m.event FROM messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC) AS last_event
-        {CONVERSATION_JOINS}
-        WHERE c.buyer_id = ? OR c.seller_id = ?
-        ORDER BY c.last_message_at DESC
-        """,
-        user_id, user_id, user_id, user_id,
-    )
-    return [_for_user(r, user_id) for r in rows]
+    with session() as s:
+        conversations = s.scalars(
+            select(Conversation).where(or_(Conversation.buyer_id == user_id, Conversation.seller_id == user_id))
+            .order_by(Conversation.last_message_at.desc())).unique().all()
+        ids = [c.id for c in conversations]
+        if not ids:
+            return []
+        # unread: messages from the other side (or the site) after this user last read it
+        my_read_at = case((Conversation.buyer_id == user_id, Conversation.buyer_read_at), else_=Conversation.seller_read_at)
+        unread = dict(s.execute(
+            select(Message.conversation_id, func.count())
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(Message.conversation_id.in_(ids),
+                   or_(Message.sender_id.is_(None), Message.sender_id != user_id),
+                   Message.created_at > func.coalesce(my_read_at, datetime(1900, 1, 1)))
+            .group_by(Message.conversation_id)).all())
+        ranked = select(Message.conversation_id, Message.body, Message.event,
+                        func.row_number().over(partition_by=Message.conversation_id,
+                                               order_by=Message.id.desc()).label("rn")
+                        ).where(Message.conversation_id.in_(ids)).subquery()
+        last = {r.conversation_id: r for r in s.execute(select(ranked).where(ranked.c.rn == 1))}
+        return [{**_as_dict(c, user_id), "unread": unread.get(c.id, 0),
+                 "last_body": last[c.id].body or "" if c.id in last else None,
+                 "last_event": last[c.id].event if c.id in last else None}
+                for c in conversations]
 
 
 def unread_count(user_id):
@@ -187,82 +177,88 @@ def unread_count(user_id):
 
 def get_conversation(user_id, conversation_id, after_id=0):
     """The conversation and its messages (only those after `after_id`, for refreshing); marks it read."""
-    _participant(user_id, conversation_id)
+    with session() as s:
+        _participant(s, user_id, conversation_id)
     complete_overdue()
-    conversation = fetch_one(f"SELECT {CONVERSATION_COLUMNS} {CONVERSATION_JOINS} WHERE c.id = ?", conversation_id)
-    messages = fetch_all(
-        "SELECT id, sender_id, body, event, created_at FROM messages WHERE conversation_id = ? AND id > ? ORDER BY id",
-        conversation_id, int(after_id or 0),
-    )
-    read_column = "buyer_read_at" if conversation["buyer_id"] == user_id else "seller_read_at"
-    with connection() as conn:
-        conn.cursor().execute(f"UPDATE conversations SET {read_column} = SYSUTCDATETIME() WHERE id = ?", conversation_id)
-    result = _for_user(conversation, user_id)
+    with session() as s:
+        conversation = s.get(Conversation, conversation_id)
+        messages = [fields(m, "id", "sender_id", "body", "event", "created_at") for m in s.scalars(
+            select(Message).where(Message.conversation_id == conversation_id, Message.id > int(after_id or 0))
+            .order_by(Message.id))]
+        result = _as_dict(conversation, user_id)
+        _mark_read(conversation, user_id)
     result["messages"] = messages
-    if conversation["deal_status"] == "completed":
+    if result["deal_status"] == "completed":
         result["ratings"] = ratings_of_conversation(user_id, conversation_id)
     return result
 
 
 # --- helpers ------------------------------------------------------------------------------
 
-def _participant(user_id, conversation_id):
-    conversation = fetch_one(
-        "SELECT c.*, l.status AS listing_status FROM conversations c JOIN user_listings l ON l.id = c.listing_id "
-        "WHERE c.id = ?", conversation_id)
-    if not conversation or user_id not in (conversation["buyer_id"], conversation["seller_id"]):
+def _participant(s, user_id, conversation_id):
+    conversation = s.get(Conversation, conversation_id)
+    if not conversation or user_id not in (conversation.buyer_id, conversation.seller_id):
         raise ChatError("not_found", 404)    # someone else's conversation: as if it didn't exist
     return conversation
 
 
 def _role(conversation, user_id):
-    return "buyer" if conversation["buyer_id"] == user_id else "seller"
+    return "buyer" if conversation.buyer_id == user_id else "seller"
 
 
-def _add_message(cursor, conversation, sender_id, body=None, event=None, actor_id=None):
-    """A message (or a site message about a step); the one who acted has read it already."""
-    cursor.execute("INSERT INTO messages (conversation_id, sender_id, body, event) VALUES (?, ?, ?, ?)",
-                   conversation["id"], sender_id, body, event)
+def _mark_read(conversation, user_id):
+    if conversation.buyer_id == user_id:
+        conversation.buyer_read_at = NOW
+    else:
+        conversation.seller_read_at = NOW
+
+
+def _add_message(s, conversation, sender_id, body=None, event=None, actor_id=None):
+    """
+    A message (or a site message about a step); the one who acted has read it already.
+    The message is saved first, so the read mark set after it is later than the message.
+    """
+    s.add(Message(conversation_id=conversation.id, sender_id=sender_id, body=body, event=event))
+    s.flush()
+    conversation.last_message_at = NOW
     reader = sender_id or actor_id
-    read_column = None if reader is None else "buyer_read_at" if reader == conversation["buyer_id"] else "seller_read_at"
-    cursor.execute(
-        "UPDATE conversations SET last_message_at = SYSUTCDATETIME()"
-        + (f", {read_column} = SYSUTCDATETIME()" if read_column else "") + " WHERE id = ?",
-        conversation["id"],
-    )
+    if reader is not None:
+        _mark_read(conversation, reader)
+    s.flush()
 
 
-def _set_listing(cursor, listing_id, status):
-    cursor.execute(
-        "UPDATE user_listings SET status = ?, updated_at = SYSUTCDATETIME(), "
-        "sold_at = CASE WHEN ? = 'sold' THEN SYSUTCDATETIME() ELSE sold_at END WHERE id = ?",
-        status, status, listing_id,
-    )
+def _set_listing(listing, status):
+    listing.status, listing.updated_at = status, NOW
+    if status == "sold":
+        listing.sold_at = NOW
 
 
-def _complete(cursor, conversation):
+def _complete(s, conversation, listing):
     """A completed purchase: the listing is sold; other open requests for it are declined."""
-    cursor.execute("UPDATE conversations SET completed_at = SYSUTCDATETIME() WHERE id = ?", conversation["id"])
-    _set_listing(cursor, conversation["listing_id"], "sold")
-    others = cursor.execute(
-        "SELECT id, buyer_id, seller_id FROM conversations WHERE listing_id = ? AND id <> ? AND deal_status = 'requested'",
-        conversation["listing_id"], conversation["id"],
-    ).fetchall()
-    for other_id, buyer_id, seller_id in others:
-        cursor.execute("UPDATE conversations SET deal_status = 'declined' WHERE id = ?", other_id)
-        _add_message(cursor, {"id": other_id, "buyer_id": buyer_id, "seller_id": seller_id},
-                     sender_id=None, event="listing_sold")
+    conversation.completed_at = NOW
+    _set_listing(listing, "sold")
+    others = s.scalars(select(Conversation).where(Conversation.listing_id == conversation.listing_id,
+                                                  Conversation.id != conversation.id,
+                                                  Conversation.deal_status == "requested")).all()
+    for other in others:
+        other.deal_status = "declined"
+        _add_message(s, other, sender_id=None, event="listing_sold")
 
 
-def _for_user(row, user_id):
-    """What one side sees: its role, the other side, the steps it can take, the thumbnail URL."""
-    role = _role(row, user_id)
-    other = "seller" if role == "buyer" else "buyer"
-    row["role"] = role
-    row["other_username"] = row[f"{other}_username"]
-    row["other_name"] = row[f"{other}_name"]
-    row["thumb_url"] = storage.url(row["thumb_key"]) if row.get("thumb_key") else None
-    row["steps"] = available_steps(row, role)
-    for column in ("buyer_read_at", "seller_read_at", "thumb_key"):
-        row.pop(column, None)
-    return row
+def _as_dict(c, user_id):
+    """What one side sees: the conversation, the listing, the other side, the steps it can take."""
+    role = _role(c, user_id)
+    other = c.seller if role == "buyer" else c.buyer
+    listing = c.listing
+    thumb = listing.photos[0].thumb_key if listing.photos else None
+    return fields(
+        c, "id", "listing_id", "buyer_id", "seller_id", "deal_status", "sent_at", "completed_at",
+        "last_message_at", "created_at",
+        price=fields(listing, "price")["price"], listing_status=listing.status, condition=listing.condition,
+        title=listing.game.title, platform_name=listing.game.platform.name,
+        buyer_username=c.buyer.username, buyer_name=c.buyer.display_name,
+        seller_username=c.seller.username, seller_name=c.seller.display_name,
+        role=role, other_username=other.username, other_name=other.display_name,
+        thumb_url=storage.url(thumb) if thumb else None,
+        steps=available_steps(c.deal_status, role, listing.status),
+    )

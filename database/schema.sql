@@ -4,7 +4,7 @@
 -- Catalogue:   platforms -> games -> game_editions
 -- Stores:      stores -> store_products -> price_snapshots   (filled by scrapers)
 --              stores -> scrape_runs                         (one row per scraper run)
--- Marketplace: users -> user_listings -> games              (used games sold by users)
+-- Marketplace: made by Alembic (migrations/, app/models.py)
 
 USE Project10794;
 GO
@@ -124,40 +124,9 @@ CREATE TABLE dbo.scrape_runs (
 GO
 
 -- ============================================================
--- Marketplace (users selling used games)
+-- Marketplace (users, listings, photos, conversations, messages, favourites, ratings):
+-- made by Alembic from app/models.py (migrations/); python -m database.setup runs both
 -- ============================================================
-
-IF OBJECT_ID('dbo.users', 'U') IS NULL
-CREATE TABLE dbo.users (
-    id             INT IDENTITY(1,1) PRIMARY KEY,
-    email          NVARCHAR(255) NOT NULL UNIQUE,
-    password_hash  NVARCHAR(255) NULL,           -- never store plain passwords; NULL = Google / Microsoft only
-    display_name   NVARCHAR(100) NOT NULL,
-    location       NVARCHAR(100) NULL,           -- e.g. city, for local pickup
-    is_active      BIT           NOT NULL DEFAULT 1,
-    created_at     DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME()
-);
-GO
-
--- A user's game for sale. Linked to games so it shows next to store prices.
-IF OBJECT_ID('dbo.user_listings', 'U') IS NULL
-CREATE TABLE dbo.user_listings (
-    id           INT IDENTITY(1,1) PRIMARY KEY,
-    user_id      INT            NOT NULL REFERENCES dbo.users(id),
-    game_id      INT            NOT NULL REFERENCES dbo.games(id),
-    edition_id   INT            NULL REFERENCES dbo.game_editions(id), -- NULL = seller didn't say
-    price        DECIMAL(10,2)  NOT NULL,
-    condition    VARCHAR(10)    NOT NULL,
-    description  NVARCHAR(2000) NULL,
-    status       VARCHAR(10)    NOT NULL DEFAULT 'active',
-    created_at   DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
-    updated_at   DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
-    sold_at      DATETIME2      NULL,
-    CONSTRAINT ck_user_listings_condition CHECK (condition IN ('like_new', 'good', 'fair', 'poor')),
-    CONSTRAINT ck_user_listings_status    CHECK (status IN ('active', 'reserved', 'sold', 'removed')),
-    CONSTRAINT ck_user_listings_price     CHECK (price > 0)
-);
-GO
 
 -- ============================================================
 -- Upgrades for databases created before a column existed
@@ -210,9 +179,6 @@ IF COL_LENGTH('dbo.store_products', 'edition_id') IS NULL
     ALTER TABLE dbo.store_products ADD edition_id INT NULL REFERENCES dbo.game_editions(id);
 GO
 
-IF COL_LENGTH('dbo.user_listings', 'edition_id') IS NULL
-    ALTER TABLE dbo.user_listings ADD edition_id INT NULL REFERENCES dbo.game_editions(id);
-GO
 
 -- Games / editions merged into another by pipeline/rematch.py: old links (/game/<id>) and
 -- favourites saved in browsers (edition ids) are sent to the one that replaced them
@@ -244,122 +210,4 @@ BEGIN
     JOIN dbo.game_editions e ON e.id = sp.edition_id
     WHERE s.slug IN ('press_start', 'mega-mania') AND e.edition_key <> '' AND sp.details_checked_at IS NOT NULL;
 END
-GO
-
--- Accounts (Phase 3): log in with username or email. password_hash is NULL for an account
--- that only signs in with Google / Microsoft. Usernames are unique (case-insensitive, like
--- the database's collation); the filtered index lets older rows without one exist.
-IF COL_LENGTH('dbo.users', 'username') IS NULL
-    ALTER TABLE dbo.users ADD
-        username      NVARCHAR(30) NULL,
-        is_admin      BIT          NOT NULL DEFAULT 0,   -- moderation
-        last_login_at DATETIME2    NULL;
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ux_users_username')
-    CREATE UNIQUE INDEX ux_users_username ON dbo.users (username) WHERE username IS NOT NULL;
-GO
-IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.users') AND name = 'password_hash' AND is_nullable = 0)
-    ALTER TABLE dbo.users ALTER COLUMN password_hash NVARCHAR(255) NULL;
-GO
-
--- Listings may also be new (still sealed)
-IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'ck_user_listings_condition'
-           AND definition NOT LIKE '%''new''%')
-BEGIN
-    ALTER TABLE dbo.user_listings DROP CONSTRAINT ck_user_listings_condition;
-    ALTER TABLE dbo.user_listings ADD CONSTRAINT ck_user_listings_condition
-        CHECK (condition IN ('new', 'like_new', 'good', 'fair', 'poor'));
-END
-GO
-
--- A listing's photos (at least 3), in the order the seller chose. The files are kept by
--- app/services/photo_storage.py; these are their keys there (photo and thumbnail).
-IF OBJECT_ID('dbo.listing_photos', 'U') IS NULL
-CREATE TABLE dbo.listing_photos (
-    id          INT IDENTITY(1,1) PRIMARY KEY,
-    listing_id  INT            NOT NULL REFERENCES dbo.user_listings(id),
-    position    INT            NOT NULL,
-    photo_key   NVARCHAR(200)  NOT NULL,
-    thumb_key   NVARCHAR(200)  NOT NULL,
-    created_at  DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME()
-);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_listing_photos_listing')
-    CREATE INDEX ix_listing_photos_listing ON dbo.listing_photos (listing_id, position);
-GO
-
--- Marketplace conversations: one per listing and buyer. The purchase steps live here too
--- (deal_status, see app/services/chat_service.py): none → requested → accepted → sent →
--- completed, or declined / cancelled / problem. *_read_at: unread messages for each side.
-IF OBJECT_ID('dbo.conversations', 'U') IS NULL
-CREATE TABLE dbo.conversations (
-    id               INT IDENTITY(1,1) PRIMARY KEY,
-    listing_id       INT          NOT NULL REFERENCES dbo.user_listings(id),
-    buyer_id         INT          NOT NULL REFERENCES dbo.users(id),
-    seller_id        INT          NOT NULL REFERENCES dbo.users(id),
-    deal_status      VARCHAR(12)  NOT NULL DEFAULT 'none',
-    sent_at          DATETIME2    NULL,      -- seller marked it sent / handed over
-    completed_at     DATETIME2    NULL,      -- buyer confirmed (or 7 days after sent)
-    buyer_read_at    DATETIME2    NULL,
-    seller_read_at   DATETIME2    NULL,
-    last_message_at  DATETIME2    NOT NULL DEFAULT SYSUTCDATETIME(),
-    created_at       DATETIME2    NOT NULL DEFAULT SYSUTCDATETIME(),
-    CONSTRAINT uq_conversations_listing_buyer UNIQUE (listing_id, buyer_id),
-    CONSTRAINT ck_conversations_deal CHECK (deal_status IN
-        ('none', 'requested', 'accepted', 'declined', 'cancelled', 'sent', 'completed', 'problem'))
-);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_conversations_buyer')
-    CREATE INDEX ix_conversations_buyer ON dbo.conversations (buyer_id, last_message_at);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_conversations_seller')
-    CREATE INDEX ix_conversations_seller ON dbo.conversations (seller_id, last_message_at);
-GO
-
--- The messages of a conversation. sender_id NULL = a message from the site about a purchase
--- step (event: requested, accepted, sent…), shown differently and translated by the page.
-IF OBJECT_ID('dbo.messages', 'U') IS NULL
-CREATE TABLE dbo.messages (
-    id               INT IDENTITY(1,1) PRIMARY KEY,
-    conversation_id  INT            NOT NULL REFERENCES dbo.conversations(id),
-    sender_id        INT            NULL REFERENCES dbo.users(id),
-    body             NVARCHAR(2000) NULL,
-    event            VARCHAR(20)    NULL,
-    created_at       DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME()
-);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_messages_conversation')
-    CREATE INDEX ix_messages_conversation ON dbo.messages (conversation_id, id);
-GO
-
--- Favourite editions, per account (before accounts they were kept in the browser; the page
--- moves those into the account at the first log-in)
-IF OBJECT_ID('dbo.user_favorites', 'U') IS NULL
-CREATE TABLE dbo.user_favorites (
-    user_id     INT        NOT NULL REFERENCES dbo.users(id),
-    edition_id  INT        NOT NULL REFERENCES dbo.game_editions(id),
-    created_at  DATETIME2  NOT NULL DEFAULT SYSUTCDATETIME(),
-    CONSTRAINT pk_user_favorites PRIMARY KEY (user_id, edition_id)
-);
-GO
-
--- Ratings between users after a completed purchase (app/services/rating_service.py): each side
--- rates the other once per purchase (conversation). The rated user may reply.
-IF OBJECT_ID('dbo.user_ratings', 'U') IS NULL
-CREATE TABLE dbo.user_ratings (
-    id               INT IDENTITY(1,1) PRIMARY KEY,
-    conversation_id  INT           NOT NULL REFERENCES dbo.conversations(id),
-    rater_id         INT           NOT NULL REFERENCES dbo.users(id),
-    rated_id         INT           NOT NULL REFERENCES dbo.users(id),
-    stars            TINYINT       NOT NULL,
-    comment          NVARCHAR(500) NULL,
-    reply            NVARCHAR(500) NULL,
-    created_at       DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
-    updated_at       DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
-    CONSTRAINT uq_user_ratings UNIQUE (conversation_id, rater_id),
-    CONSTRAINT ck_user_ratings_stars CHECK (stars BETWEEN 1 AND 5)
-);
-GO
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_user_ratings_rated')
-    CREATE INDEX ix_user_ratings_rated ON dbo.user_ratings (rated_id) INCLUDE (stars);
 GO

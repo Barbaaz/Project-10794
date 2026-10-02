@@ -1,6 +1,7 @@
 """
-Create the database if it doesn't exist and bring it up to date (tables, indexes, views,
-platforms and stores). Safe to re-run: every script only adds what's missing.
+Create the database if it doesn't exist and bring it up to date: the price side's tables,
+indexes, views, platforms and stores (database/*.sql), then the marketplace's tables (Alembic
+migrations, migrations/). Safe to re-run: every step only adds what's missing.
 Uses DB_CONNECTION_STRING (app/config.py) — its DATABASE= is the one created.
 
     python -m database.setup
@@ -16,6 +17,7 @@ import pyodbc
 from app.config import DB_CONNECTION_STRING
 
 DATABASE_DIR = Path(__file__).resolve().parent
+ROOT = DATABASE_DIR.parent
 SCRIPTS = ("schema.sql", "indexes.sql", "views.sql", "seed_stores.sql")
 
 
@@ -63,7 +65,26 @@ def setup(connection_string=DB_CONNECTION_STRING, wait_seconds=0):
             run_sql_script(conn.cursor(), script, name)
     finally:
         conn.close()
+    migrate(connection_string)
     print(f"Database {name} is up to date")
+
+
+def migrate(connection_string):
+    """The marketplace's tables: Alembic's migrations (migrations/versions) up to the latest."""
+    from alembic import command
+    from alembic.config import Config
+
+    from db import make_engine
+
+    config = Config(str(ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(ROOT / "migrations"))
+    engine = make_engine(connection_string)
+    try:
+        with engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "head")
+    finally:
+        engine.dispose()
 
 
 if __name__ == "__main__":

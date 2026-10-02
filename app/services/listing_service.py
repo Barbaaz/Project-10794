@@ -1,13 +1,16 @@
 """
-The pre-owned marketplace: games people sell (user_listings) with their photos.
+The pre-owned marketplace: games people sell (Listing) with their photos.
 Only the seller changes a listing. A listing always has MIN_PHOTOS..MAX_PHOTOS photos.
 """
 from decimal import Decimal, InvalidOperation
 
+from sqlalchemy import case, func, select
+
+from app.models import NOW, Conversation, Game, GameEdition, Listing, ListingPhoto, Platform, fields
+from app.services.common import card_group, page_result
 from app.services.photo_storage import PhotoError, process_photo, storage
-from app.services.common import EDITION_CARD_COLUMNS, card_group, page_result
-from app.services.rating_service import check_not_blocked, rating_columns
-from db import connection, fetch_all, fetch_one, placeholders
+from app.services.rating_service import check_not_blocked, summaries
+from db import json_value, session
 
 CONDITIONS = ("new", "like_new", "good", "fair", "poor")
 STATUSES = ("active", "reserved", "sold", "removed")
@@ -16,21 +19,7 @@ MIN_PHOTOS, MAX_PHOTOS = 3, 10
 MIN_PRICE, MAX_PRICE = Decimal("0.50"), Decimal("10000")
 MAX_DESCRIPTION = 2000
 
-# A listing as everyone sees it (with the seller's rating): never the seller's email
-LISTING_COLUMNS = f"""
-    l.id, l.user_id, l.game_id, l.edition_id, l.price, l.condition, l.description, l.status,
-    l.created_at, l.updated_at, l.sold_at,
-    g.title, p.code AS platform, p.name AS platform_name, e.name AS edition,
-    u.username AS seller_username, u.display_name AS seller_name, u.created_at AS seller_since,
-    {rating_columns("l.user_id", "seller_")}
-"""
-LISTING_JOINS = """
-    FROM user_listings l
-    JOIN games g ON g.id = l.game_id
-    JOIN platforms p ON p.id = g.platform_id
-    JOIN users u ON u.id = l.user_id
-    LEFT JOIN game_editions e ON e.id = l.edition_id
-"""
+BROWSE_SORTS = ("newest", "price_asc", "price_desc")
 
 
 class ListingError(Exception):
@@ -42,41 +31,66 @@ class ListingError(Exception):
         self.status = status
 
 
-def create_listing(user_id, game_id, edition_id, price, condition, description, photos):
-    """photos: the uploaded files' bytes. Returns the new listing."""
-    check_not_blocked(user_id, ListingError)       # a rating overdue: rate first
-    fields = _checked_fields(price, condition, description)
-    game_id, edition_id = _checked_game(game_id, edition_id)
-    if not MIN_PHOTOS <= len(photos) <= MAX_PHOTOS:
-        raise ListingError("photo_count")
-    processed = [_process(data) for data in photos]   # all checked before anything is saved
+# --- reading ------------------------------------------------------------------------------
 
-    with connection() as conn:
-        cursor = conn.cursor()
-        listing_id = cursor.execute(
-            "INSERT INTO user_listings (user_id, game_id, edition_id, price, condition, description) "
-            "OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)",
-            user_id, game_id, edition_id, fields["price"], fields["condition"], fields["description"],
-        ).fetchone()[0]
-        _save_photos(cursor, listing_id, processed, first_position=0)
-    return get_listing(listing_id, viewer_id=user_id)
+def as_dicts(listings):
+    """
+    Listings as the API sends them: the listing, its game / edition / platform, the seller
+    (with their rating; never the email) and the photos with their URLs.
+    """
+    ratings = summaries([l.user_id for l in listings])
+    result = []
+    for l in listings:
+        rating, count = ratings.get(l.user_id, (None, 0))
+        result.append(fields(
+            l, "id", "user_id", "game_id", "edition_id", "price", "condition", "description", "status",
+            "created_at", "updated_at", "sold_at",
+            title=l.game.title, platform=l.game.platform.code, platform_name=l.game.platform.name,
+            edition=l.edition.name if l.edition else None,
+            seller_username=l.seller.username, seller_name=l.seller.display_name,
+            seller_since=json_value(l.seller.created_at), seller_rating=rating, seller_rating_count=count,
+            photos=[fields(p, "id", "listing_id", "position", "photo_key", "thumb_key",
+                           url=storage.url(p.photo_key), thumb_url=storage.url(p.thumb_key)) for p in l.photos],
+        ))
+    return result
+
+
+def _listings(*conditions, order_by):
+    with session() as s:
+        return as_dicts(s.scalars(select(Listing).where(*conditions).order_by(*order_by)).unique().all())
 
 
 def listings_for_game(game_id):
     """The game's listings everyone can see (active first, cheapest first), each with its photos."""
-    rows = fetch_all(
-        f"SELECT {LISTING_COLUMNS} {LISTING_JOINS} WHERE l.game_id = ? AND l.status IN ('active', 'reserved') "
-        "ORDER BY CASE l.status WHEN 'active' THEN 0 ELSE 1 END, l.price",
-        game_id,
-    )
-    return _with_photos(rows)
+    return _listings(Listing.game_id == game_id, Listing.status.in_(VISIBLE),
+                     order_by=(case((Listing.status == "active", 0), else_=1), Listing.price))
 
 
-BROWSE_SORTS = {
-    "newest": "u.newest DESC, g.title",
-    "price_asc": "u.min_price, g.title",
-    "price_desc": "u.min_price DESC, g.title",
-}
+def listings_of_user(user_id):
+    """A seller's listings everyone can see (their profile page), newest first."""
+    return _listings(Listing.user_id == user_id, Listing.status.in_(VISIBLE), order_by=(Listing.created_at.desc(),))
+
+
+def my_listings(user_id):
+    """The seller's own listings (all but removed), newest first."""
+    return _listings(Listing.user_id == user_id, Listing.status != "removed", order_by=(Listing.created_at.desc(),))
+
+
+def get_listing(listing_id, viewer_id=None):
+    """
+    A listing with its photos, or None if this viewer can't see it: sold / removed listings are
+    only shown to their seller and to the people who talked to the seller about them (a buyer
+    can still see what they bought).
+    """
+    with session() as s:
+        listing = s.get(Listing, listing_id)
+        if not listing:
+            return None
+        talked = viewer_id and s.scalar(select(Conversation.id).where(
+            Conversation.listing_id == listing_id, Conversation.buyer_id == viewer_id).limit(1))
+        if listing.status not in VISIBLE and listing.user_id != viewer_id and not talked:
+            return None
+        return as_dicts([listing])[0]
 
 
 def browse(platform=None, sort="newest", page=1, per_page=48):
@@ -85,27 +99,29 @@ def browse(platform=None, sort="newest", page=1, per_page=48):
     each with its active listings, cheapest first; editions with the newest listing first, or
     by their cheapest price. Paged by edition.
     """
-    used = """
-        WITH u AS (
-            SELECT edition_id, MIN(price) AS min_price, MAX(created_at) AS newest
-            FROM user_listings WHERE status = 'active' AND edition_id IS NOT NULL GROUP BY edition_id
-        )"""
-    joins = """
-        FROM u JOIN game_editions e ON e.id = u.edition_id
-        JOIN games g ON g.id = e.game_id JOIN platforms p ON p.id = g.platform_id
-        WHERE (? IS NULL OR p.code = ?)"""
-    total = fetch_one(f"{used} SELECT COUNT(*) AS total {joins}", platform, platform)["total"]
-    editions = fetch_all(
-        f"{used} SELECT {EDITION_CARD_COLUMNS}, g.image_url AS image {joins} "
-        f"ORDER BY {BROWSE_SORTS.get(sort, BROWSE_SORTS['newest'])} OFFSET ? ROWS FETCH NEXT ? ROWS ONLY",
-        platform, platform, (page - 1) * per_page, per_page,
-    )
-    ids = [e["edition_id"] for e in editions]
-    listings = _with_photos(fetch_all(
-        f"SELECT {LISTING_COLUMNS} {LISTING_JOINS} WHERE l.status = 'active' AND l.edition_id IN ({placeholders(ids)}) "
-        "ORDER BY l.price, l.created_at", *ids)) if ids else []
-    groups = [card_group(e, [], image=e["image"], listings=[l for l in listings if l["edition_id"] == e["edition_id"]])
-              for e in editions]
+    used = (select(Listing.edition_id, func.min(Listing.price).label("min_price"),
+                   func.max(Listing.created_at).label("newest"))
+            .where(Listing.status == "active", Listing.edition_id.is_not(None))
+            .group_by(Listing.edition_id).subquery())
+    editions = (select(GameEdition, Game, Platform)
+                .join(used, used.c.edition_id == GameEdition.id)
+                .join(Game, Game.id == GameEdition.game_id).join(Platform, Platform.id == Game.platform_id))
+    if platform:
+        editions = editions.where(Platform.code == platform)
+    order = {"newest": (used.c.newest.desc(), Game.title), "price_asc": (used.c.min_price, Game.title),
+             "price_desc": (used.c.min_price.desc(), Game.title)}[sort if sort in BROWSE_SORTS else "newest"]
+
+    with session() as s:
+        total = s.scalar(select(func.count()).select_from(editions.subquery()))
+        rows = s.execute(editions.order_by(*order).offset((page - 1) * per_page).limit(per_page)).all()
+        ids = [edition.id for edition, _, _ in rows]
+        listings = as_dicts(s.scalars(select(Listing).where(Listing.status == "active", Listing.edition_id.in_(ids))
+                                      .order_by(Listing.price, Listing.created_at)).unique().all()) if ids else []
+    groups = [card_group({"edition_id": edition.id, "game_id": game.id, "title": game.title,
+                          "edition_key": edition.edition_key, "edition": edition.name,
+                          "console": platform_.code, "platform_name": platform_.name},
+                         [], image=game.image_url, listings=[l for l in listings if l["edition_id"] == edition.id])
+              for edition, game, platform_ in rows]
     return page_result(page, per_page, total, groups=groups)
 
 
@@ -116,97 +132,92 @@ def used_summaries(edition_ids):
     """
     if not edition_ids:
         return {}
-    rows = fetch_all(
-        f"""
-        SELECT edition_id, COUNT(*) OVER (PARTITION BY edition_id) AS count, price, id AS listing_id,
-               ROW_NUMBER() OVER (PARTITION BY edition_id ORDER BY price, id) AS rn
-        FROM user_listings
-        WHERE status = 'active' AND edition_id IN ({placeholders(edition_ids)})
-        """,
-        *edition_ids,
-    )
-    return {r["edition_id"]: {"count": r["count"], "price": r["price"], "listing_id": r["listing_id"]}
-            for r in rows if r["rn"] == 1}
+    ranked = select(
+        Listing.edition_id, Listing.price, Listing.id,
+        func.count().over(partition_by=Listing.edition_id).label("count"),
+        func.row_number().over(partition_by=Listing.edition_id, order_by=(Listing.price, Listing.id)).label("rn"),
+    ).where(Listing.status == "active", Listing.edition_id.in_(edition_ids)).subquery()
+    with session() as s:
+        rows = s.execute(select(ranked).where(ranked.c.rn == 1)).all()
+    return {r.edition_id: {"count": r.count, "price": json_value(r.price), "listing_id": r.id} for r in rows}
 
 
-def listings_of_user(user_id):
-    """A seller's listings everyone can see (their profile page), newest first."""
-    rows = fetch_all(
-        f"SELECT {LISTING_COLUMNS} {LISTING_JOINS} WHERE l.user_id = ? AND l.status IN ('active', 'reserved') "
-        "ORDER BY l.created_at DESC",
-        user_id,
-    )
-    return _with_photos(rows)
+# --- changing -----------------------------------------------------------------------------
 
+def create_listing(user_id, game_id, edition_id, price, condition, description, photos):
+    """photos: the uploaded files' bytes. Returns the new listing."""
+    check_not_blocked(user_id, ListingError)       # a rating overdue: rate first
+    checked = _checked_fields(price, condition, description)
+    game_id, edition_id = _checked_game(game_id, edition_id)
+    if not MIN_PHOTOS <= len(photos) <= MAX_PHOTOS:
+        raise ListingError("photo_count")
+    processed = [_process(data) for data in photos]   # all checked before anything is saved
 
-def my_listings(user_id):
-    """The seller's own listings (all but removed), newest first."""
-    rows = fetch_all(
-        f"SELECT {LISTING_COLUMNS} {LISTING_JOINS} WHERE l.user_id = ? AND l.status <> 'removed' "
-        "ORDER BY l.created_at DESC",
-        user_id,
-    )
-    return _with_photos(rows)
-
-
-def get_listing(listing_id, viewer_id=None):
-    """
-    A listing with its photos, or None if this viewer can't see it: sold / removed listings are
-    only shown to their seller and to the people who talked to the seller about them (a buyer
-    can still see what they bought).
-    """
-    row = fetch_one(f"SELECT {LISTING_COLUMNS} {LISTING_JOINS} WHERE l.id = ?", listing_id)
-    if not row:
-        return None
-    if row["status"] not in VISIBLE and row["user_id"] != viewer_id and not (viewer_id and fetch_one(
-            "SELECT 1 AS ok FROM conversations WHERE listing_id = ? AND buyer_id = ?", listing_id, viewer_id)):
-        return None
-    return _with_photos([row])[0]
+    saved = []
+    try:
+        with session() as s:
+            listing = Listing(user_id=user_id, game_id=game_id, edition_id=edition_id, **checked)
+            s.add(listing)
+            s.flush()
+            saved = _store_photos(listing, processed, first_position=0)
+            listing_id = listing.id
+    except Exception:
+        for key in saved:             # the listing wasn't saved: don't keep its files
+            storage.delete(key)
+        raise
+    return get_listing(listing_id, viewer_id=user_id)
 
 
 def update_listing(user_id, listing_id, changes):
     """The seller changes price / condition / description / status."""
-    listing = _own_listing(user_id, listing_id)
-    fields = _checked_fields(
-        changes.get("price", listing["price"]),
-        changes.get("condition", listing["condition"]),
-        changes.get("description", listing["description"]),
-    )
-    status = changes.get("status", listing["status"])
-    if status not in STATUSES:
-        raise ListingError("status_invalid")
-    with connection() as conn:
-        conn.cursor().execute(
-            "UPDATE user_listings SET price = ?, condition = ?, description = ?, status = ?, "
-            "sold_at = CASE WHEN ? = 'sold' THEN COALESCE(sold_at, SYSUTCDATETIME()) END, "
-            "updated_at = SYSUTCDATETIME() WHERE id = ?",
-            fields["price"], fields["condition"], fields["description"], status, status, listing_id,
-        )
+    with session() as s:
+        listing = _own_listing(s, user_id, listing_id)
+        checked = _checked_fields(changes.get("price", listing.price), changes.get("condition", listing.condition),
+                                  changes.get("description", listing.description))
+        status = changes.get("status", listing.status)
+        if status not in STATUSES:
+            raise ListingError("status_invalid")
+        for name, value in checked.items():
+            setattr(listing, name, value)
+        if status == "sold" and not listing.sold_at:
+            listing.sold_at = NOW
+        elif status != "sold":
+            listing.sold_at = None
+        listing.status, listing.updated_at = status, NOW
     return get_listing(listing_id, viewer_id=user_id)
 
 
 def add_photos(user_id, listing_id, photos):
-    listing = _own_listing(user_id, listing_id)
-    if len(listing["photos"]) + len(photos) > MAX_PHOTOS:
-        raise ListingError("photo_count")
+    with session() as s:
+        listing = _own_listing(s, user_id, listing_id)
+        if len(listing.photos) + len(photos) > MAX_PHOTOS:
+            raise ListingError("photo_count")
     processed = [_process(data) for data in photos]
-    with connection() as conn:
-        position = max((p["position"] for p in listing["photos"]), default=-1) + 1
-        _save_photos(conn.cursor(), listing_id, processed, first_position=position)
+    saved = []
+    try:
+        with session() as s:
+            listing = s.get(Listing, listing_id)
+            first = max((p.position for p in listing.photos), default=-1) + 1
+            saved = _store_photos(listing, processed, first_position=first)
+    except Exception:
+        for key in saved:
+            storage.delete(key)
+        raise
     return get_listing(listing_id, viewer_id=user_id)
 
 
 def delete_photo(user_id, listing_id, photo_id):
-    listing = _own_listing(user_id, listing_id)
-    photo = next((p for p in listing["photos"] if p["id"] == photo_id), None)
-    if photo is None:
-        raise ListingError("not_found", 404)
-    if len(listing["photos"]) <= MIN_PHOTOS:
-        raise ListingError("photo_count")
-    with connection() as conn:
-        conn.cursor().execute("DELETE FROM listing_photos WHERE id = ?", photo_id)
-    storage.delete(photo["photo_key"])
-    storage.delete(photo["thumb_key"])
+    with session() as s:
+        listing = _own_listing(s, user_id, listing_id)
+        photo = next((p for p in listing.photos if p.id == photo_id), None)
+        if photo is None:
+            raise ListingError("not_found", 404)
+        if len(listing.photos) <= MIN_PHOTOS:
+            raise ListingError("photo_count")
+        keys = photo.photo_key, photo.thumb_key
+        listing.photos.remove(photo)          # delete-orphan: the row goes too
+    for key in keys:
+        storage.delete(key)
     return get_listing(listing_id, viewer_id=user_id)
 
 
@@ -233,30 +244,31 @@ def _checked_game(game_id, edition_id):
         edition_id = int(edition_id) if edition_id not in (None, "") else None
     except (TypeError, ValueError):
         raise ListingError("game_invalid")
-    if not fetch_one("SELECT 1 AS ok FROM games WHERE id = ?", game_id):
-        raise ListingError("game_invalid")
-    if edition_id is not None and not fetch_one(
-            "SELECT 1 AS ok FROM game_editions WHERE id = ? AND game_id = ?", edition_id, game_id):
-        raise ListingError("edition_invalid")
+    with session() as s:
+        if not s.get(Game, game_id):
+            raise ListingError("game_invalid")
+        edition = s.get(GameEdition, edition_id) if edition_id is not None else None
+        if edition_id is not None and (edition is None or edition.game_id != game_id):
+            raise ListingError("edition_invalid")
     return game_id, edition_id
 
 
-def _save_photos(cursor, listing_id, processed, first_position):
+def _store_photos(listing, processed, first_position):
     """
-    Store the processed photos' files and add their rows (in the caller's transaction).
-    If anything fails, the files stored so far are deleted again: no files without a row.
+    Store the processed photos' files and add them to the listing (saved with the caller's
+    session). Returns the stored keys, so the caller can delete the files if saving fails.
     """
     saved = []
     try:
         for offset, (photo, thumb) in enumerate(processed):
-            keys = storage.save(f"listings/{listing_id}", photo), storage.save(f"listings/{listing_id}", thumb)
+            keys = storage.save(f"listings/{listing.id}", photo), storage.save(f"listings/{listing.id}", thumb)
             saved += keys
-            cursor.execute("INSERT INTO listing_photos (listing_id, position, photo_key, thumb_key) VALUES (?, ?, ?, ?)",
-                           listing_id, first_position + offset, *keys)
+            listing.photos.append(ListingPhoto(position=first_position + offset, photo_key=keys[0], thumb_key=keys[1]))
     except Exception:
         for key in saved:
             storage.delete(key)
         raise
+    return saved
 
 
 def _process(data):
@@ -266,27 +278,10 @@ def _process(data):
         raise ListingError(e.code)
 
 
-def _own_listing(user_id, listing_id):
-    listing = get_listing(listing_id, viewer_id=user_id)
-    if listing is None:
+def _own_listing(s, user_id, listing_id):
+    listing = s.get(Listing, listing_id)
+    if listing is None or (listing.user_id != user_id and listing.status not in VISIBLE):
         raise ListingError("not_found", 404)
-    if listing["user_id"] != user_id:
+    if listing.user_id != user_id:
         raise ListingError("not_yours", 403)
     return listing
-
-
-def _with_photos(rows):
-    if not rows:
-        return rows
-    ids = [r["id"] for r in rows]
-    photos = fetch_all(
-        f"SELECT id, listing_id, position, photo_key, thumb_key FROM listing_photos "
-        f"WHERE listing_id IN ({placeholders(ids)}) ORDER BY listing_id, position",
-        *ids,
-    )
-    for row in rows:
-        row["photos"] = [
-            {**p, "url": storage.url(p["photo_key"]), "thumb_url": storage.url(p["thumb_key"])}
-            for p in photos if p["listing_id"] == row["id"]
-        ]
-    return rows

@@ -193,6 +193,26 @@ When a store fails or looks half-broken, the daily run shows a **Windows notific
 the front page footer shows ⚠ next to that store (also when a store hasn't updated for 36 h). A full run takes about 8 minutes. A new price row is
 only stored when a price or stock status changes.
 
+## Database code
+
+- **Marketplace** (users, listings, photos, conversations, messages, favourites, ratings): SQLAlchemy
+  models in `app/models.py`, used by `app/services/{auth,listing,chat,rating,favorite}_service.py`
+  through `db.session()` — no SQL text there. Their tables are made and changed by **Alembic**
+  migrations (`migrations/versions/`).
+- **Price side** (stores, products, price history, games and editions, the `current_offers`
+  discount view): SQL in `database/*.sql` and the services' queries (`db.fetch_all`), being
+  reports (latest price per product, 30-day windows) that read better as SQL.
+
+`python -m database.setup` runs both. To change a marketplace table:
+
+```powershell
+# 1. change the model in app/models.py, then:
+alembic revision --autogenerate -m "listings: add a shipping cost"   # writes migrations/versions/…
+# 2. read the generated file (autogenerate isn't perfect), then:
+alembic upgrade head
+alembic check            # "No new upgrade operations detected" = models and database agree
+```
+
 ## Tests
 
 ```powershell

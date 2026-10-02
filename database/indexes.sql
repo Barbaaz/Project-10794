@@ -40,16 +40,6 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_price_snapshots_produc
         INCLUDE (price, old_price, in_stock);
 GO
 
--- Active user listings for a game
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_user_listings_game_status')
-    CREATE INDEX ix_user_listings_game_status ON dbo.user_listings (game_id, status) INCLUDE (price, condition);
-GO
-
--- A user's own listings
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_user_listings_user')
-    CREATE INDEX ix_user_listings_user ON dbo.user_listings (user_id);
-GO
-
 -- Recent runs per store
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_scrape_runs_store_date')
     CREATE INDEX ix_scrape_runs_store_date ON dbo.scrape_runs (store_id, started_at DESC);

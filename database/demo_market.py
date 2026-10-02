@@ -13,12 +13,15 @@ import argparse
 import io
 import logging
 import random
+from datetime import timedelta
 
 from PIL import Image, ImageDraw, ImageFont
+from sqlalchemy import delete, or_, select
 
+from app.models import Conversation, Favorite, Listing, Message, Rating, User
 from app.services import auth_service, chat_service, listing_service
 from app.services.photo_storage import storage
-from db import connection, fetch_all
+from db import fetch_all, session
 
 log = logging.getLogger(__name__)
 
@@ -38,28 +41,31 @@ DESCRIPTIONS = [
 LISTINGS = 15
 GAMES = 9            # 15 listings over 9 games: some games have two sellers
 CONDITION_SHARE = {"new": 0.95, "like_new": 0.80, "good": 0.70, "fair": 0.55, "poor": 0.40}
-DEMO_USERS = "username LIKE 'demo[_]%' AND email LIKE '%@demo.invalid'"   # never a real user
+
+
+def _demo_users(s):
+    """The demo users (recognised by their username prefix and @demo.invalid email: never a real user)."""
+    return s.scalars(select(User).where(User.username.like("demo[_]%"), User.email.like("%@demo.invalid"))).all()
 
 
 def remove():
-    users = [r["id"] for r in fetch_all(f"SELECT id FROM users WHERE {DEMO_USERS}")]
-    if not users:
-        log.info("No demo marketplace data")
-        return
-    ids = ",".join(map(str, users))
-    keys = [k for r in fetch_all(
-        f"SELECT lp.photo_key, lp.thumb_key FROM listing_photos lp JOIN user_listings l ON l.id = lp.listing_id "
-        f"WHERE l.user_id IN ({ids})") for k in (r["photo_key"], r["thumb_key"])]
-    with connection() as conn:
-        c = conn.cursor()
-        conversations = f"SELECT id FROM conversations WHERE buyer_id IN ({ids}) OR seller_id IN ({ids})"
-        c.execute(f"DELETE FROM user_ratings WHERE conversation_id IN ({conversations})")
-        c.execute(f"DELETE FROM messages WHERE conversation_id IN ({conversations})")
-        c.execute(f"DELETE FROM conversations WHERE buyer_id IN ({ids}) OR seller_id IN ({ids})")
-        c.execute(f"DELETE lp FROM listing_photos lp JOIN user_listings l ON l.id = lp.listing_id WHERE l.user_id IN ({ids})")
-        c.execute(f"DELETE FROM user_listings WHERE user_id IN ({ids})")
-        c.execute(f"DELETE FROM user_favorites WHERE user_id IN ({ids})")
-        c.execute(f"DELETE FROM users WHERE id IN ({ids})")
+    with session() as s:
+        users = [u.id for u in _demo_users(s)]
+        if not users:
+            log.info("No demo marketplace data")
+            return
+        conversations = select(Conversation.id).where(
+            or_(Conversation.buyer_id.in_(users), Conversation.seller_id.in_(users)))
+        listings = s.scalars(select(Listing).where(Listing.user_id.in_(users))).all()
+        keys = [key for l in listings for p in l.photos for key in (p.photo_key, p.thumb_key)]
+        s.execute(delete(Rating).where(Rating.conversation_id.in_(conversations)))
+        s.execute(delete(Message).where(Message.conversation_id.in_(conversations)))
+        s.execute(delete(Conversation).where(Conversation.id.in_(conversations)))
+        for listing in listings:
+            s.delete(listing)                  # its photos go with it
+        s.flush()
+        s.execute(delete(Favorite).where(Favorite.user_id.in_(users)))
+        s.execute(delete(User).where(User.id.in_(users)))
     for key in keys:
         storage.delete(key)
     log.info("Demo marketplace removed: %d users, %d photo files", len(users), len(keys))
@@ -148,11 +154,11 @@ def add():
             chat_service.send_message(users[seller if j % 2 == 0 else buyer], conversation_id, line)
 
     # Spread the dates over the last weeks, so "published" / message times look real
-    with connection() as conn:
-        c = conn.cursor()
-        demo_ids = ",".join(str(i) for i in users.values())
-        c.execute(f"UPDATE users SET created_at = DATEADD(DAY, -(30 + id % 200), created_at) WHERE id IN ({demo_ids})")
-        c.execute(f"UPDATE user_listings SET created_at = DATEADD(HOUR, -(id % 300), created_at) WHERE user_id IN ({demo_ids})")
+    with session() as s:
+        for user in _demo_users(s):
+            user.created_at -= timedelta(days=30 + user.id % 200)
+        for listing in s.scalars(select(Listing).where(Listing.user_id.in_(users.values()))):
+            listing.created_at -= timedelta(hours=listing.id % 300)
     log.info("Demo conversations: %d. Log in as e.g. demo_ana / %s", len(stories), DEMO_PASSWORD)
 
 
