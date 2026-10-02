@@ -21,6 +21,10 @@ OFFER_COLUMNS = """
     o.discount_percent, o.is_discount, o.last_seen_at
 """
 
+# TWO_STEPS: queries pick the edition / game ids first, then read current_offers with
+# "IN (ids)". Joining current_offers to a subquery makes SQL Server recompute the view
+# for every row (30 s instead of 0.1 s).
+
 
 def search_filters(q, platform):
     """WHERE clause + params: every word of q must appear in the game's title."""
@@ -245,7 +249,7 @@ def editions_with_offers(edition_ids):
         """,
         *edition_ids,
     )
-    # Two steps on purpose (see search_offers): filter current_offers by id, not by a join
+    # Two steps on purpose (see TWO_STEPS): filter current_offers by id, not by a join
     offers = fetch_all(
         f"""
         SELECT {OFFER_COLUMNS}
@@ -316,17 +320,19 @@ CATALOG_SORTS = {
 }
 
 
-def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False):
+def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False, q=None, store=None):
     """
     The whole catalogue: every edition with at least one offer in stock, as card groups
     (same shape as /search), one page at a time. sort: name / price_asc / price_desc.
     special_only: only editions above Standard (Deluxe, Collector's, Steelbook...). Keys are
     "" for Standard and "|Game Key Card" for a Standard that only differs in format.
+    q: every word must be in the game's title (the search uses this).
+    store: only editions this store has in stock (all stores' offers are still shown, to compare).
     """
     order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS["name"])
     in_stock_editions = """
         WITH offers AS (
-            SELECT sp.edition_id, last.price
+            SELECT sp.edition_id, sp.store_id, last.price
             FROM store_products sp
             CROSS APPLY (SELECT TOP 1 price, in_stock FROM price_snapshots ps
                          WHERE ps.store_product_id = sp.id ORDER BY ps.scraped_at DESC, ps.id DESC) last
@@ -334,9 +340,17 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False)
         ),
         ed AS (SELECT edition_id, MIN(price) AS best_price FROM offers GROUP BY edition_id)
     """
-    filters = "(? IS NULL OR p.code = ?)"
+    filters, params = ["(? IS NULL OR p.code = ?)"], [platform, platform]
     if special_only:
-        filters += " AND e.edition_key <> '' AND e.edition_key NOT LIKE '|%'"
+        filters.append("e.edition_key <> '' AND e.edition_key NOT LIKE '|%'")
+    for word in normalize_name(q or "").split():
+        filters.append("g.normalized_title LIKE ?")
+        params.append(f"%{word}%")
+    if store:
+        filters.append("ed.edition_id IN (SELECT o.edition_id FROM offers o JOIN stores s ON s.id = o.store_id "
+                       "WHERE s.slug = ?)")
+        params.append(store)
+    filters = " AND ".join(filters)
 
     total = fetch_one(
         f"""{in_stock_editions}
@@ -345,7 +359,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False)
         JOIN games g ON g.id = e.game_id
         JOIN platforms p ON p.id = g.platform_id
         WHERE {filters}""",
-        platform, platform,
+        *params,
     )["total"]
 
     page_editions = fetch_all(
@@ -359,13 +373,13 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False)
         WHERE {filters}
         ORDER BY {order_by}
         OFFSET ? ROWS FETCH NEXT ? ROWS ONLY""",
-        platform, platform, (page - 1) * per_page, per_page,
+        *params, (page - 1) * per_page, per_page,
     )
 
     groups = []
     if page_editions:
         ids = [e["edition_id"] for e in page_editions]
-        # Two steps on purpose (see search_offers): filter current_offers by id, not by a join
+        # Two steps on purpose (see TWO_STEPS): filter current_offers by id, not by a join
         offers = fetch_all(
             f"""
             SELECT {OFFER_COLUMNS}
@@ -435,49 +449,3 @@ def get_price_history(game_id, days=90):
         offer["history"].append({"date": r["date"], "price": r["price"], "in_stock": r["in_stock"]})
 
     return list(offers.values())
-
-
-def search_offers(q, limit=60):
-    """
-    For the web page: one group per game edition with its in-stock offers.
-    Shape kept from the old live-scraping /search: [{name, console, offers: [...]}]
-    """
-    where, params = search_filters(q, None)
-
-    # Two steps on purpose: joining current_offers to a subquery makes SQL Server
-    # recompute the view per game (30 s instead of 0.1 s)
-    game_ids = [r["id"] for r in fetch_all(
-        f"""
-        SELECT TOP {int(limit)} g.id FROM games g JOIN platforms p ON p.id = g.platform_id
-        WHERE {where} ORDER BY g.title
-        """,
-        *params,
-    )]
-    if not game_ids:
-        return []
-
-    placeholders = ",".join("?" * len(game_ids))
-    rows = fetch_all(
-        f"""
-        SELECT g.title, p.code AS console, p.name AS platform_name, e.name AS edition, e.edition_key, {OFFER_COLUMNS}
-        FROM current_offers o
-        JOIN games g ON g.id = o.game_id
-        JOIN platforms p ON p.id = g.platform_id
-        JOIN game_editions e ON e.id = o.edition_id
-        JOIN stores s ON s.id = o.store_id
-        WHERE o.is_active = 1 AND o.in_stock = 1 AND o.game_id IN ({placeholders})
-        ORDER BY g.title, p.code, CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, e.name, o.price
-        """,
-        *game_ids,
-    )
-
-    groups = {}
-    for r in rows:
-        name = r["title"] if r["edition_key"] == "" else f"{r['title']} — {r['edition']}"
-        group = groups.setdefault(r["edition_id"], {
-            "name": name, "console": r["console"], "platform_name": r["platform_name"],
-            "game_id": r["game_id"], "edition_id": r["edition_id"], "offers": [],
-        })
-        group["offers"].append(r)
-
-    return list(groups.values())

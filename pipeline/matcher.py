@@ -1,6 +1,6 @@
 from difflib import SequenceMatcher
 
-from core.close_match import KeyIndex
+from core.close_match import KeyIndex, expand
 from core.editions import EDITION_WORDS, parse_title, learn_phrase, edition_key_of, cut_display
 
 MIN_TYPO_LENGTH = 5     # words this long may differ by a typo ("delixe" / "deluxe")
@@ -62,7 +62,9 @@ class GameMatcher:
         index = self.keys.setdefault(platform_id, KeyIndex())
         game_key, edition_key, edition_name = self.mend_split(parsed, index)
         game_key = index.resolve(game_key)
-        own_title = parsed.game_title if game_key == parsed.game_key else None
+        # Its own name is a good display title, also when it only differs by a leading "The"
+        # or an abbreviation; a shortened or mended one isn't
+        own_title = parsed.game_title if expand(game_key) == expand(parsed.game_key) else None
 
         game_id = self.games.get((game_key, platform_id))
         if game_id is None:

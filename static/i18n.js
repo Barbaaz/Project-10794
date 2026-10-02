@@ -55,6 +55,9 @@ const STRINGS = {
         // catalogue
         catalog_count: "{count} edições em stock · página {page} de {pages}",
         special_count: "{count} edições especiais em stock · página {page} de {pages}",
+        search_count: "{count} edições em stock para «{query}» · página {page} de {pages}",
+        store_filter: "Loja:",
+        all_stores: "Todas as lojas",
         sort: "Ordenar:",
         sort_name: "Nome (A–Z)",
         sort_price_asc: "Preço: mais barato primeiro",
@@ -175,6 +178,9 @@ const STRINGS = {
 
         catalog_count: "{count} editions in stock · page {page} of {pages}",
         special_count: "{count} special editions in stock · page {page} of {pages}",
+        search_count: "{count} editions in stock for “{query}” · page {page} of {pages}",
+        store_filter: "Store:",
+        all_stores: "All stores",
         sort: "Sort:",
         sort_name: "Name (A–Z)",
         sort_price_asc: "Price: lowest first",

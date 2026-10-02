@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Game Price Tracker</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="/static/i18n.js"></script>
@@ -96,7 +97,7 @@
     <div id="loading" class="text-center my-4 d-none"><div class="spinner-border text-primary"></div></div>
     <p id="empty" class="text-body-secondary d-none" data-i18n="no_results"></p>
 
-    <div id="results" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 row-cols-xxl-8 g-2"></div>
+    <div id="results"></div>
 
     <!-- When each store's prices were last updated; ⚠ when a run failed or a store is out of date -->
     <footer id="store-status" class="small text-body-secondary border-top mt-5 pt-3"></footer>
@@ -106,7 +107,7 @@
 const MAX_OFFERS = 3;   // offers shown on a card; the game page has all of them
 // t(), eur, LOCALE, fmtNumber: static/i18n.js
 
-let currentData = [];
+let currentData = null;     // the search results on screen (a catalogue page)
 let hasSearched = false;
 let stores = {};
 let favorites = [];
@@ -125,20 +126,6 @@ function storeName(slug) {
 function handleSearch(event) {
     event.preventDefault();
     search();
-}
-
-function render(data) {
-    const container = document.getElementById("results");
-    container.innerHTML = "";
-
-    const selected = document.getElementById("consoleFilter").value;
-    const groups = data
-        .filter(g => !selected || g.console === selected)
-        .sort((a, b) => isFavorite(b) - isFavorite(a));
-
-    document.getElementById("empty").classList.toggle("d-none", groups.length > 0 || !hasSearched);
-
-    groups.forEach(group => container.appendChild(makeCard(group)));
 }
 
 // A card: cover, title, platform and up to MAX_OFFERS store prices.
@@ -199,9 +186,13 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
 const CATALOG_PAGE = 48;
 let catalogSort = "name";
 try { catalogSort = localStorage.getItem("catalogSort") || "name"; } catch (e) {}
+// Store filter for the catalogue tabs and the search (/?…&store=darty); not remembered between visits
+let catalogStore = new URLSearchParams(location.search).get("store") || "";
 
 // /?tab=catalog&page=3 opens on that page (bookmarks, the game page's back button)
-let pageFromUrl = Number(new URLSearchParams(location.search).get("page")) || 1;
+// (a page in a search address, /?q=zelda&page=2, belongs to the search, not to the tab)
+const startParams = new URLSearchParams(location.search);
+let pageFromUrl = startParams.get("q") ? 1 : Number(startParams.get("page")) || 1;
 
 function catalogTab(special, empty) {
     return {
@@ -220,13 +211,21 @@ function catalogTab(special, empty) {
 async function showCatalogPage(page) {
     const data = frontData[frontTab];
     frontData[frontTab] = await loadCatalogPage(data.special, data.platform, page);
-    setPageUrl(page > 1 ? `/?tab=${frontTab}&page=${page}` : `/?tab=${frontTab}`);
+    setPageUrl(listUrl({ tab: frontTab }, page));
     renderFront();
     document.getElementById("front").scrollIntoView({ block: "start" });
 }
 
+// /?tab=catalog&page=3&store=darty or /?q=zelda&page=2: page and store only when not the default
+function listUrl(params, page = 1) {
+    const query = new URLSearchParams(params);
+    if (page > 1) query.set("page", page);
+    if (catalogStore) query.set("store", catalogStore);
+    return `/?${query}`;
+}
+
 // « Anterior  1 … 4 5 [6] 7 8 … 75  Seguinte »  (solid buttons, current page in blue)
-function pagination(page, pages) {
+function pagination(page, pages, showPage) {
     const nav = document.createElement("nav");
     nav.className = "d-flex flex-wrap justify-content-center gap-1 mt-4";
     nav.setAttribute("aria-label", t("pages"));
@@ -243,7 +242,7 @@ function pagination(page, pages) {
         b.textContent = label;
         b.disabled = disabled;
         if (current) b.setAttribute("aria-current", "page");
-        if (!disabled && !current) b.onclick = () => showCatalogPage(target);
+        if (!disabled && !current) b.onclick = () => showPage(target);
         return b;
     };
 
@@ -265,18 +264,28 @@ async function loadCatalogPage(special, platform, page) {
     const params = new URLSearchParams({ sort: catalogSort, page, per_page: CATALOG_PAGE });
     if (platform) params.set("platform", platform);
     if (special) params.set("editions", "special");
+    if (catalogStore) params.set("store", catalogStore);
     const data = await fetch(`/api/games/catalog?${params}`).then(r => r.json());
     // pages is computed here too, in case the server is older than this page
     const pages = data.pages || Math.max(1, Math.ceil(data.total / (data.per_page || CATALOG_PAGE)));
     return { ...data, pages, special, platform };
 }
 
-function renderCatalog(data) {
+// The catalogue tabs and the search results: count, store filter, sort, cards, page buttons.
+// showPage(n) loads page n again with the current filters (the tab's or the search's)
+function renderCatalog(data, showPage = showCatalogPage) {
+    const count = { count: fmtNumber(data.total), page: data.page, pages: data.pages, query: data.query };
+    const storeOptions = Object.values(stores)      // active stores (/api/stores)
+        .map(s => `<option value="${esc(s.slug)}">${esc(s.name)}</option>`).join("");
     const wrap = document.createElement("div");
     wrap.innerHTML = `
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <span class="small text-body-secondary me-auto">${t(data.special ? "special_count" : "catalog_count",
-                { count: fmtNumber(data.total), page: data.page, pages: data.pages })}</span>
+            <span class="small text-body-secondary me-auto">${esc(t(data.query ? "search_count"
+                : data.special ? "special_count" : "catalog_count", count))}</span>
+            <label class="small text-body-secondary" for="catalog-store">${t("store_filter")}</label>
+            <select id="catalog-store" class="form-select form-select-sm w-auto">
+                <option value="">${t("all_stores")}</option>${storeOptions}
+            </select>
             <label class="small text-body-secondary" for="catalog-sort">${t("sort")}</label>
             <select id="catalog-sort" class="form-select form-select-sm w-auto">
                 <option value="name">${t("sort_name")}</option>
@@ -290,7 +299,13 @@ function renderCatalog(data) {
     select.onchange = async () => {
         catalogSort = select.value;
         try { localStorage.setItem("catalogSort", catalogSort); } catch (e) {}
-        await showCatalogPage(1);
+        await showPage(1);
+    };
+    const storeSelect = wrap.querySelector("#catalog-store");
+    storeSelect.value = catalogStore;
+    storeSelect.onchange = async () => {
+        catalogStore = storeSelect.value;
+        await showPage(1);
     };
 
     // Games not out yet: "Pré-reserva" on the cover, release date next to the platform
@@ -303,7 +318,7 @@ function renderCatalog(data) {
         }));
     });
     wrap.appendChild(grid);
-    wrap.appendChild(pagination(data.page, data.pages));
+    wrap.appendChild(pagination(data.page, data.pages, showPage));
     return wrap;
 }
 
@@ -403,8 +418,8 @@ async function selectFrontTab(tab) {
 
     // Address bar: /?tab=… (+ &page=… on catalogue pages), not while a search is on screen
     if (!document.getElementById("q").value.trim()) {
-        const page = config.paged ? frontData[tab]?.page || 1 : 1;
-        setPageUrl(page > 1 ? `/?tab=${tab}&page=${page}` : `/?tab=${tab}`);
+        // page and store filter only belong to the catalogue tabs
+        setPageUrl(config.paged ? listUrl({ tab }, frontData[tab]?.page || 1) : `/?tab=${tab}`);
     }
     renderFront();
 }
@@ -636,17 +651,19 @@ document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click",
 
 let isSearching = false;
 
-async function search() {
+// Search: editions in stock whose title has every word, 48 per page, with the same store
+// filter, sort and page buttons as the catalogue (served by /api/games/catalog?q=…)
+async function search(page = 1) {
     const query = document.getElementById("q").value.trim();
     if (isSearching) return;
 
     // Empty search: back to the front page with the featured discounts
     if (!query) {
         hasSearched = false;
-        currentData = [];
+        currentData = null;
         document.getElementById("results").innerHTML = "";
         document.getElementById("empty").classList.add("d-none");
-        setPageUrl(`/?tab=${frontTab}`);
+        setPageUrl(FRONT_TABS[frontTab].paged ? listUrl({ tab: frontTab }) : `/?tab=${frontTab}`);
         showFront(true);
         return;
     }
@@ -658,13 +675,18 @@ async function search() {
     document.getElementById("empty").classList.add("d-none");
     document.getElementById("results").innerHTML = "";
 
-    setPageUrl(`/?q=${encodeURIComponent(query)}`);
+    setPageUrl(listUrl({ q: query }, page));
 
     try {
-        const res = await fetch(`/search?q=${encodeURIComponent(query)}`);
-        currentData = await res.json();
+        const platform = document.getElementById("consoleFilter").value;
+        const params = new URLSearchParams({ q: query, sort: catalogSort, page, per_page: CATALOG_PAGE });
+        if (platform) params.set("platform", platform);
+        if (catalogStore) params.set("store", catalogStore);
+        const data = await fetch(`/api/games/catalog?${params}`).then(r => r.json());
+        currentData = { ...data, query };
         hasSearched = true;
-        render(currentData);
+        renderSearch();
+        if (page > 1) document.getElementById("results").scrollIntoView({ block: "start" });
     } catch (err) {
         console.error("Erro na pesquisa:", err);
     }
@@ -673,8 +695,17 @@ async function search() {
     isSearching = false;
 }
 
+function renderSearch() {
+    const container = document.getElementById("results");
+    container.innerHTML = "";
+    const found = currentData?.total > 0;
+    // nothing at all for these words: "no games found"; nothing at one store: keep the filters visible
+    document.getElementById("empty").classList.toggle("d-none", found || !!catalogStore);
+    if (found || catalogStore) container.appendChild(renderCatalog(currentData, p => search(p)));
+}
+
 document.getElementById("consoleFilter").addEventListener("change", () => {
-    if (hasSearched) return render(currentData);
+    if (hasSearched) return search(1);
     // Platform-aware tabs ask the server again; the others filter what they already have
     FRONT_TABS[frontTab].platformAware ? selectFrontTab(frontTab) : renderFront();
 });
@@ -738,7 +769,7 @@ function toggleFavorite(group) {
     favorites = favorites.includes(id) ? favorites.filter(f => f !== id) : [...favorites, id];
     try { localStorage.setItem("favoriteEditions", JSON.stringify(favorites)); } catch (e) {}
 
-    if (hasSearched) return render(currentData);
+    if (hasSearched) return renderSearch();
     if (frontTab === "favorites") frontData.favorites = (frontData.favorites || []).filter(g => favorites.includes(g.edition_id));
     renderFront();
 }
@@ -760,10 +791,11 @@ applyI18n();
 
 // /?q=zelda opens with that search, so searches can be bookmarked or shared
 loadFilters().then(() => {
-    const q = new URLSearchParams(location.search).get("q");
+    const params = new URLSearchParams(location.search);
+    const q = params.get("q");
     if (q) {
         document.getElementById("q").value = q;
-        search();
+        search(Number(params.get("page")) || 1);
     }
     // after loadFilters, so the cards show store names
     selectFrontTab(frontTab);

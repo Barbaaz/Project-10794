@@ -14,6 +14,8 @@ def test_shortened_names_find_their_game():
     assert close_match("ff vii revelation", KNOWN) == "final fantasy vii revelation"     # abbreviation
     assert close_match("doom dark ages", KNOWN) == "doom the dark ages"                  # a linking word left out
     assert close_match("star wars", KNOWN) == "star wars"                                # exact still wins
+    assert close_match("legend of zelda breath of the wild",
+                       {"the legend of zelda breath of the wild"}) == "the legend of zelda breath of the wild"
 
 
 def test_different_games_are_never_joined():

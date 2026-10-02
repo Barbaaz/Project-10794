@@ -48,7 +48,9 @@ Tabs, the visitor's choice remembered in the browser (or opened with `/?tab=…`
 `discounts` (featured real discounts, or best prices between stores until there are some),
 `preorders`, `releases` (calendar by month / day), `catalog` (everything in stock, by platform,
 sortable, 48 at a time), `special` (only editions above Standard) and `favorites` (starred
-editions with their offers and historical low). The game page's back button returns to the
+editions with their offers and historical low). Search uses the catalogue too: 48 editions per
+page, sort by name / price, and a store filter (also on the catalogue tabs); the address keeps
+them (`/?q=zelda&page=2&store=darty`). The game page's back button returns to the
 search or tab the game was opened from. Favourites that came
 back in stock show as a banner. Favourites are stored in the browser for now.
 

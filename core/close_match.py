@@ -27,7 +27,11 @@ MIN_PREFIX = 3   # a cut-off word keeps at least 3 letters
 
 
 def expand(key):
-    return " ".join(ABBREVIATIONS.get(w, w) for w in key.split())
+    """Abbreviations written out, and a leading "the" dropped ("The Legend of Zelda" = "Legend of Zelda")."""
+    words = [ABBREVIATIONS.get(w, w) for w in key.split()]
+    if len(words) > 2 and words[0] == "the":
+        words = words[1:]
+    return " ".join(words)
 
 
 def numbers(words):
@@ -100,9 +104,10 @@ class KeyIndex:
         if not words:
             return key
         found = [k for k in self.by_first.get(words[0], ()) if k != key and fits(key, k)]
-        if len(found) != 1:
+        # Candidates that only differ by "the" / an abbreviation are one game written two ways
+        if not found or len({expand(k) for k in found}) != 1:
             return key
-        other = found[0]
+        other = max(found, key=lambda k: (len(k), k))
         if fits(other, key) and (len(other), other) < (len(key), key):
             return key
         return other
