@@ -142,7 +142,7 @@ def _apply(s, moderator, action, target_id):
             raise ModerationError("not_found", 404)
         hide = action == "hide_listing"
         listing.removed_by_moderator = hide
-        listing.status = "removed" if hide else "active"
+        listing.status = "removed" if hide else "sold" if listing.sold_at else "active"
         listing.updated_at = NOW
     elif action in ("hide_rating", "restore_rating"):
         rating = s.get(Rating, target_id)
