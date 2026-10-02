@@ -59,7 +59,8 @@ def preorders():
     """
     Games that can be pre-ordered, one group per edition with its pre-order offers
     (same shape as /search groups), soonest release first; unknown dates last.
-    Sold-out pre-orders (limited editions whose allocation ran out) are left out.
+    Sold-out pre-orders (limited editions whose allocation ran out) and pre-orders whose
+    release date has passed are left out.
     """
     def compute():
         rows = fetch_all(f"""
@@ -74,6 +75,9 @@ def preorders():
             JOIN game_editions e ON e.id = o.edition_id
             LEFT JOIN game_release r ON r.game_id = g.id
             WHERE o.is_active = 1 AND o.is_preorder = 1 AND o.condition = 'new' AND o.in_stock = 1
+              -- out already: some stores keep the pre-order label after the release date
+              -- (the product's own date first: a special edition can come out later than the game)
+              AND COALESCE(o.release_date, r.release_date, '9999-12-31') >= CAST(SYSUTCDATETIME() AS DATE)
             ORDER BY CASE WHEN r.release_date IS NULL THEN 1 ELSE 0 END, r.release_date, g.title,
                      CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, e.name, o.price
         """)
