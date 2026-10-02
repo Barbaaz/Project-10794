@@ -82,6 +82,26 @@ def test_mega_mania_pre_order_is_in_stock(fixture_text):
     assert by_name(products, "ACE COMBAT 8")["in_stock"] is True
 
 
+def test_mega_mania_sold_out_pre_order():
+    # Limited editions: the button still says PRÉ-ENCOMENDAR, but the box says "Esgotado"
+    # (Control Resonant Steelbook Edition PS5, reported 2026-10-02)
+    html = """
+    <div class="produto_lista MolduraProdutos">
+      <div class="produto_lista_imagem"><a href="/pt/produto/9172-control-resonant-steelbook-edition-ps"><img src="/x.jpg"></a></div>
+      <div class="produto_lista_titulo"><p><a href="#">CONTROL RESONANT Steelbook Edition PS5</a></p></div>
+      <div class="produto_lista_stock_wrapper"><div class="produto_lista_stock_esgotado">Esgotado</div></div>
+      <div class="produto_lista_botoes">
+        <div class="produto_lista_botoes__bt"><div class="produto_lista_botoes__bt_texto">PRÉ-ENCOMENDAR</div>
+          <div class="produto_lista_botoes__bt_preco">69,99€</div></div>
+        <div class="produto_lista_botoes__bt produto_lista_botoes__bt_vermelho"><span>Lançamento:</span> 15 Outubro 2026</div>
+      </div>
+    </div>"""
+    [product] = parse_mega_mania(html, "PS5")
+    assert product["is_preorder"] is True
+    assert product["in_stock"] is False
+    assert product["release_date"] == date(2026, 10, 15)
+
+
 def test_mega_mania_pre_order_and_release_date(fixture_text):
     products = parse_mega_mania(fixture_text("mega_mania_listing.html"), "PS5")
     pre_order = by_name(products, "ACE COMBAT 8")
