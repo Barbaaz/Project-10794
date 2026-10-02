@@ -1,3 +1,4 @@
+import json
 import logging
 
 from core.editions import is_excluded
@@ -17,11 +18,16 @@ WHEN MATCHED THEN UPDATE SET
     -- keep the known date when this run didn't read one (e.g. the game came out and the store hid it)
     release_date = COALESCE(?, t.release_date),
     release_date_checked_at = CASE WHEN ? = 1 THEN SYSUTCDATETIME() ELSE t.release_date_checked_at END,
+    -- descriptions are only sent when the product page was read: keep the stored one otherwise
+    description = CASE WHEN ? = 1 THEN ? ELSE t.description END,
+    details = CASE WHEN ? = 1 THEN ? ELSE t.details END,
+    details_checked_at = CASE WHEN ? = 1 THEN SYSUTCDATETIME() ELSE t.details_checked_at END,
     last_seen_at = SYSUTCDATETIME(), is_active = 1
 WHEN NOT MATCHED THEN
     INSERT (store_id, url, condition, game_id, edition_id, platform_id, external_name, image_url,
-            is_preorder, release_date, release_date_checked_at)
+            is_preorder, release_date, release_date_checked_at, description, details, details_checked_at)
     VALUES (s.store_id, s.url, s.condition, ?, ?, ?, ?, ?,
+            ?, ?, CASE WHEN ? = 1 THEN SYSUTCDATETIME() END,
             ?, ?, CASE WHEN ? = 1 THEN SYSUTCDATETIME() END)
 OUTPUT $action, INSERTED.id;
 """
@@ -87,11 +93,16 @@ def process_products(store_slug, products, full_catalog=True):
             image = (p.get("image") or "")[:1000] or None
 
             release = (p.get("is_preorder", False), p.get("release_date"), p.get("release_date_checked", False))
+            checked = p.get("details_checked", False)
+            description = p.get("description")
+            details = json.dumps(p["details"], ensure_ascii=False) if p.get("details") else None
             action, store_product_id = cursor.execute(
                 UPSERT_STORE_PRODUCT,
                 store_id, p["url"], p["condition"],
                 game_id, edition_id, platform_id, name, image, *release,
+                checked, description, checked, details, checked,
                 game_id, edition_id, platform_id, name, image, *release,
+                description, details, checked,
             ).fetchone()
 
             if action == "INSERT":

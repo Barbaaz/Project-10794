@@ -8,3 +8,6 @@ PRICE = ".produto_lista_botoes__bt_preco"              # price the customer pays
 OLD_PRICE = ".produto_desconto_valor"                  # crossed-out price, only when on sale
 OUT_OF_STOCK = ".produto_lista_stock_esgotado"              # also used for "Pré-encomenda"; check the text
 RELEASE_DATE = ".produto_lista_botoes__bt_vermelho"        # "Lançamento: 15 Outubro 2026" on pre-orders
+
+# Product page
+DESCRIPTION = "#descricao-produto"                         # "Conteúdo desta edição: ..."

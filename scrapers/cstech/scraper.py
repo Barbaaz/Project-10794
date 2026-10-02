@@ -2,7 +2,7 @@ import logging
 
 from app.utils.utils import detetar_plataforma
 from scrapers.base.base_scraper import BaseScraper
-from scrapers.base.parser_utils import parse_price, detect_condition
+from scrapers.base.parser_utils import parse_price, detect_condition, html_to_text
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +77,10 @@ class ShopifyScraper(BaseScraper):
             "is_preorder": self.is_preorder(item),
             "release_date": None,          # Shopify doesn't publish it; taken from other stores
             "release_date_checked": False,
+            # The description comes with the catalogue, no extra request
+            "description": html_to_text(item.get("body_html")),
+            "details": {"Editora": item["vendor"]} if item.get("vendor") else None,
+            "details_checked": True,
             "url": f"{self.base_url}/products/{item['handle']}",
             "image": images[0]["src"] if images else None,
         }

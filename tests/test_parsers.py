@@ -117,24 +117,63 @@ def test_press_start_release_date_from_product_page():
     assert parse_release_date_page("<div>Sem data</div>") is None
 
 
-def test_press_start_release_dates_only_fetched_when_needed():
+def product(url, name="Some Game PS5", preorder=True):
+    return {"url": url, "external_name": name, "is_preorder": preorder, "release_date": None, "release_date_checked": False}
+
+
+def test_product_pages_read_only_when_needed():
     from scrapers.press_start.scraper import PressStartScraper
 
     fetched = []
-    scraper = PressStartScraper(fresh_release_urls={"https://x/fresh"})
-    scraper.fetch_release_date = lambda url: fetched.append(url) or date(2026, 11, 20)
+    scraper = PressStartScraper(fresh_release_urls={"https://x/fresh"},
+                                known_detail_urls={"https://x/fresh", "https://x/out"})
+    scraper.fetch_product_page = lambda url: fetched.append(url) or {
+        "release_date": date(2026, 11, 20), "description": "Conteúdo: estátua", "details": {"Género": "Ação"}}
 
     products = [
-        {"url": "https://x/new", "is_preorder": True, "release_date": None, "release_date_checked": False},
-        {"url": "https://x/fresh", "is_preorder": True, "release_date": None, "release_date_checked": False},
-        {"url": "https://x/out", "is_preorder": False, "release_date": None, "release_date_checked": False},
-        {"url": "https://x/new", "is_preorder": True, "release_date": None, "release_date_checked": False},
+        product("https://x/new"),
+        product("https://x/fresh"),                    # date checked lately, description known
+        product("https://x/out", preorder=False),     # out already, description known
+        product("https://x/new"),                      # same product in a second category
     ]
-    scraper.add_release_dates(products)
+    scraper.add_product_pages(products)
 
     assert fetched == ["https://x/new"]     # once, even though it's in two categories
     assert [p["release_date"] for p in products] == [date(2026, 11, 20), None, None, date(2026, 11, 20)]
-    assert products[0]["release_date_checked"] and products[3]["release_date_checked"]
+    assert products[0]["description"] == products[3]["description"] == "Conteúdo: estátua"
+    assert products[0]["details_checked"] and "details_checked" not in products[1]
+
+
+def test_product_pages_special_editions_first():
+    from scrapers.press_start.scraper import PressStartScraper
+
+    fetched = []
+    scraper = PressStartScraper()
+    scraper.max_product_pages = 2
+    scraper.fetch_product_page = lambda url: fetched.append(url) or {}
+    scraper.add_product_pages([
+        product("https://x/standard", "Game PS5", preorder=False),
+        product("https://x/preorder", "Other Game PS5"),
+        product("https://x/collectors", "Game - Collector's Edition PS5", preorder=False),
+    ])
+    assert fetched == ["https://x/collectors", "https://x/preorder"]
+
+
+def test_press_start_product_page():
+    from scrapers.press_start.parser import parse_product_page
+
+    html = """
+    <div>Data prevista de lançamento: 2026-12-31</div>
+    <div id="description"><div class="product-description">
+      <p>Conteúdo da Collector's Edition:<br>- Jogo Completo (Download Digital)<br>- Estátua de 38cm</p>
+      <p>Embarca numa missão inspiradora.</p></div></div>
+    <dl class="data-sheet"><dt>Etiqueta</dt><dd>PRÉ-RESERVA</dd><dt>Género</dt><dd>Ação</dd></dl>"""
+    page = parse_product_page(html)
+    assert page["release_date"] == date(2026, 12, 31)
+    assert page["description"].splitlines() == [
+        "Conteúdo da Collector's Edition:", "- Jogo Completo (Download Digital)", "- Estátua de 38cm",
+        "Embarca numa missão inspiradora."]
+    assert page["details"] == {"Género": "Ação"}
 
 
 # --- CSTech (Shopify JSON) -------------------------------------------------
@@ -145,7 +184,8 @@ def test_cstech(fixture_json):
     products = [p for p in map(scraper.parse_item, items) if p]
 
     assert len(products) == 3   # the non-game item is skipped
-    assert all(set(p) == KEYS for p in products)
+    assert all(KEYS <= set(p) for p in products)
+    assert all(p["details_checked"] for p in products)    # the description comes with the catalogue
 
     dune = by_name(products, "Dune")
     assert (dune["price"], dune["old_price"], dune["in_stock"]) == (44.89, 49.99, True)

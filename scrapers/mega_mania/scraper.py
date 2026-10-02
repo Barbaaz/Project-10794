@@ -1,7 +1,7 @@
 from urllib.parse import quote
 
 from scrapers.base.base_scraper import BaseScraper
-from .parser import parse_products
+from .parser import parse_products, parse_product_page
 
 
 class MegaManiaScraper(BaseScraper):
@@ -26,3 +26,6 @@ class MegaManiaScraper(BaseScraper):
 
     def parse_listing(self, html, console=None):
         return parse_products(html, console)
+
+    def fetch_product_page(self, url):
+        return parse_product_page(self.http.get_text(url))

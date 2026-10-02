@@ -74,6 +74,20 @@ def parse_release_date(text):
     return None
 
 
+def html_to_text(html, max_length=6000):
+    """A store's HTML description as plain text, one paragraph / list item per line."""
+    if not html:
+        return None
+    from bs4 import BeautifulSoup   # local import: parser_utils is also used without bs4 work
+
+    soup = BeautifulSoup(html, "html.parser")
+    for br in soup.find_all("br"):
+        br.replace_with("\n")
+    lines = [" ".join(line.split()) for line in soup.get_text("\n").splitlines()]
+    text = "\n".join(line for line in lines if line)
+    return text[:max_length] or None
+
+
 def absolute_url(base_url, url):
     if not url:
         return None

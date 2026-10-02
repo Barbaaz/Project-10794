@@ -82,6 +82,9 @@ CREATE TABLE dbo.store_products (
     is_preorder    BIT            NOT NULL DEFAULT 0,
     release_date   DATE           NULL,          -- as the store announces it; 31/12 often means "this year, no date yet"
     release_date_checked_at DATETIME2 NULL,      -- last time the date was read from the product page (Press Start)
+    description    NVARCHAR(MAX)  NULL,          -- the store's product description, as plain text
+    details        NVARCHAR(MAX)  NULL,          -- JSON {"Editora": "...", "Género": "..."} from the store's data sheet
+    details_checked_at DATETIME2  NULL,          -- when the product page was read (read once)
     first_seen_at  DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
     last_seen_at   DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
     is_active      BIT            NOT NULL DEFAULT 1, -- 0 when it disappears from the store
@@ -173,6 +176,13 @@ IF COL_LENGTH('dbo.store_products', 'is_preorder') IS NULL
         is_preorder BIT NOT NULL DEFAULT 0,
         release_date DATE NULL,
         release_date_checked_at DATETIME2 NULL;
+GO
+
+IF COL_LENGTH('dbo.store_products', 'description') IS NULL
+    ALTER TABLE dbo.store_products ADD
+        description NVARCHAR(MAX) NULL,
+        details NVARCHAR(MAX) NULL,
+        details_checked_at DATETIME2 NULL;
 GO
 
 IF COL_LENGTH('dbo.platforms', 'sort_order') IS NULL

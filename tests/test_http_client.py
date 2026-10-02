@@ -105,7 +105,12 @@ def test_request_budget(clock):
     assert c.request_count == 2
 
 
-def test_release_date_lookups_stop_when_blocked():
+def pre_orders(n):
+    return [{"url": f"https://x/{i}", "external_name": f"Game {i} PS5", "is_preorder": True,
+             "release_date": None, "release_date_checked": False} for i in range(n)]
+
+
+def test_product_page_lookups_stop_when_blocked():
     from scrapers.press_start.scraper import PressStartScraper
 
     calls = []
@@ -115,21 +120,18 @@ def test_release_date_lookups_stop_when_blocked():
         raise StoreBlocked("403")
 
     scraper = PressStartScraper()
-    scraper.fetch_release_date = blocked
-    products = [{"url": f"https://x/{i}", "is_preorder": True, "release_date": None, "release_date_checked": False}
-                for i in range(10)]
+    scraper.fetch_product_page = blocked
     with pytest.raises(StoreBlocked):
-        scraper.add_release_dates(products)
+        scraper.add_product_pages(pre_orders(10))
     assert len(calls) == 1
 
 
-def test_release_date_lookups_are_capped_per_run():
+def test_product_page_lookups_are_capped_per_run():
     from scrapers.press_start.scraper import PressStartScraper
 
     scraper = PressStartScraper()
-    scraper.max_release_date_lookups = 3
-    scraper.fetch_release_date = lambda url: None
-    products = [{"url": f"https://x/{i}", "is_preorder": True, "release_date": None, "release_date_checked": False}
-                for i in range(10)]
-    scraper.add_release_dates(products)
+    scraper.max_product_pages = 3
+    scraper.fetch_product_page = lambda url: {}
+    products = pre_orders(10)
+    scraper.add_product_pages(products)
     assert sum(p["release_date_checked"] for p in products) == 3

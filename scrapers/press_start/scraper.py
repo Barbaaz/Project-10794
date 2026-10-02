@@ -1,7 +1,7 @@
 from urllib.parse import quote_plus
 
 from scrapers.base.base_scraper import BaseScraper
-from .parser import parse_products, parse_release_date_page
+from .parser import parse_products, parse_product_page
 
 
 class PressStartScraper(BaseScraper):
@@ -27,5 +27,7 @@ class PressStartScraper(BaseScraper):
     def parse_listing(self, html, console=None):
         return parse_products(html, console)
 
-    def fetch_release_date(self, url):
-        return parse_release_date_page(self.http.get_text(url))
+    reads_release_date_from_page = True
+
+    def fetch_product_page(self, url):
+        return parse_product_page(self.http.get_text(url))

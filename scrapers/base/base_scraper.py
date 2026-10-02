@@ -1,5 +1,6 @@
 import logging
 
+from core.editions import parse_title
 from .http_client import HttpClient, RequestBudgetExceeded, StoreBlocked
 
 log = logging.getLogger(__name__)
@@ -13,6 +14,8 @@ class BaseScraper:
         store, external_name, console, condition ('new' | 'used'),
         price, old_price, in_stock, url, image,
         is_preorder, release_date (date or None), release_date_checked (date was looked up this run)
+    and, when the product page was read this run (or the listing has it, like CSTech):
+        description (plain text), details (dict), details_checked
 
     Subclasses set store_slug / base_url and implement:
         parse_listing(html, console=None) -> list of products from one listing page
@@ -25,13 +28,16 @@ class BaseScraper:
     base_url = None
     catalog_urls = {}
     max_pages = 200                  # safety limit per listing
-    max_release_date_lookups = 50    # product pages opened per run; the rest wait for the next run
+    max_product_pages = 100          # product pages opened per run; the rest wait for the next run
+    reads_release_date_from_page = False   # True when the release date is only on the product page
     # The pause between requests is enforced by HttpClient (see http_client.py)
 
-    def __init__(self, http=None, fresh_release_urls=()):
+    def __init__(self, http=None, fresh_release_urls=(), known_detail_urls=()):
         self.http = http or HttpClient()
         # Pre-orders whose release date was read recently; their product page isn't fetched again
         self.fresh_release_urls = set(fresh_release_urls)
+        # Products whose description was already read (read once)
+        self.known_detail_urls = set(known_detail_urls)
 
     # --- implemented by each store -------------------------------------
 
@@ -44,8 +50,11 @@ class BaseScraper:
     def build_page_url(self, url, page):
         raise NotImplementedError
 
-    def fetch_release_date(self, url):
-        """Stores that only show the release date on the product page override this."""
+    def fetch_product_page(self, url):
+        """
+        Stores with useful product pages override this and return
+        {"description": str | None, "details": dict | None, "release_date": date | None}.
+        """
         return None
 
     # --- shared behaviour ----------------------------------------------
@@ -64,35 +73,60 @@ class BaseScraper:
         for url, console in self.catalog_urls.items():
             products.extend(self.crawl(lambda page: self.build_page_url(url, page), console))
 
-        self.add_release_dates(products)
+        self.add_product_pages(products)
         return products
 
-    def add_release_dates(self, products):
-        """Open the product page of pre-orders whose date we don't have or haven't checked lately."""
-        if type(self).fetch_release_date is BaseScraper.fetch_release_date:
+    def needs_release_date(self, p):
+        return (self.reads_release_date_from_page and p["is_preorder"] and not p["release_date"]
+                and p["url"] not in self.fresh_release_urls)
+
+    def needs_details(self, p):
+        return p["url"] not in self.known_detail_urls
+
+    def add_product_pages(self, products):
+        """
+        Open product pages for what the listing doesn't show: the release date of pre-orders
+        (not checked lately) and the description (read once per product). One visit gives both.
+        At most max_product_pages per run: special editions first (their description says what
+        they include), then pre-orders, then the rest; the others wait for the next runs.
+        """
+        if type(self).fetch_product_page is BaseScraper.fetch_product_page:
             return
 
-        pending = {p["url"]: p for p in products
-                   if p["is_preorder"] and not p["release_date"] and p["url"] not in self.fresh_release_urls}
-        todo = dict(list(pending.items())[:self.max_release_date_lookups])
+        def priority(p):
+            special = parse_title(p["external_name"]).phrase != ""
+            return (not special, not p["is_preorder"])
+
+        pending = {}
+        for p in sorted(products, key=priority):
+            if self.needs_release_date(p) or self.needs_details(p):
+                pending.setdefault(p["url"], p)
+        todo = list(pending)[:self.max_product_pages]
         if todo:
-            log.info("[%s] reading release dates of %d pre-orders (%d left for later runs)",
+            log.info("[%s] reading %d product pages (%d left for later runs)",
                      self.store_slug, len(todo), len(pending) - len(todo))
 
-        for url, product in todo.items():
+        pages = {}
+        for url in todo:
             try:
-                product["release_date"] = self.fetch_release_date(url)
-                product["release_date_checked"] = True
+                pages[url] = self.fetch_product_page(url) or {}
             except (StoreBlocked, RequestBudgetExceeded):
                 raise   # stop now rather than keep knocking
             except Exception as e:
-                log.warning("[%s] release date of %s: %s", self.store_slug, url, e)
+                log.warning("[%s] product page %s: %s", self.store_slug, url, e)
 
-        # The same product can appear in two categories
+        # The same product can appear in two categories: fill in every copy
         for p in products:
-            if p["url"] in todo:
-                p["release_date"] = todo[p["url"]]["release_date"]
-                p["release_date_checked"] = todo[p["url"]]["release_date_checked"]
+            page = pages.get(p["url"])
+            if page is None:
+                continue
+            if self.needs_release_date(p):
+                p["release_date"] = page.get("release_date")
+                p["release_date_checked"] = True
+            if self.needs_details(p):
+                p["description"] = page.get("description")
+                p["details"] = page.get("details")
+                p["details_checked"] = True
 
     def crawl(self, make_url, console=None):
         """

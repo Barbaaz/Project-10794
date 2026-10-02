@@ -79,7 +79,7 @@ def run_store(slug, accept_drop=False, force=False):
     run_id = start_run(slug)
 
     try:
-        scraper = SCRAPERS[slug](fresh_release_urls=fresh_release_urls(slug))
+        scraper = SCRAPERS[slug](fresh_release_urls=fresh_release_urls(slug), known_detail_urls=known_detail_urls(slug))
         products = scraper.scrape_catalog()
         log.info("[%s] %d requests", slug, scraper.http.request_count)
         if not products:
@@ -154,6 +154,20 @@ def fresh_release_urls(slug):
             "SELECT sp.url FROM store_products sp JOIN stores s ON s.id = sp.store_id "
             "WHERE s.slug = ? AND sp.release_date_checked_at > DATEADD(DAY, ?, SYSUTCDATETIME())",
             slug, -RELEASE_DATE_RECHECK_DAYS,
+        ).fetchall()
+        return {r[0] for r in rows}
+    finally:
+        conn.close()
+
+
+def known_detail_urls(slug):
+    """Products whose product page (description) was already read; read once."""
+    conn = get_connection()
+    try:
+        rows = conn.cursor().execute(
+            "SELECT sp.url FROM store_products sp JOIN stores s ON s.id = sp.store_id "
+            "WHERE s.slug = ? AND sp.details_checked_at IS NOT NULL",
+            slug,
         ).fetchall()
         return {r[0] for r in rows}
     finally:

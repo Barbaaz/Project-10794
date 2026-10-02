@@ -32,6 +32,7 @@ def run(monkeypatch):
     def run_store(found, previous, hours_ago=None, **kwargs):
         monkeypatch.setitem(jobs.SCRAPERS, "test_store", lambda **_: FakeScraper(found))
         monkeypatch.setattr(jobs, "fresh_release_urls", lambda slug: set())
+        monkeypatch.setattr(jobs, "known_detail_urls", lambda slug: set())
         monkeypatch.setattr(jobs, "hours_since_last_success", lambda slug: hours_ago)
         monkeypatch.setattr(jobs, "start_run", lambda slug: 1)
         monkeypatch.setattr(jobs, "previous_product_count", lambda slug: previous)
