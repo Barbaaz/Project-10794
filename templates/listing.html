@@ -59,6 +59,13 @@
             </dl>
             <p id="description" class="mb-3" style="white-space: pre-line;"></p>
 
+            <!-- Buyers: talk to the seller / ask to buy (app/services/chat_service.py) -->
+            <div id="buyer-actions" class="d-flex gap-2 mb-3 d-none">
+                <button type="button" id="buy-btn" class="btn btn-success flex-fill" data-i18n="listing_buy"></button>
+                <button type="button" id="message-btn" class="btn btn-primary flex-fill" data-i18n="listing_message"></button>
+            </div>
+            <div id="buyer-error" class="alert alert-warning d-none py-2 small" role="alert"></div>
+
             <!-- Only the seller sees this -->
             <section id="owner" class="card d-none">
                 <div class="card-body">
@@ -120,6 +127,7 @@ function render() {
 
     renderGallery(0);
     if (currentUser && currentUser.id === listing.user_id) renderOwner();
+    else renderBuyerActions();
     document.getElementById("listing").classList.remove("d-none");
 }
 
@@ -142,6 +150,26 @@ async function compareWithStores() {
     if (!best) return;
     document.getElementById("compare").innerHTML =
         `${esc(t("listing_new_in_stores"))} <strong>${eur.format(best.price)}</strong> · ${esc(best.store_name)}`;
+}
+
+// --- buyers: Message / Buy -------------------------------------------------------------------
+// Both open the conversation with the seller (Buy also asks to buy); logged out: log in first
+function renderBuyerActions() {
+    document.getElementById("buyer-actions").classList.remove("d-none");
+    const buy = document.getElementById("buy-btn");
+    buy.disabled = listing.status !== "active";
+    if (buy.disabled) buy.title = t("listing_unavailable_hint");
+    buy.onclick = () => contactSeller(true);
+    document.getElementById("message-btn").onclick = () => contactSeller(false);
+}
+
+async function contactSeller(buy) {
+    if (!currentUser) return location.assign(`/account?next=${encodeURIComponent(location.pathname)}`);
+    const { ok, data } = await api(`/api/listings/${LISTING_ID}/conversation`, { body: { buy } });
+    if (ok) return location.assign(`/messages?c=${data.id}`);
+    const box = document.getElementById("buyer-error");
+    box.textContent = t(`error_${data?.error || "unknown"}`);
+    box.classList.remove("d-none");
 }
 
 // --- the seller's controls ----------------------------------------------------------------

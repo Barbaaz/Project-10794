@@ -53,6 +53,10 @@ def test_a_purchase_from_buy_to_completed(deal):
     assert done["deal_status"] == "completed" and done["completed_at"]
     assert listing_status(deal) == "sold"
     assert events(client, conversation_id) == ["request", "accept", "sent", "received"]
+    # the buyer still sees what they bought; strangers don't see a sold listing
+    assert client.get(f"/api/listings/{deal['listing']['id']}").status_code == 200
+    sign_up(client, "stranger")
+    assert client.get(f"/api/listings/{deal['listing']['id']}").status_code == 404
 
 
 def test_each_side_only_takes_its_own_steps(deal):

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Game Price Tracker</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/common.css" rel="stylesheet">
+    <script src="/static/common.js"></script>
+    <script src="/static/i18n.js"></script>
+    <script src="/static/market.js"></script>
+    <style>
+        .chat-list .list-group-item img, .chat-header img { width: 48px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: .25rem; background: var(--bs-secondary-bg); }
+        .chat-list .preview { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+        .chat-messages { height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: .4rem; padding: .75rem;
+                         background: var(--bs-tertiary-bg); border-radius: .5rem; }
+        .bubble { max-width: 75%; padding: .45rem .7rem; border-radius: .75rem; white-space: pre-line; overflow-wrap: anywhere; }
+        .bubble.mine { align-self: flex-end; background: var(--bs-primary); color: #fff; border-bottom-right-radius: .2rem; }
+        .bubble.theirs { align-self: flex-start; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-bottom-left-radius: .2rem; }
+        .bubble .time { display: block; font-size: .7rem; opacity: .75; margin-top: .15rem; }
+        .site-message { align-self: center; font-size: .8rem; color: var(--bs-secondary-color); text-align: center; }
+    </style>
+</head>
+<body class="bg-body-tertiary">
+
+<div class="container-xl py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <a href="/" class="btn btn-sm btn-primary" data-i18n="home"></a>
+        <div class="d-flex gap-2">
+            <div id="account-area" class="d-flex gap-2"></div>
+            <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
+            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
+        </div>
+    </div>
+
+    <h1 class="h4 mb-3" data-i18n="messages"></h1>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div id="chat-list" class="list-group chat-list"></div>
+            <p id="no-chats" class="small text-body-secondary d-none" data-i18n="no_conversations"></p>
+        </div>
+        <div class="col-md-8">
+            <section id="chat" class="card shadow-sm d-none">
+                <div class="card-body">
+                    <div class="chat-header d-flex align-items-center gap-2 mb-2">
+                        <img id="chat-thumb" alt="">
+                        <div class="me-auto">
+                            <a id="chat-listing" class="fw-semibold link-body-emphasis"></a>
+                            <div id="chat-with" class="small text-body-secondary"></div>
+                        </div>
+                        <span id="chat-status" class="badge"></span>
+                    </div>
+                    <div id="chat-steps" class="d-flex flex-wrap gap-1 mb-2"></div>
+                    <p id="step-hint" class="small text-body-secondary mb-2"></p>
+                    <div id="chat-messages" class="chat-messages mb-2" aria-live="polite"></div>
+                    <form id="chat-form" class="d-flex gap-2">
+                        <textarea id="chat-input" rows="2" maxlength="2000" class="form-control"
+                                  data-i18n-placeholder="message_placeholder" data-i18n-aria-label="message_placeholder"></textarea>
+                        <button class="btn btn-primary align-self-end" data-i18n="send"></button>
+                    </form>
+                    <div id="chat-error" class="alert alert-danger d-none py-1 px-2 small mt-2" role="alert"></div>
+                </div>
+            </section>
+            <p id="pick-chat" class="text-body-secondary d-none" data-i18n="pick_conversation"></p>
+        </div>
+    </div>
+</div>
+
+<script>
+let conversations = [];
+let open = null;          // the conversation on screen
+let lastId = 0;           // its newest message shown
+const REFRESH_MS = 5000;
+
+const STATUS_STYLES = { requested: "text-bg-warning", accepted: "text-bg-info", sent: "text-bg-primary",
+                        completed: "text-bg-success", problem: "text-bg-danger", declined: "text-bg-secondary",
+                        cancelled: "text-bg-secondary" };
+const STEP_STYLES = { accept: "btn-success", received: "btn-success", sent: "btn-primary", request: "btn-success",
+                      decline: "btn-danger", cancel: "btn-danger", problem: "btn-danger" };
+
+function fmtTime(iso) {
+    return new Date(iso).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" });
+}
+
+async function loadList() {
+    conversations = await fetch("/api/conversations").then(r => r.json());
+    const list = document.getElementById("chat-list");
+    list.innerHTML = conversations.map(c => `
+        <a href="?c=${c.id}" data-id="${c.id}" class="list-group-item list-group-item-action d-flex gap-2 align-items-center
+            ${open && open.id === c.id ? "active" : ""}">
+            <img src="${esc(c.thumb_url || "")}" alt="">
+            <div class="flex-fill overflow-hidden">
+                <div class="d-flex justify-content-between gap-1">
+                    <strong class="text-truncate">${esc(c.title)}</strong>
+                    ${c.unread ? `<span class="badge rounded-pill text-bg-danger">${c.unread}</span>` : ""}
+                </div>
+                <div class="small">@${esc(c.other_username)} · ${t(c.role === "buyer" ? "you_buy" : "you_sell")}</div>
+                <div class="small preview opacity-75">${esc(c.last_event ? eventText(c.last_event) : c.last_body)}</div>
+            </div>
+        </a>`).join("");
+    list.querySelectorAll("[data-id]").forEach(a => a.onclick = e => { e.preventDefault(); openChat(Number(a.dataset.id)); });
+    document.getElementById("no-chats").classList.toggle("d-none", conversations.length > 0);
+    document.getElementById("pick-chat").classList.toggle("d-none", !!open || !conversations.length);
+}
+
+async function openChat(id) {
+    const response = await fetch(`/api/conversations/${id}`);
+    if (!response.ok) return;
+    open = await response.json();
+    lastId = 0;
+    history.replaceState(null, "", `/messages?c=${id}`);
+    document.getElementById("chat-messages").innerHTML = "";
+    renderChat(open.messages);
+    document.getElementById("chat").classList.remove("d-none");
+    document.getElementById("pick-chat").classList.add("d-none");
+    loadList();
+    showUnreadCount();
+}
+
+function eventText(event) {
+    return t(`event_${event}`);
+}
+
+function renderChat(newMessages) {
+    document.getElementById("chat-thumb").src = open.thumb_url || "";
+    const listing = document.getElementById("chat-listing");
+    listing.href = `/listing/${open.listing_id}`;
+    listing.textContent = `${open.title} · ${eur.format(open.price)}`;
+    document.getElementById("chat-with").textContent =
+        `${t(open.role === "buyer" ? "you_buy_from" : "you_sell_to")} @${open.other_username} · ${open.platform_name}`;
+    const status = document.getElementById("chat-status");
+    status.className = `badge ${STATUS_STYLES[open.deal_status] || "d-none"}`;
+    status.textContent = open.deal_status !== "none" ? t(`deal_${open.deal_status}`) : "";
+
+    const steps = document.getElementById("chat-steps");
+    steps.innerHTML = open.steps.map(s => `
+        <button type="button" class="btn btn-sm ${STEP_STYLES[s] || "btn-secondary"}" data-step="${s}">${t(`step_${s}_${open.role}`)}</button>`).join("");
+    steps.querySelectorAll("[data-step]").forEach(b => b.onclick = () => takeStep(b.dataset.step));
+    document.getElementById("step-hint").textContent = t(`hint_${open.deal_status}_${open.role}`, {}, "");
+
+    const box = document.getElementById("chat-messages");
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    for (const m of newMessages) {
+        const row = document.createElement("div");
+        if (m.event) {
+            row.className = "site-message";
+            row.textContent = `${eventText(m.event)} · ${fmtTime(m.created_at)}`;
+        } else {
+            row.className = `bubble ${m.sender_id === currentUser.id ? "mine" : "theirs"}`;
+            row.innerHTML = `${esc(m.body)}<span class="time">${fmtTime(m.created_at)}</span>`;
+        }
+        box.appendChild(row);
+        lastId = Math.max(lastId, m.id);
+    }
+    if (atBottom || newMessages.length) box.scrollTop = box.scrollHeight;
+}
+
+function chatError(code) {
+    const box = document.getElementById("chat-error");
+    box.textContent = code ? t(`error_${code}`) : "";
+    box.classList.toggle("d-none", !code);
+}
+
+// After sending / a step, the answer is the whole conversation: show what's new in it
+function update(data) {
+    const newMessages = data.messages.filter(m => m.id > lastId);
+    open = { ...data, messages: undefined };
+    renderChat(newMessages);
+    loadList();
+}
+
+async function takeStep(action) {
+    if (["decline", "cancel"].includes(action) && !confirm(t(`confirm_${action}`))) return;
+    if (action === "received" && !confirm(t("confirm_received"))) return;
+    chatError(null);
+    const { ok, data } = await api(`/api/conversations/${open.id}/steps`, { body: { action } });
+    if (!ok) return chatError(data?.error);
+    update(data);
+}
+
+document.getElementById("chat-form").onsubmit = async e => {
+    e.preventDefault();
+    const input = document.getElementById("chat-input");
+    if (!input.value.trim()) return;
+    chatError(null);
+    const { ok, data } = await api(`/api/conversations/${open.id}/messages`, { body: { body: input.value } });
+    if (!ok) return chatError(data?.error);
+    input.value = "";
+    update(data);
+};
+
+// Enter sends, Shift+Enter makes a new line
+document.getElementById("chat-input").addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); document.getElementById("chat-form").requestSubmit(); }
+});
+
+// New messages every few seconds, only while the page is on screen
+setInterval(async () => {
+    if (!open || document.visibilityState !== "visible") return;
+    const response = await fetch(`/api/conversations/${open.id}?after=${lastId}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    const changed = data.messages.length || data.deal_status !== open.deal_status;
+    if (changed) update({ ...data, messages: data.messages });
+}, REFRESH_MS);
+
+async function start() {
+    applyI18n();
+    await renderAccountArea();
+    if (!currentUser) return location.replace(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
+    const id = Number(new URLSearchParams(location.search).get("c"));
+    await loadList();
+    if (id) openChat(id);
+}
+start();
+</script>
+</body>
+</html>

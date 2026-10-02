@@ -56,6 +56,10 @@ python -m database.setup                                        # creates / upda
 python -m database.setup --demo database\demo\demo.json.gz      # ... and loads demo data, if you have it
 ```
 
+**Demo marketplace**: `python -m database.demo_market` adds 5 made-up users (`demo_ana`, `demo_bruno`…,
+password `demo12345`) with 15 listings (generated photos marked DEMO) and conversations at every
+purchase step; `python -m database.demo_market --remove` takes them all out again.
+
 Sharing the collected data: `python -m database.demo export database\demo\demo.json.gz`
 (`--without-texts` leaves out the stores' descriptions and IGDB summaries). Never commit it.
 
@@ -89,6 +93,10 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `POST /api/listings` (multipart: `game_id, edition_id, price, condition, description` + 3–10 `photos`) | Put a game up for sale; photos are re-saved without EXIF (no GPS location), 1600 px + thumbnail |
 | `PATCH /api/listings/<id>` `{price?, condition?, description?, status?}` | The seller changes it (status: active / reserved / sold / removed) |
 | `POST /api/listings/<id>/photos` · `DELETE /api/listings/<id>/photos/<photo_id>` | Add / remove photos (always 3–10) |
+| `POST /api/listings/<id>/conversation` `{message?, buy?}` | Message / Buy: open (or reopen) the conversation with the seller → `{id}` |
+| `GET /api/conversations` · `GET /api/conversations/unread` | The user's conversations (unread count, last message) · the total unread |
+| `GET /api/conversations/<id>?after=` · `POST …/messages` `{body}` | One conversation (only messages after `after`, for refreshing) · send a message |
+| `POST /api/conversations/<id>/steps` `{action}` | Purchase step: `request`, `accept` (reserves), `decline`, `sent`, `received` (sold), `problem`, `cancel`; 7 days after `sent` it completes by itself |
 
 Requests that change something (POST / PUT / DELETE) must send the header `X-Requested-With: fetch`
 (the pages' `api()` helper in `static/common.js` does): another site can't add it, so it can't act

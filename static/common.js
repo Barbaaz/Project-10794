@@ -77,10 +77,25 @@ async function renderAccountArea() {
         return;
     }
     box.innerHTML = `
+        <a href="/messages" class="btn btn-sm btn-secondary position-relative" id="messages-link"
+           title="${esc(t("messages"))}" aria-label="${esc(t("messages"))}">💬</a>
         <a href="/account" class="btn btn-sm btn-secondary" title="${esc(t("my_account"))}">👤 ${esc(currentUser.username || currentUser.display_name)}</a>
         <button type="button" class="btn btn-sm btn-secondary" id="logout-btn">${t("log_out")}</button>`;
+    showUnreadCount();
     box.querySelector("#logout-btn").onclick = async () => {
         await api("/api/auth/logout");
         location.reload();
     };
+}
+
+// The number of unread messages on the 💬 button (the messages page calls it again as it reads)
+async function showUnreadCount() {
+    const link = document.getElementById("messages-link");
+    if (!link) return;
+    const { count } = await fetch("/api/conversations/unread").then(r => r.json()).catch(() => ({ count: 0 }));
+    link.querySelector(".badge")?.remove();
+    if (count) {
+        link.insertAdjacentHTML("beforeend", `<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger">${count}</span>`);
+        link.setAttribute("aria-label", `${t("messages")} (${t("unread_count", { count })})`);
+    }
 }

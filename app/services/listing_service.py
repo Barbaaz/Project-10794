@@ -79,9 +79,16 @@ def my_listings(user_id):
 
 
 def get_listing(listing_id, viewer_id=None):
-    """A listing with its photos; sold / removed ones only for their seller. None if not visible."""
+    """
+    A listing with its photos, or None if this viewer can't see it: sold / removed listings are
+    only shown to their seller and to the people who talked to the seller about them (a buyer
+    can still see what they bought).
+    """
     row = fetch_one(f"SELECT {LISTING_COLUMNS} {LISTING_JOINS} WHERE l.id = ?", listing_id)
-    if not row or (row["status"] not in VISIBLE and row["user_id"] != viewer_id):
+    if not row:
+        return None
+    if row["status"] not in VISIBLE and row["user_id"] != viewer_id and not (viewer_id and fetch_one(
+            "SELECT 1 AS ok FROM conversations WHERE listing_id = ? AND buyer_id = ?", listing_id, viewer_id)):
         return None
     return _with_photos([row])[0]
 

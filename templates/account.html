@@ -17,6 +17,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <a href="/" class="btn btn-sm btn-primary" data-i18n="home"></a>
         <div class="d-flex gap-2">
+            <div id="account-area" class="d-flex gap-2"></div>
             <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
             <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
         </div>
@@ -161,6 +162,7 @@ async function load() {
 }
 
 applyI18n();
+renderAccountArea();
 load();
 </script>
 </body>
