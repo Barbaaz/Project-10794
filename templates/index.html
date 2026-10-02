@@ -112,6 +112,7 @@ const MAX_OFFERS = 3;   // offers shown on a card; the game page has all of them
 let currentData = null;     // the search results on screen (a catalogue page)
 let hasSearched = false;
 let stores = {};
+let genres = [];     // categories with games in stock (/api/genres), for the category filter
 let favorites = [];     // the logged-in user's favourite edition ids (kept in the account: loadFavoriteIds)
 // esc(), storeName(), saved() / save(), toggleDark(): static/common.js
 
@@ -226,6 +227,8 @@ const CATALOG_PAGE = 48;
 let catalogSort = saved("catalogSort", "name");
 // Store filter for the catalogue tabs and the search (/?…&store=darty); not remembered between visits
 let catalogStore = new URLSearchParams(location.search).get("store") || "";
+// Category filter (/?…&genre=rpg), the same way
+let catalogGenre = new URLSearchParams(location.search).get("genre") || "";
 
 // /?tab=catalog&page=3 opens on that page (bookmarks, the game page's back button)
 // (a page in a search address, /?q=zelda&page=2, belongs to the search, not to the tab)
@@ -254,11 +257,12 @@ async function showCatalogPage(page) {
     document.getElementById("front").scrollIntoView({ block: "start" });
 }
 
-// /?tab=catalog&page=3&store=darty or /?q=zelda&page=2: page and store only when not the default
+// /?tab=catalog&page=3&store=darty&genre=rpg or /?q=zelda&page=2: page, store and category only when not the default
 function listUrl(params, page = 1) {
     const query = new URLSearchParams(params);
     if (page > 1) query.set("page", page);
     if (catalogStore) query.set("store", catalogStore);
+    if (catalogGenre) query.set("genre", catalogGenre);
     return `/?${query}`;
 }
 
@@ -298,11 +302,12 @@ function pagination(page, pages, showPage) {
     return nav;
 }
 
-// /api/games/catalog parameters: the chosen sort, page, platform and store, plus `extra`
+// /api/games/catalog parameters: the chosen sort, page, platform, store and category, plus `extra`
 function catalogParams(page, platform, extra = {}) {
     const params = new URLSearchParams({ ...extra, sort: catalogSort, page, per_page: CATALOG_PAGE });
     if (platform) params.set("platform", platform);
     if (catalogStore) params.set("store", catalogStore);
+    if (catalogGenre) params.set("genre", catalogGenre);
     return params;
 }
 
@@ -368,11 +373,18 @@ function renderCatalog(data, showPage = showCatalogPage) {
     const count = { count: fmtNumber(data.total), page: data.page, pages: data.pages, query: data.query };
     const storeOptions = Object.values(stores)      // active stores (/api/stores)
         .map(s => `<option value="${esc(s.slug)}">${esc(s.name)}</option>`).join("");
+    const genreOptions = [...genres]
+        .sort((a, b) => t(`genre_${a.genre}`).localeCompare(t(`genre_${b.genre}`), LOCALE))
+        .map(g => `<option value="${esc(g.genre)}">${esc(t(`genre_${g.genre}`))}</option>`).join("");
     const wrap = document.createElement("div");
     wrap.innerHTML = `
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
             <span class="small text-body-secondary me-auto">${esc(t(data.query ? "search_count"
                 : data.special ? "special_count" : "catalog_count", count))}</span>
+            <label class="small text-body-secondary" for="catalog-genre">${t("genre_filter")}</label>
+            <select id="catalog-genre" class="form-select form-select-sm w-auto">
+                <option value="">${t("all_genres")}</option>${genreOptions}
+            </select>
             <label class="small text-body-secondary" for="catalog-store">${t("store_filter")}</label>
             <select id="catalog-store" class="form-select form-select-sm w-auto">
                 <option value="">${t("all_stores")}</option>${storeOptions}
@@ -396,6 +408,12 @@ function renderCatalog(data, showPage = showCatalogPage) {
     storeSelect.value = catalogStore;
     storeSelect.onchange = async () => {
         catalogStore = storeSelect.value;
+        await showPage(1);
+    };
+    const genreSelect = wrap.querySelector("#catalog-genre");
+    genreSelect.value = catalogGenre;
+    genreSelect.onchange = async () => {
+        catalogGenre = genreSelect.value;
         await showPage(1);
     };
 
@@ -798,9 +816,10 @@ function renderSearch() {
     const container = document.getElementById("results");
     container.innerHTML = "";
     const found = currentData?.total > 0;
-    // nothing at all for these words: "no games found"; nothing at one store: keep the filters visible
-    document.getElementById("empty").classList.toggle("d-none", found || !!catalogStore);
-    if (found || catalogStore) container.appendChild(renderCatalog(currentData, p => search(p)));
+    // nothing at all for these words: "no games found"; nothing at one store / in one category: keep the filters visible
+    const filtered = !!(catalogStore || catalogGenre);
+    document.getElementById("empty").classList.toggle("d-none", found || filtered);
+    if (found || filtered) container.appendChild(renderCatalog(currentData, p => search(p)));
 }
 
 document.getElementById("consoleFilter").addEventListener("change", () => {
@@ -809,13 +828,15 @@ document.getElementById("consoleFilter").addEventListener("change", () => {
     FRONT_TABS[frontTab].platformAware ? selectFrontTab(frontTab) : renderFront();
 });
 
-// Platforms and store names come from the API, so new ones appear without editing this page
+// Platforms, store names and categories come from the API, so new ones appear without editing this page
 async function loadFilters() {
     try {
-        const [platforms, storeList] = await Promise.all([
+        const [platforms, storeList, genreList] = await Promise.all([
             fetch("/api/platforms").then(r => r.json()),
             fetch("/api/stores").then(r => r.json()),
+            fetch("/api/genres").then(r => r.json()),
         ]);
+        genres = genreList;
         const select = document.getElementById("consoleFilter");
         platforms.forEach(p => select.add(new Option(p.name, p.code)));
         storeList.forEach(s => stores[s.slug] = s);

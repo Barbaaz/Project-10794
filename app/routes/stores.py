@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify
 
+from app.services.genre_service import genre_counts
 from db import fetch_all
 
 bp = Blueprint("stores", __name__, url_prefix="/api")
@@ -54,3 +55,9 @@ def list_platforms():
         WHERE EXISTS (SELECT 1 FROM store_products sp WHERE sp.platform_id = p.id AND sp.is_active = 1)
         ORDER BY p.sort_order, p.name
     """))
+
+
+@bp.get("/genres")
+def list_genres():
+    """Categories with games in stock, for the catalogue's category filter: [{genre, count}]."""
+    return jsonify(genre_counts())

@@ -4,6 +4,7 @@ import re
 from app.services.common import (
     EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, card_group, lowest_prices, page_result, title_word_filters,
 )
+from app.services.genre_service import genre_filter
 from app.services.listing_service import used_summaries
 from app.services.release_service import game_release_date, game_release_dates
 from db import fetch_all, fetch_one, placeholders
@@ -256,7 +257,7 @@ CATALOG_SORTS = {
 }
 
 
-def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False, q=None, store=None):
+def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False, q=None, store=None, genre=None):
     """
     The whole catalogue: every edition with at least one offer in stock at a store or a used
     copy for sale by a user, as card groups (same shape as /search), one page at a time; each
@@ -267,6 +268,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
     q: every word must be in the game's title (the search uses this).
     store: only editions this store has in stock (all stores' offers and used copies are still
     shown, to compare).
+    genre: only games in this category (app/services/genre_service.py); an unknown one is ignored.
     """
     order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS["name"])
     in_stock_editions = f"""
@@ -294,6 +296,10 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
         filters.append("ed.edition_id IN (SELECT o.edition_id FROM offers o JOIN stores s ON s.id = o.store_id "
                        "WHERE s.slug = ?)")
         params.append(store)
+    in_genre = genre_filter(genre)
+    if in_genre:
+        filters.append(in_genre[0])
+        params += in_genre[1]
     filters = " AND ".join(filters)
 
     total = fetch_one(
