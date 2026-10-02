@@ -1,38 +1,43 @@
 from flask import Flask, request, jsonify, render_template
-from db_insert import insert_products
-from db_queries import get_recent_products
-from scrapers.press_start.scraper import PressStartScraper
-from scrapers.mega_mania.scraper import MegaManiaScraper
+from werkzeug.exceptions import HTTPException
 
-from core.matcher import match_products
+from app.routes import games, prices, stores
+from app.services.game_service import search_offers
 
+# All data comes from the database, which the scheduler fills
+# (python -m scheduler.run_all_scrapers). Nothing here scrapes the stores.
 app = Flask(__name__)
+app.register_blueprint(games.bp)
+app.register_blueprint(prices.bp)
+app.register_blueprint(stores.bp)
+
+
+@app.errorhandler(HTTPException)
+def json_error(e):
+    if request.path.startswith("/api/"):
+        return jsonify(error=e.description), e.code
+    return e
+
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
+
+@app.route("/game/<int:game_id>")
+def game_page(game_id):
+    """Editions, offers and price history; the page loads its data from /api/games/<id>."""
+    return render_template("game.html", game_id=game_id)
+
+
 @app.route("/search")
 def search():
-    query = request.args.get("q")
+    """Used by templates/index.html: one group per game edition with its offers."""
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify([])
+    return jsonify(search_offers(query))
 
-    recent = get_recent_products(query)
-
-    if recent:
-        print("A usar dados da BD")
-        all_products = recent
-    else:
-        print("A fazer scraping")
-        ps = PressStartScraper().run(query)
-        mm = MegaManiaScraper().run(query)
-
-        all_products = ps + mm
-
-        insert_products(all_products)
-
-    matched = match_products(all_products)
-
-    return jsonify(matched)
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)

@@ -1,7 +1,9 @@
-PRODUCT_CARD = ".produto_lista.MolduraProdutos"  
+PRODUCT_CARD = ".produto_lista.MolduraProdutos"
 NAME = ".produto_lista_titulo a"
-SALE = ".produto_lista_botoes__bt_preco"
-PRICE = ".produto_desconto_valor"
+IMAGE = ".produto_lista_imagem img"
 LINK = ".produto_lista_imagem a"
-STOCK = ".produto_lista_stock_emstock"
-DISCOUNT = ".produto_desconto_wrapper"
+BUY_BUTTON = ".produto_lista_botoes__bt"               # first one: "COMPRAR NOVO" / "COMPRAR USADO" / "PRÉ-ENCOMENDAR"
+BUY_LABEL = ".produto_lista_botoes__bt_texto"
+PRICE = ".produto_lista_botoes__bt_preco"              # price the customer pays
+OLD_PRICE = ".produto_desconto_valor"                  # crossed-out price, only when on sale
+OUT_OF_STOCK = ".produto_lista_stock_esgotado"

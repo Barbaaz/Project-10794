@@ -1,57 +1,28 @@
-import requests
-import time
+from urllib.parse import quote_plus
+
+from scrapers.base.base_scraper import BaseScraper
 from .parser import parse_products
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-}
 
-BASE_URL = "https://www.pressstart.pt/pt/index.php?fc=module&module=leoproductsearch&controller=productsearch&leoproductsearch_static_token=658541fb9c2614f7870540d8c712d5a0&cate=&search_query="
 
-class PressStartScraper:
+class PressStartScraper(BaseScraper):
+    store_slug = "press_start"
+    base_url = "https://www.pressstart.pt"
 
-    def fetch_page(self, url):
-        response = requests.get(url, headers=HEADERS)
+    catalog_urls = {
+        "https://www.pressstart.pt/pt/jogos-ps5/": "PS5",
+        "https://www.pressstart.pt/pt/jogos-ps4/": "PS4",
+        "https://www.pressstart.pt/pt/jogos-nintendo-switch/": "Switch",
+        "https://www.pressstart.pt/pt/jogos-switch-2/": "Switch2",
+        "https://www.pressstart.pt/pt/jogos-xbox-series-x/": "XboxSeries",
+        "https://www.pressstart.pt/pt/jogos-xbox-one/": "XboxOne",
+        "https://www.pressstart.pt/pt/jogos-pc/": "PC",
+    }
 
-        if response.status_code != 200:
-            raise Exception(f"Erro HTTP: {response.status_code}")
+    def build_search_url(self, query, page):
+        return f"{self.base_url}/pt/pesquisar?s={quote_plus(query)}&page={page}"
 
-        return response.text
-    
-    def run(self, query):
+    def build_page_url(self, url, page):
+        return f"{url}?page={page}"
 
-        all_products = []
-        query = query.replace(' ', '+').replace("'", "%27")
-
-        page = 1
-
-        while True:
-            if page == 1:
-                url = f'{BASE_URL}{query}'
-            else:
-                url = f'{BASE_URL}{query}&page={page}'
-
-            print(url)
-
-            try:
-                html = self.fetch_page(url)
-            except Exception as e:
-                print(f"Erro ao fazer request: {e}")
-                break
-
-            products = parse_products(html)
-
-            if not products:
-                if page == 1:
-                    print("Nenhum resultado encontrado.")
-                else:
-                    print("Fim das páginas.")
-                break
-            
-            all_products.extend(products)
-
-            page += 1
-            time.sleep(2)
-
-        print(f"Total produtos: {len(all_products)}")
-
-        return all_products
+    def parse_listing(self, html, console=None):
+        return parse_products(html, console)

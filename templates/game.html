@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Game Price Tracker</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+
+    <style>
+        /* Chart colors by role. Store colors are a validated categorical palette
+           (fixed slot per store, see /api/stores color_slot); dark mode has its own steps. */
+        :root {
+            --surface-1: #fcfcfb;
+            --text-primary: #0b0b0b;
+            --text-secondary: #52514e;
+            --text-muted: #898781;
+            --gridline: #e1e0d9;
+            --baseline: #c3c2b7;
+            --series-1: #2a78d6;
+            --series-2: #eb6834;
+            --series-3: #1baf7a;
+            --series-4: #eda100;
+            --series-5: #e87ba4;
+            --series-6: #008300;
+        }
+        :root[data-bs-theme="dark"] {
+            --surface-1: #1a1a19;
+            --text-primary: #ffffff;
+            --text-secondary: #c3c2b7;
+            --text-muted: #898781;
+            --gridline: #2c2c2a;
+            --baseline: #383835;
+            --series-1: #3987e5;
+            --series-2: #d95926;
+            --series-3: #199e70;
+            --series-4: #c98500;
+            --series-5: #d55181;
+            --series-6: #008300;
+        }
+
+        .chart-box { position: relative; height: 280px; background: var(--surface-1); border-radius: .5rem; padding: .5rem; }
+        .game-cover { width: 140px; aspect-ratio: 3 / 4; object-fit: cover; background: #000; border-radius: .5rem; }
+        .swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+        .low-badge { background: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); border: 1px solid var(--bs-success-border-subtle); }
+        table.prices td, table.prices th { font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body class="bg-body-tertiary">
+
+<div class="container py-4" style="max-width: 1000px;">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <a href="/" onclick="if (document.referrer.includes(location.host)) { history.back(); return false; }"
+           class="btn btn-sm btn-outline-secondary">← Pesquisa</a>
+        <button onclick="toggleDark()" class="btn btn-sm btn-secondary" aria-label="Modo escuro">🌙</button>
+    </div>
+
+    <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
+    <div id="error" class="alert alert-warning d-none"></div>
+
+    <div id="game" class="d-none">
+        <div class="d-flex gap-3 align-items-start mb-4">
+            <img id="cover" class="game-cover flex-shrink-0" alt="">
+            <div>
+                <h1 id="title" class="h3 mb-1"></h1>
+                <span id="platform" class="badge text-bg-secondary"></span>
+                <p id="history-note" class="text-body-secondary small mt-2 mb-0"></p>
+            </div>
+        </div>
+
+        <!-- Período do gráfico: um filtro para todos os gráficos da página -->
+        <div class="btn-group btn-group-sm mb-3" role="group" aria-label="Período">
+            <button class="btn btn-outline-primary" data-days="30">30 dias</button>
+            <button class="btn btn-outline-primary active" data-days="90">90 dias</button>
+            <button class="btn btn-outline-primary" data-days="365">1 ano</button>
+            <button class="btn btn-outline-primary" data-days="0">Tudo</button>
+        </div>
+
+        <div id="editions"></div>
+    </div>
+</div>
+
+<script>
+const GAME_ID = {{ game_id }};
+const eur = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" });
+const fmtDate = d => new Date(d).toLocaleDateString("pt-PT");
+const fmtDateTime = d => new Date(d).toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" });
+
+let game, history, stores = {}, rangeDays = 90;
+const charts = [];
+
+function esc(text) {
+    const div = document.createElement("div");
+    div.textContent = text ?? "";
+    return div.innerHTML;
+}
+
+function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function storeColor(slug) {
+    const slot = stores[slug]?.color_slot || 6;
+    return css(`--series-${Math.min(slot, 6)}`);
+}
+
+function storeName(slug) {
+    return stores[slug]?.name || slug;
+}
+
+async function load() {
+    try {
+        const [g, h, s] = await Promise.all([
+            fetch(`/api/games/${GAME_ID}`).then(r => r.ok ? r.json() : Promise.reject(r.status)),
+            fetch(`/api/games/${GAME_ID}/prices?days=3650`).then(r => r.json()),
+            fetch(`/api/stores`).then(r => r.json()),
+        ]);
+        game = g; history = h;
+        s.forEach(store => stores[store.slug] = store);
+        render();
+    } catch (status) {
+        document.getElementById("error").textContent =
+            status === 404 ? "Jogo não encontrado." : "Não foi possível carregar o jogo.";
+        document.getElementById("error").classList.remove("d-none");
+    }
+    document.getElementById("loading").classList.add("d-none");
+}
+
+function render() {
+    document.title = `${game.title} (${game.platform}) · Game Price Tracker`;
+    document.getElementById("title").textContent = game.title;
+    document.getElementById("platform").textContent = game.platform_name;
+
+    const cover = game.image || game.editions.flatMap(e => e.offers).find(o => o.image)?.image;
+    if (cover) document.getElementById("cover").src = cover;
+    else document.getElementById("cover").classList.add("d-none");
+
+    const firstDate = history.flatMap(o => o.history).map(p => p.date).sort()[0];
+    document.getElementById("history-note").textContent = firstDate
+        ? `Preços acompanhados desde ${fmtDate(firstDate)}. O mínimo histórico conta só cópias novas em stock.`
+        : "";
+
+    const container = document.getElementById("editions");
+    container.innerHTML = "";
+    game.editions.forEach((edition, i) => container.appendChild(renderEdition(edition, i)));
+    drawCharts();
+
+    document.getElementById("game").classList.remove("d-none");
+}
+
+function renderEdition(edition, i) {
+    const card = document.createElement("section");
+    card.className = "card shadow-sm mb-4";
+
+    const low = edition.lowest_price;
+    const best = edition.offers.find(o => o.in_stock);
+    const isLowNow = low && best && best.condition === "new" && best.price <= low.price;
+
+    card.innerHTML = `
+        <div class="card-body">
+            <h2 class="h5 mb-3">${esc(edition.name)}</h2>
+
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                ${best ? `<span class="badge bg-body-secondary text-body border fs-6 fw-normal">
+                    Melhor preço agora: <strong>${eur.format(best.price)}</strong> · ${esc(storeName(best.store))}</span>` : ""}
+                ${low ? `<span class="badge low-badge fs-6 fw-normal">
+                    ★ Mínimo histórico: <strong>${eur.format(low.price)}</strong> · ${fmtDate(low.date)} · ${esc(storeName(low.store))}</span>` : ""}
+                ${isLowNow ? `<span class="badge text-bg-success fs-6 fw-normal">Preço mais baixo de sempre</span>` : ""}
+            </div>
+
+            ${offersTable(edition)}
+
+            <h3 class="h6 mt-4 mb-2">Histórico de preços <span class="text-body-secondary fw-normal small">(cópias novas)</span></h3>
+            <div class="chart-box"><canvas id="chart-${i}" role="img"
+                aria-label="Histórico de preços de ${esc(edition.name)}"></canvas></div>
+            <p class="small text-body-secondary mt-1 mb-0">Linha tracejada: esgotado nesse período.</p>
+
+            <details class="mt-2">
+                <summary class="small">Ver histórico em tabela</summary>
+                ${historyTable(edition)}
+            </details>
+        </div>`;
+    return card;
+}
+
+function offersTable(edition) {
+    const rows = edition.offers.map(o => `
+        <tr class="${o.in_stock ? "" : "text-body-secondary"}">
+            <td><span class="swatch" style="background:${storeColor(o.store)}"></span>${esc(storeName(o.store))}</td>
+            <td>${o.condition === "used" ? '<span class="badge text-bg-secondary">Usado</span>' : "Novo"}</td>
+            <td class="text-end">
+                ${o.was_price ? `<small class="text-decoration-line-through text-body-secondary me-1">${eur.format(o.was_price)}</small>
+                    <span class="badge text-bg-danger me-1">-${o.discount_percent}%</span>` : ""}
+                <strong>${eur.format(o.price)}</strong>
+            </td>
+            <td>${o.in_stock ? "Em stock" : "Esgotado"}</td>
+            <td class="text-end"><a href="${esc(o.url)}" target="_blank" rel="noopener"
+                class="btn btn-sm ${o.in_stock ? "btn-outline-primary" : "btn-outline-secondary"}">Ver na loja</a></td>
+        </tr>`).join("");
+
+    return `
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 prices">
+                <thead><tr><th>Loja</th><th>Estado</th><th class="text-end">Preço</th><th>Stock</th><th></th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>`;
+}
+
+function editionHistory(edition) {
+    return history.filter(o => o.edition_id === edition.id && o.condition === "new");
+}
+
+function historyTable(edition) {
+    const low = edition.lowest_price;
+    const rows = editionHistory(edition)
+        .flatMap(o => o.history.map(p => ({ ...p, store: o.store, offer_id: o.offer_id })))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map(p => {
+            const isLow = low && p.offer_id === low.offer_id && p.date === low.date;
+            return `<tr class="${isLow ? "table-success" : ""}">
+                <td>${fmtDateTime(p.date)}</td><td>${esc(storeName(p.store))}</td>
+                <td class="text-end">${eur.format(p.price)}${isLow ? " ★" : ""}</td>
+                <td>${p.in_stock ? "Em stock" : "Esgotado"}</td></tr>`;
+        }).join("");
+
+    return `<table class="table table-sm mt-2 mb-0 prices">
+        <thead><tr><th>Data</th><th>Loja</th><th class="text-end">Preço</th><th>Stock</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" class="text-body-secondary">Sem histórico.</td></tr>'}</tbody></table>`;
+}
+
+// Vertical crosshair under the cursor
+const crosshair = {
+    id: "crosshair",
+    afterDatasetsDraw(chart) {
+        const active = chart.tooltip?.getActiveElements?.() || [];
+        if (!active.length) return;
+        const x = active[0].element.x, { top, bottom } = chart.chartArea, ctx = chart.ctx;
+        ctx.save();
+        ctx.strokeStyle = css("--baseline");
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+        ctx.restore();
+    },
+};
+
+function drawCharts() {
+    charts.forEach(c => c.destroy());
+    charts.length = 0;
+
+    const now = new Date();
+    const rangeStart = rangeDays ? new Date(now - rangeDays * 86400000) : null;
+
+    game.editions.forEach((edition, i) => {
+        const low = edition.lowest_price;
+        const activeOffers = new Set(edition.offers.map(o => o.offer_id));
+        const offers = editionHistory(edition);
+        const allDates = offers.flatMap(o => o.history.map(p => new Date(p.date)));
+        if (!allDates.length) return;
+
+        const firstDate = new Date(Math.min(...allDates));
+        const xMin = rangeStart && rangeStart > firstDate ? rangeStart : firstDate;
+
+        const datasets = offers.map(o => {
+            const color = storeColor(o.store);
+            const points = o.history.map(p => ({ x: new Date(p.date), y: p.price, in_stock: p.in_stock, date: p.date }));
+            // The last price still holds today for products the store still sells
+            const last = points[points.length - 1];
+            if (activeOffers.has(o.offer_id)) points.push({ ...last, x: now, extended: true });
+
+            const isLow = p => low && o.offer_id === low.offer_id && p.date === low.date && !p.extended;
+            return {
+                label: storeName(o.store),
+                data: points,
+                stepped: true,
+                borderColor: color,
+                backgroundColor: color,
+                borderWidth: 2,
+                borderCapStyle: "round",
+                borderJoinStyle: "round",
+                segment: { borderDash: ctx => ctx.p0.raw.in_stock ? undefined : [4, 4] },
+                pointRadius: ctx => isLow(ctx.raw) ? 6 : 0,
+                pointHoverRadius: 5,
+                pointBorderColor: css("--surface-1"),
+                pointBorderWidth: ctx => isLow(ctx.raw) ? 2 : 1,
+                pointHitRadius: 8,
+            };
+        });
+
+        const annotations = low ? {
+            lowLine: {
+                type: "line",
+                yMin: low.price, yMax: low.price,
+                borderColor: css("--text-secondary"),
+                borderWidth: 1,
+                label: {
+                    display: true,
+                    content: `Mínimo histórico ${eur.format(low.price)}`,
+                    position: "start",
+                    color: css("--text-primary"),
+                    backgroundColor: css("--surface-1"),
+                    font: { size: 11, weight: "600" },
+                    padding: 3,
+                    yAdjust: -10,
+                },
+            },
+        } : {};
+
+        Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+        charts.push(new Chart(document.getElementById(`chart-${i}`), {
+            type: "line",
+            data: { datasets },
+            plugins: [crosshair],
+            options: {
+                maintainAspectRatio: false,
+                animation: false,
+                interaction: { mode: "nearest", axis: "x", intersect: false },
+                scales: {
+                    x: {
+                        type: "time",
+                        min: xMin, max: now,
+                        time: { tooltipFormat: "dd/MM/yyyy HH:mm", displayFormats: { hour: "HH:mm", day: "dd/MM", week: "dd/MM", month: "MM/yyyy" } },
+                        grid: { color: css("--gridline") },
+                        border: { color: css("--baseline") },
+                        ticks: { color: css("--text-muted"), maxTicksLimit: 8 },
+                    },
+                    y: {
+                        grace: "10%",
+                        grid: { color: css("--gridline") },
+                        border: { display: false },
+                        ticks: { color: css("--text-muted"), callback: v => eur.format(v) },
+                    },
+                },
+                plugins: {
+                    legend: {
+                        display: datasets.length > 1,
+                        align: "start",
+                        labels: { color: css("--text-secondary"), boxWidth: 16, boxHeight: 3 },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => {
+                                const p = ctx.raw;
+                                return `${ctx.dataset.label}: ${eur.format(p.y)}${p.in_stock ? "" : " (esgotado)"}${p.extended ? " (atual)" : ""}`;
+                            },
+                        },
+                    },
+                    annotation: { annotations },
+                },
+            },
+        }));
+    });
+}
+
+document.querySelectorAll("[data-days]").forEach(btn => btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-days]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    rangeDays = Number(btn.dataset.days);
+    drawCharts();
+}));
+
+function toggleDark() {
+    const next = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-bs-theme", next);
+    try { localStorage.setItem("theme", next); } catch (e) {}
+    if (game) render();   // charts read their colors from CSS, so redraw them
+}
+
+function savedTheme() {
+    let theme = null;
+    try { theme = localStorage.getItem("theme"); } catch (e) {}
+    return theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+}
+document.documentElement.setAttribute("data-bs-theme", savedTheme());
+load();
+</script>
+</body>
+</html>

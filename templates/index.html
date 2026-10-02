@@ -2,260 +2,275 @@
 <html lang="pt" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Game Price Tracker</title>
 
-    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
+    <style>
+        .game-card .cover-link { display: block; overflow: hidden; background: #000; }
+        .game-card img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; transition: transform .3s ease; }
+        .game-card:hover img { transform: scale(1.04); }
+        .game-card .card-body { padding: .5rem; font-size: .8rem; }
+        .game-title {
+            font-size: .85rem; font-weight: 600; line-height: 1.25; margin-bottom: .15rem;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .fav-btn {
+            position: absolute; top: .4rem; right: .4rem; width: 1.75rem; height: 1.75rem; padding: 0;
+            border-radius: 50%; line-height: 1; font-size: 1.05rem;
+        }
+        /* One button per store, linking to the product on the store's site */
+        .offer-btn {
+            display: flex; justify-content: space-between; align-items: baseline; gap: .4rem;
+            width: 100%; margin-top: .3rem; padding: .25rem .45rem; font-size: .78rem; text-align: left;
+        }
+        .offer-btn .store { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .offer-btn .price { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
+        .offer-btn .was { font-weight: 400; text-decoration: line-through; opacity: .75; margin-right: .2rem; }
+        .discount-badge { position: absolute; top: .4rem; left: .4rem; font-size: .8rem; }
+    </style>
 </head>
 
-<style>
-.card-img-top {
-    transition: transform 0.3s ease;
-}
+<body class="bg-body-tertiary">
 
-.card:hover .card-img-top {
-    transform: scale(1.05);
-}
-</style>
+<div class="container-xxl py-4">
 
-<body class="bg-light">
-
-<div class="container py-4">
-
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>🎮 Game Price Tracker</h1>
-        <button onclick="toggleDark()" class="btn btn-sm btn-secondary">🌙</button>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">🎮 Game Price Tracker</h1>
+        <button onclick="toggleDark()" class="btn btn-sm btn-secondary" aria-label="Modo escuro">🌙</button>
     </div>
 
-    <!-- FORM -->
     <form class="row g-2 mb-4" onsubmit="handleSearch(event)">
         <div class="col-md-6">
-            <input type="text" id="q" class="form-control" placeholder="Ex: resident evil">
+            <input type="text" id="q" class="form-control" placeholder="Ex: resident evil" autofocus>
         </div>
-
         <div class="col-md-3">
-            <select id="consoleFilter" class="form-select">
-                <option value="">Todas as consolas</option>
-                <option value="PS5">PS5</option>
-                <option value="PS4">PS4</option>
-                <option value="Xbox">Xbox</option>
-                <option value="Switch">Switch</option>
+            <select id="consoleFilter" class="form-select" aria-label="Plataforma">
+                <option value="">Todas as plataformas</option>
             </select>
         </div>
-
         <div class="col-md-3 d-grid">
             <button type="submit" class="btn btn-primary">Pesquisar</button>
         </div>
     </form>
 
-    <!-- LOADING -->
-    <div id="loading" class="text-center my-4" style="display:none;">
-        <div class="spinner-border text-primary"></div>
-    </div>
+    <section id="featured" class="mb-4">
+        <h2 class="h5 mb-3">🔥 Descontos em destaque</h2>
+        <div id="featured-cards" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 row-cols-xxl-8 g-2"></div>
+        <p id="featured-empty" class="text-body-secondary small d-none mb-0">
+            Ainda sem descontos para mostrar. Só contam descontos reais: o preço tem de estar abaixo
+            do mais baixo dos 30 dias anteriores, por isso os primeiros aparecem após um mês de histórico.
+        </p>
+    </section>
 
-    <!-- RESULTADOS -->
-    <div id="results" class="row g-3"></div>
+    <div id="loading" class="text-center my-4 d-none"><div class="spinner-border text-primary"></div></div>
+    <p id="empty" class="text-body-secondary d-none">Nenhum jogo encontrado.</p>
 
+    <div id="results" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 row-cols-xxl-8 g-2"></div>
 </div>
 
 <script>
+const MAX_OFFERS = 3;   // offers shown on a card; the game page has all of them
+const eur = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" });
 
 let currentData = [];
-let debounceTimer;
-let favorites = JSON.parse(localStorage.getItem("favorites")) || [];
+let hasSearched = false;
+let stores = {};
+let favorites = [];
+try { favorites = JSON.parse(localStorage.getItem("favorites")) || []; } catch (e) {}
 
-// submit manual
+function esc(text) {
+    const div = document.createElement("div");
+    div.textContent = text ?? "";
+    return div.innerHTML;
+}
+
+function storeName(slug) {
+    return stores[slug]?.name || slug;
+}
+
 function handleSearch(event) {
     event.preventDefault();
     search();
 }
 
-function formatStoreName(name) {
-    const map = {
-        "mega-mania": "Mega-Mania",
-        "press_start": "Press Start"
-    };
-
-    return map[name] || name;
-}
-
 function render(data) {
-
     const container = document.getElementById("results");
     container.innerHTML = "";
 
-    const selectedConsole = document.getElementById("consoleFilter").value;
+    const selected = document.getElementById("consoleFilter").value;
+    const groups = data
+        .filter(g => !selected || g.console === selected)
+        .sort((a, b) => isFavorite(b) - isFavorite(a));
 
-    data.sort((a, b) => {
-        const aFav = isFavorite(a.name, a.console);
-        const bFav = isFavorite(b.name, b.console);
-        return bFav - aFav;
-    });
+    document.getElementById("empty").classList.toggle("d-none", groups.length > 0 || !hasSearched);
 
-    data.forEach(group => {
+    groups.forEach(group => container.appendChild(makeCard(group)));
+}
 
-        if (selectedConsole && group.console !== selectedConsole) return;
+// A card: cover, title, platform and up to MAX_OFFERS store prices.
+// group = {name, console, platform_name, game_id, offers: [...]}
+function makeCard(group, { coverBadge = "" } = {}) {
+    const offers = [...group.offers].sort((a, b) => a.price - b.price);
+    const best = offers[0];
+    const gameUrl = `/game/${group.game_id}`;
 
-        // ordenar por preço
-        group.offers.sort((a, b) => {
-            if (a.price == null) return 1;
-            if (b.price == null) return -1;
-            return a.price - b.price;
+    // Cheapest store in green, the others outlined; each opens the product on the store's site
+    const rows = offers.slice(0, MAX_OFFERS).map((o, i) => `
+        <a href="${esc(o.url)}" target="_blank" rel="noopener"
+           class="btn offer-btn ${i === 0 ? "btn-success" : "btn-outline-secondary"}"
+           title="Ver na ${esc(storeName(o.store))}">
+            <span class="store">${esc(storeName(o.store))}${o.condition === "used" ? " · Usado" : ""}</span>
+            <span class="price">
+                ${o.discount_percent && !coverBadge ? `<span class="badge text-bg-danger">-${o.discount_percent}%</span>` : ""}
+                ${o.was_price ? `<span class="was">${eur.format(o.was_price)}</span>` : ""}${eur.format(o.price)}
+            </span>
+        </a>`).join("");
+
+    const more = offers.length > MAX_OFFERS
+        ? `<a href="${gameUrl}" class="btn btn-link btn-sm w-100 mt-1 p-0">Ver todas as lojas (+${offers.length - MAX_OFFERS})</a>` : "";
+
+    const col = document.createElement("div");
+    col.className = "col";
+    col.innerHTML = `
+        <div class="card h-100 shadow-sm overflow-hidden game-card">
+            <div class="position-relative">
+                <a href="${gameUrl}" class="cover-link"><img src="${esc(best?.image || "")}" alt="" loading="lazy"></a>
+                ${coverBadge}
+                <button type="button" class="btn btn-light fav-btn shadow-sm"
+                    aria-label="Favorito" aria-pressed="${isFavorite(group)}">${isFavorite(group) ? "★" : "☆"}</button>
+            </div>
+            <div class="card-body d-flex flex-column">
+                <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(group.name)}">${esc(group.name)}</a>
+                <div class="text-body-secondary small mb-2">${esc(group.platform_name || group.console)}</div>
+                <div class="mt-auto">${rows}${more}</div>
+            </div>
+        </div>`;
+    col.querySelector(".fav-btn").onclick = () => toggleFavorite(group);
+    return col;
+}
+
+// Front page: biggest real discounts (from our own price history, never the store's crossed-out price)
+async function loadFeatured() {
+    try {
+        const offers = await fetch("/api/discounts/featured").then(r => r.json());
+        const container = document.getElementById("featured-cards");
+        container.innerHTML = "";
+
+        offers.forEach(o => {
+            const name = o.edition_key === "" ? o.title : `${o.title} — ${o.edition}`;
+            const group = { name, console: o.platform, platform_name: o.platform_name, game_id: o.game_id, offers: [o] };
+            container.appendChild(makeCard(group, {
+                coverBadge: `<span class="badge text-bg-danger discount-badge">-${o.discount_percent}%</span>`,
+            }));
         });
 
-        const best = group.offers[0];
+        document.getElementById("featured-empty").classList.toggle("d-none", offers.length > 0);
+    } catch (e) {
+        console.error("Erro a carregar descontos:", e);
+    }
+}
 
-        const col = document.createElement("div");
-        col.className = "col-md-4";
-
-        const card = document.createElement("div");
-        card.className = "card h-100 shadow-sm d-flex flex-column overflow-hidden";
-
-        const img = document.createElement("img");
-        img.src = best?.image || "";
-        img.className = "card-img-top";
-        img.style.aspectRatio = "3 / 4";
-        img.style.objectFit = "cover";
-        img.style.backgroundColor = "#000";
-        
-
-        const body = document.createElement("div");
-        body.className = "card-body d-flex flex-column";
-
-        const title = document.createElement("h5");
-        title.className = "card-title mb-2";
-        title.style.fontSize = "0.95rem";
-        title.innerHTML = `${group.name} (${group.console})`;
-        title.style.minHeight = "40px";
-
-        const favBtn = document.createElement("button");
-        favBtn.className = "btn btn-sm btn-outline-warning mb-2";
-        favBtn.innerText = isFavorite(group.name, group.console) ? "★ Favorito" : "☆ Favorito";
-
-        favBtn.onclick = () => toggleFavorite(group.name, group.console);
-
-        body.appendChild(favBtn);
-
-        body.appendChild(title);
-
-        const offersContainer = document.createElement("div");
-        offersContainer.className = "flex-grow-1 d-flex flex-column justify-content-end";
-
-        group.offers.forEach((p, index) => {
-
-            if (index > 0 && p.price === group.offers[0].price && p.store === group.offers[0].store) {
-                return; //
-            }
-
-            const item = document.createElement("div");
-            item.className = "mb-2 d-flex flex-column";
-
-            // linha com preço + badge
-            const row = document.createElement("div");
-            row.className = "d-flex justify-content-between align-items-center";
-
-            row.innerHTML = `
-                <span>
-                    ${index === 0 ? '<span class="badge bg-success">Melhor preço</span>' : ''}
-                </span>
-                <strong>${p.price ?? "N/A"}€</strong>
-            `;
-
-            // botão com nome da loja
-            const link = document.createElement("a");
-            link.href = p.url;
-            link.target = "_blank";
-            link.innerText = `Ver na ${formatStoreName(p.store)}`;
-            link.className = index === 0
-                ? "btn btn-sm btn-success w-100 mt-auto"
-                : "btn btn-sm btn-outline-primary w-100 mt-auto";
-
-            item.appendChild(row);
-            item.appendChild(link);
-
-            offersContainer.appendChild(item);
-        });
-
-        body.appendChild(offersContainer);
-
-        card.appendChild(img);
-        card.appendChild(body);
-        col.appendChild(card);
-        container.appendChild(col);
-    });
+function showFeatured(show) {
+    document.getElementById("featured").classList.toggle("d-none", !show);
 }
 
 let isSearching = false;
 
 async function search() {
-    if (isSearching) return;
-    isSearching = true;
-
-    document.getElementById("loading").style.display = "block";
-    document.getElementById("results").innerHTML = "";
-
     const query = document.getElementById("q").value.trim();
+    if (isSearching) return;
 
+    // Empty search: back to the front page with the featured discounts
     if (!query) {
-        document.getElementById("loading").style.display = "none";
-        isSearching = false;
+        hasSearched = false;
+        currentData = [];
+        document.getElementById("results").innerHTML = "";
+        document.getElementById("empty").classList.add("d-none");
+        history.replaceState(null, "", location.pathname);
+        showFeatured(true);
         return;
     }
 
+    isSearching = true;
+    showFeatured(false);
+
+    document.getElementById("loading").classList.remove("d-none");
+    document.getElementById("empty").classList.add("d-none");
+    document.getElementById("results").innerHTML = "";
+
+    history.replaceState(null, "", `?q=${encodeURIComponent(query)}`);
+
     try {
         const res = await fetch(`/search?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
-
-        currentData = data;
+        currentData = await res.json();
+        hasSearched = true;
         render(currentData);
-
     } catch (err) {
         console.error("Erro na pesquisa:", err);
     }
 
-    document.getElementById("loading").style.display = "none";
-
+    document.getElementById("loading").classList.add("d-none");
     isSearching = false;
 }
 
-// filtro consola
-document.getElementById("consoleFilter").addEventListener("change", function() {
-    render(currentData);
-});
+document.getElementById("consoleFilter").addEventListener("change", () => render(currentData));
 
-function toggleFavorite(name, console) {
-    const id = name + "_" + console;
-
-    if (favorites.includes(id)) {
-        favorites = favorites.filter(f => f !== id);
-    } else {
-        favorites.push(id);
+// Platforms and store names come from the API, so new ones appear without editing this page
+async function loadFilters() {
+    try {
+        const [platforms, storeList] = await Promise.all([
+            fetch("/api/platforms").then(r => r.json()),
+            fetch("/api/stores").then(r => r.json()),
+        ]);
+        const select = document.getElementById("consoleFilter");
+        platforms.forEach(p => select.add(new Option(p.name, p.code)));
+        storeList.forEach(s => stores[s.slug] = s);
+    } catch (e) {
+        console.error("Erro a carregar filtros:", e);
     }
-
-    localStorage.setItem("favorites", JSON.stringify(favorites));
-    render(currentData); // re-render
 }
 
-function isFavorite(name, console) {
-    return favorites.includes(name + "_" + console);
+function favoriteId(group) {
+    return `${group.name}_${group.console}`;
 }
 
-// dark mode
+function isFavorite(group) {
+    return favorites.includes(favoriteId(group));
+}
+
+function toggleFavorite(group) {
+    const id = favoriteId(group);
+    favorites = favorites.includes(id) ? favorites.filter(f => f !== id) : [...favorites, id];
+    try { localStorage.setItem("favorites", JSON.stringify(favorites)); } catch (e) {}
+    render(currentData);
+}
+
 function toggleDark() {
-    const current = document.documentElement.getAttribute("data-bs-theme");
-
-    const newTheme = current === "dark" ? "light" : "dark";
-
-    document.documentElement.setAttribute("data-bs-theme", newTheme);
-    localStorage.setItem("theme", newTheme);
+    const next = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-bs-theme", next);
+    try { localStorage.setItem("theme", next); } catch (e) {}
 }
 
-// carregar ao iniciar
-const savedTheme = localStorage.getItem("theme") || "light";
-document.documentElement.setAttribute("data-bs-theme", savedTheme);
+function savedTheme() {
+    let theme = null;
+    try { theme = localStorage.getItem("theme"); } catch (e) {}
+    return theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+}
 
+document.documentElement.setAttribute("data-bs-theme", savedTheme());
+
+// /?q=zelda opens with that search, so searches can be bookmarked or shared
+loadFilters().then(() => {
+    const q = new URLSearchParams(location.search).get("q");
+    if (q) {
+        document.getElementById("q").value = q;
+        search();
+    }
+    // after loadFilters, so the cards show store names
+    loadFeatured();
+});
 </script>
-
 </body>
 </html>

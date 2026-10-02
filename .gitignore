@@ -63,3 +63,5 @@ htmlcov/
 # Jupyter
 
 .ipynb_checkpoints
+# Scraper logs (rotated daily)
+logs/
