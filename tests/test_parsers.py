@@ -302,7 +302,6 @@ def test_radio_popular(fixture_json):
     html = fixture_json("radio_popular_page.json")["content"]["products"]
     products = parse_products(html, "PS5")
     assert len(products) == 4 and all(KEYS <= set(p) for p in products)
-    assert all(p["short_names"] for p in products)
 
     control = by_name(products, "CONTROL RESONANT")
     assert (control["console"], control["price"], control["condition"]) == ("PS5", 50.99, "new")

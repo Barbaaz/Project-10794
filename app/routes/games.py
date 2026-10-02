@@ -41,7 +41,15 @@ def editions():
         abort(400, description="'ids' must be a comma-separated list of numbers")
     if len(ids) > 200:
         abort(400, description="at most 200 ids")
-    return jsonify(game_service.editions_with_offers(list(dict.fromkeys(ids))))
+    # Favourites saved before two editions were merged: answer with the edition now, and say
+    # which saved id it replaces (merged_from) so the page can update what it saved
+    merged = game_service.merged_into("edition", ids)
+    groups = game_service.editions_with_offers(list(dict.fromkeys(merged.get(i, i) for i in ids)))
+    for group in groups:
+        old = [o for o, n in merged.items() if n == group["edition_id"]]
+        if old:
+            group["merged_from"] = old
+    return jsonify(groups)
 
 
 @bp.get("/<int:game_id>")

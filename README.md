@@ -56,16 +56,31 @@ back in stock show as a banner. Favourites are stored in the browser for now.
 
 Products are grouped as **game → edition → store offers**: "Silent Hill: Townfall" (PS5)
 has a Standard and a Day One Edition, each with its own prices per store. The rules that
-split a store's name into game + edition are in `core/editions.py`.
+split a store's name into game + edition are in `core/editions.py`; `pipeline/matcher.py`
+links each product, also when stores write a name differently:
+
+- a shortened name goes to the one fuller known game it fits ("Doom Dark Ages" → "Doom: The
+  Dark Ages"; `core/close_match.py`: same numbers, same first and last word, only linking words
+  missing, exactly one candidate — so "F1 23" never joins "F1 Manager 23");
+- a title cut in the wrong place is mended ("Star Wars" + "Galactic Racer Deluxe" → "Star Wars:
+  Galactic Racer" + "Deluxe"), but edition words never move into a title;
+- edition keys ignore word order, filler and synonyms ("Day 1 Steelbook" = "Steelbook Day One",
+  "Game of the Year" = "GOTY"), and an edition differing by a typo from one the game already has
+  is that edition ("Delixe" → "Deluxe").
 
 Products sold as a code in a box ("Código na caixa", "Code in box", "Código de descarga")
 are not tracked.
 
-After changing the matching rules, re-link what is already stored (no scraping):
+After changing the matching rules, re-link what is already stored (no scraping). Check the list of
+merges first:
 
 ```powershell
+python -m pipeline.rematch --dry-run
 python -m pipeline.rematch
 ```
+
+Games and editions merged into another are recorded in `merged_ids`: old `/game/<id>` links
+redirect, and favourites saved in browsers move to the edition that replaced theirs.
 
 ## Discounts
 

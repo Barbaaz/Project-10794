@@ -213,6 +213,16 @@ def lowest_prices(game_id):
     return {r.pop("edition_id"): r for r in rows}
 
 
+def merged_into(kind, ids):
+    """{old id: id now}: games / editions merged into another (pipeline/rematch.py, merged_ids)."""
+    if not ids:
+        return {}
+    return dict((r["old_id"], r["new_id"]) for r in fetch_all(
+        f"SELECT old_id, new_id FROM merged_ids WHERE kind = ? AND old_id IN ({','.join('?' * len(ids))})",
+        kind, *ids,
+    ))
+
+
 def editions_with_offers(edition_ids):
     """
     For the favourites tab: each edition as a card group (same shape as /search) with all its

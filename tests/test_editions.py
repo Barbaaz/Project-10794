@@ -5,12 +5,12 @@ from core.normalizer import normalize_name
 
 
 @pytest.mark.parametrize("name, game_key, edition_key", [
-    ("NBA 2K26 - Kobe Bryant Edition PS5", "nba 2 k 26", "kobe bryant"),
+    ("NBA 2K26 - Kobe Bryant Edition PS5", "nba 2 k 26", "bryant kobe"),   # edition words sorted
     ("Silent Hill: Townfall - Day One Edition PS5", "silent hill townfall", "day one"),
     ("SILENT HILL TOWNFALL DAY ONE EDITION PS5", "silent hill townfall", "day one"),
     ("Silent Hill: Townfall PS5", "silent hill townfall", ""),
     ("CASTLEVANIA Belmonts Curse Midnight Edition PS5", "castlevania belmonts curse", "midnight"),
-    ("Assassin's Creed Shadows Game of the Year Edition PS5", "assassins creed shadows", "game of the year"),
+    ("Assassin's Creed Shadows Game of the Year Edition PS5", "assassins creed shadows", "goty"),
     ("BEYOND A STEEL SKY [STEELBOOK EDITION] PS4", "beyond a steel sky", "steelbook"),
     ("NBA 2K25 Standard Edition PS5", "nba 2 k 25", ""),
     ("Pokémon Legends: Z-A Nintendo Switch 2 Edition", "pokemon legends za", ""),
@@ -37,8 +37,21 @@ def test_deluxe_and_deluxe_edition_are_the_same_edition():
 def test_phrase_learned_from_dash_names_splits_names_without_dash():
     known = {learn_phrase("NBA 2K26 - Kobe Bryant Edition PS5")}
     parsed = parse_title("NBA 2K26 KOBE BRYANT EDITION PS5", known)
-    assert (parsed.game_key, parsed.edition_key) == ("nba 2 k 26", "kobe bryant")
+    assert (parsed.game_key, parsed.edition_key) == ("nba 2 k 26", "bryant kobe")
     assert parsed.edition_name == "Kobe Bryant Edition"
+
+
+@pytest.mark.parametrize("a, b", [
+    ("Silent Hill f - Day One Steelbook Edition PS5", "Silent Hill f Steelbook Day One Edition PS5"),   # word order
+    ("Silent Hill f - Day 1 Edition PS5", "Silent Hill f Day One Edition PS5"),
+    ("Assassin's Creed Shadows - GOTY Edition PS5", "Assassin's Creed Shadows Game of the Year Edition PS5"),
+    ("Game X - Collector Edition PS5", "Game X - Collector's Edition PS5"),
+    ("Game X - The Complete Edition PS5", "Game X - Complete Edition PS5"),
+    ("Game X - Physical Deluxe Edition PS5", "Game X - Deluxe Edition PS5"),
+    ("Jogo Hogwarts Legacy Edição Deluxe PS5", "Hogwarts Legacy - Deluxe Edition PS5"),
+])
+def test_same_edition_written_differently(a, b):
+    assert parse_title(a).edition_key == parse_title(b).edition_key != ""
 
 
 def test_display_names():

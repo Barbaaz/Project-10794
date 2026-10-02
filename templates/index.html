@@ -330,7 +330,7 @@ const FRONT_TABS = {
     special: catalogTab(true, "empty_special"),
     favorites: {
         // the list changes as the visitor stars games, so it's fetched every time
-        url: () => `/api/games/editions?ids=${favorites.join(",")}`,
+        load: () => loadFavorites(),
         fresh: true,
         render: renderFavorites,
         empty: "empty_favorites",
@@ -480,7 +480,7 @@ function dismissedRestocks() {
 async function loadRestockAlerts() {
     if (!favorites.length) return;
     try {
-        const groups = await fetch(FRONT_TABS.favorites.url()).then(r => r.json());
+        const groups = await loadFavorites();
         frontData.favorites = groups;
         const dismissed = dismissedRestocks();
         const alerts = groups.flatMap(g => g.offers
@@ -714,6 +714,18 @@ function renderStoreStatus(storeList) {
     });
     document.getElementById("store-status").innerHTML =
         `${t("status_intro")} ${parts.join(" · ")}`;
+}
+
+// The favourite editions with their offers. When two editions were merged into one
+// (duplicates cleaned up), the answer says which saved id it replaces: keep the new id
+async function loadFavorites() {
+    const groups = await fetch(`/api/games/editions?ids=${favorites.join(",")}`).then(r => r.json());
+    const replaced = new Map(groups.flatMap(g => (g.merged_from || []).map(old => [old, g.edition_id])));
+    if (replaced.size) {
+        favorites = [...new Set(favorites.map(id => replaced.get(id) ?? id))];
+        try { localStorage.setItem("favoriteEditions", JSON.stringify(favorites)); } catch (e) {}
+    }
+    return groups;
 }
 
 // Favourites are game editions, saved in this browser by edition id

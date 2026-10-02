@@ -39,8 +39,6 @@ def parse_products(html, console=None):
                 "release_date_checked": True,
                 "url": card.select_one(LINK)["href"],
                 "image": image.get("content") if image else None,
-                # Rádio Popular shortens names ("TALES OF ETERNIA REMAS"): see core/close_match.py
-                "short_names": True,
             })
 
         except Exception as e:

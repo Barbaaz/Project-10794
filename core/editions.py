@@ -94,10 +94,28 @@ def parse_title(name, known_phrases=()):
     return ParsedTitle(game_key, game_title.strip(" -–:|/,+"), edition_key, edition_name, phrase)
 
 
+# Different ways of writing the same edition
+EDITION_SYNONYMS = [
+    ("game of the year", "goty"),
+    ("day 1", "day one"),
+    ("director s", "directors"),
+    ("collector", "collectors"),
+    ("edicao", ""), ("versao", ""),   # "Edição Deluxe"
+]
+# Words that don't change which edition it is
+EDITION_FILLER = EDITION_END | {"the", "physical", "fisica", "ed"}
+
+
 def edition_key_of(phrase):
-    """ "Deluxe Edition" and "Deluxe" are the same edition: "deluxe edition" → "deluxe" """
-    words = ["collectors" if w == "collector" else w for w in phrase.split() if w not in EDITION_END]
-    return " ".join(words)
+    """
+    One key per edition however a store writes it: "Deluxe Edition" = "Deluxe",
+    "Steelbook Day One Edition" = "Day 1 Edition Steelbook", "Game of the Year" = "GOTY".
+    The words are sorted, so their order doesn't matter.
+    """
+    text = f" {phrase} "
+    for written, same in EDITION_SYNONYMS:
+        text = text.replace(f" {written} ", f" {same} ")
+    return " ".join(sorted({w for w in text.split() if w not in EDITION_FILLER}))
 
 
 def extract_tags(name):
@@ -177,9 +195,17 @@ def cut_display(cleaned, n_tokens):
 
 
 def display_case(text):
-    """Mega Mania writes names in capitals: "COLLECTOR'S EDITION" → "Collector's Edition"."""
+    """
+    An edition's display name, tidied: capitals ("COLLECTOR'S EDITION" → "Collector's Edition"),
+    a lost apostrophe ("Collector?s"), "Edition" twice or first ("Edition GOTY" → "GOTY Edition").
+    """
     text = (text or "").strip(" -–:|/,+")
-    return string.capwords(text) if text.isupper() else text
+    text = string.capwords(text) if text.isupper() else text
+    text = re.sub(r"(?<=[A-Za-z])[?�’](?=s\b)", "'", text)
+    text = re.sub(r"\b(Edition)(\s+Edition)+\b", r"\1", text, flags=re.IGNORECASE)
+    if m := re.fullmatch(r"(Edition|Edição)\s+(.+)", text, flags=re.IGNORECASE):
+        text = f"{m.group(2)} {m.group(1)}" if m.group(1).lower() == "edition" else text
+    return text
 
 
 def learn_phrase(name):

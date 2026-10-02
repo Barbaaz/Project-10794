@@ -68,3 +68,41 @@ def close_match(key, known_keys):
         return key
     found = [k for k in known_keys if fits(key, k)]
     return found[0] if len(found) == 1 else None
+
+
+class KeyIndex:
+    """
+    Known game keys of one platform, to send a name to its fuller known form:
+    resolve("doom dark ages") → "doom the dark ages" when that game is known.
+    Indexed by first word (fits() needs the same first word), so it stays fast.
+    """
+
+    def __init__(self, keys=()):
+        self.by_first = {}
+        for key in keys:
+            self.add(key)
+
+    def add(self, key):
+        words = expand(key).split()
+        if words:
+            self.by_first.setdefault(words[0], set()).add(key)
+
+    def __contains__(self, key):
+        words = expand(key).split()
+        return bool(words) and key in self.by_first.get(words[0], ())
+
+    def resolve(self, key):
+        """
+        The fuller known key `key` is a short form of, else `key` itself. Two keys that fit each
+        other ("gta trilogy" / "grand theft auto trilogy") both go to the longer one.
+        """
+        words = expand(key).split()
+        if not words:
+            return key
+        found = [k for k in self.by_first.get(words[0], ()) if k != key and fits(key, k)]
+        if len(found) != 1:
+            return key
+        other = found[0]
+        if fits(other, key) and (len(other), other) < (len(key), key):
+            return key
+        return other

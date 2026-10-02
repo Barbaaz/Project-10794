@@ -214,6 +214,18 @@ IF COL_LENGTH('dbo.user_listings', 'edition_id') IS NULL
     ALTER TABLE dbo.user_listings ADD edition_id INT NULL REFERENCES dbo.game_editions(id);
 GO
 
+-- Games / editions merged into another by pipeline/rematch.py: old links (/game/<id>) and
+-- favourites saved in browsers (edition ids) are sent to the one that replaced them
+IF OBJECT_ID('dbo.merged_ids', 'U') IS NULL
+CREATE TABLE dbo.merged_ids (
+    kind      VARCHAR(10) NOT NULL CHECK (kind IN ('game', 'edition')),
+    old_id    INT         NOT NULL,
+    new_id    INT         NOT NULL,
+    merged_at DATETIME2   NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT pk_merged_ids PRIMARY KEY (kind, old_id)
+);
+GO
+
 -- IGDB trailers (pipeline/igdb.py): JSON list of {"id": YouTube id, "name": "Trailer"};
 -- NULL = not looked up yet, "[]" = IGDB has none
 IF COL_LENGTH('dbo.games', 'video_ids') IS NULL

@@ -1,8 +1,8 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, redirect, render_template
 from werkzeug.exceptions import HTTPException
 
 from app.routes import games, prices, stores
-from app.services.game_service import search_offers
+from app.services.game_service import game_exists, merged_into, search_offers
 
 # All data comes from the database, which the scheduler fills
 # (python -m scheduler.run_all_scrapers). Nothing here scrapes the stores.
@@ -27,6 +27,9 @@ def index():
 @app.route("/game/<int:game_id>")
 def game_page(game_id):
     """Editions, offers and price history; the page loads its data from /api/games/<id>."""
+    # A game merged into another (pipeline/rematch.py): old links go to the one that replaced it
+    if not game_exists(game_id) and (new_id := merged_into("game", [game_id]).get(game_id)):
+        return redirect(f"/game/{new_id}", code=301)
     return render_template("game.html", game_id=game_id)
 
 
