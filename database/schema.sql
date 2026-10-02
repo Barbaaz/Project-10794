@@ -198,6 +198,12 @@ IF COL_LENGTH('dbo.games', 'video_ids') IS NULL
     ALTER TABLE dbo.games ADD video_ids NVARCHAR(MAX) NULL;
 GO
 
+-- IGDB game modes and themes, for the tag filter (app/services/tag_service.py): "Single player,
+-- Co-operative" / "Horror, Survival"; NULL = not looked up yet, "" = IGDB lists none
+IF COL_LENGTH('dbo.games', 'game_modes') IS NULL
+    ALTER TABLE dbo.games ADD game_modes NVARCHAR(500) NULL, themes NVARCHAR(500) NULL;
+GO
+
 -- The store's photos of a product besides the cover (special editions: what's in the box),
 -- JSON list of URLs, read with the description
 IF COL_LENGTH('dbo.store_products', 'image_urls') IS NULL

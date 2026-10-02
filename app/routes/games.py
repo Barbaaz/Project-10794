@@ -23,7 +23,8 @@ def catalog():
     /api/games/catalog?platform=PS5&sort=name|price_asc|price_desc&page=1&per_page=48&editions=special&q=zelda&store=darty&genre=rpg
     editions=special: only editions above Standard (Deluxe, Collector's...)
     q: search words (all of them in the title); store: only editions that store has in stock;
-    genre: only games in that category (/api/genres)
+    genre: only games in that category (/api/genres); tags=coop,horror: only games with all of
+    them (/api/tags); pegi=12: PEGI rating up to that age
     """
     sort = choice_arg("sort", "name", game_service.CATALOG_SORTS)
     page = int_arg("page", 1, minimum=1)
@@ -32,6 +33,8 @@ def catalog():
     return jsonify(game_service.catalog(
         text_arg("platform"), sort, page, per_page, special_only, q=text_arg("q"), store=text_arg("store"),
         genre=text_arg("genre"),
+        tags=[t for t in (text_arg("tags") or "").split(",") if t][:5],
+        pegi=int_arg("pegi", None),
     ))
 
 

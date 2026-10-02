@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify
 
 from app.services.genre_service import genre_counts
+from app.services.tag_service import tag_list
 from db import fetch_all
 
 bp = Blueprint("stores", __name__, url_prefix="/api")
@@ -61,3 +62,9 @@ def list_platforms():
 def list_genres():
     """Categories with games in stock, for the catalogue's category filter: [{genre, count}]."""
     return jsonify(genre_counts())
+
+
+@bp.get("/tags")
+def list_tags():
+    """Tags for the filter: [{tag, group: mode | theme | price, count}] (count None for price tags)."""
+    return jsonify(tag_list())

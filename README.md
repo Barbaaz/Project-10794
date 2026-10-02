@@ -81,8 +81,9 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/deals?limit=12&min_percent=15` | Editions clearly cheaper at one store than at the next cheapest (15–60% gap, a comparison, not a discount); shown while there are no real discounts |
 | `GET /api/preorders?platform=` | Games on pre-order, one group per edition, soonest release first |
 | `GET /api/releases?platform=` | Games coming out from today on, by release date (`date_is_estimate` for "31/12" dates) |
-| `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special&q=&store=&genre=` | The whole catalogue (and the search): every edition with an offer in stock, paged; `editions=special` = only editions above Standard; `q` = words in the title; `store` = only what that store has in stock; `genre` = only games in that category |
+| `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special&q=&store=&genre=&tags=&pegi=` | The whole catalogue (and the search): every edition with an offer in stock, paged; `editions=special` = only editions above Standard; `q` = words in the title; `store` = only what that store has in stock; `genre` = only games in that category; `tags=coop,horror` = only games with all those tags; `pegi=12` = PEGI up to 12 |
 | `GET /api/genres` | Categories with games in stock (`{genre, count}`), from the IGDB genres; close genres share one (TBS / RTS / Tactical → `strategy`) |
+| `GET /api/tags` | Tags for the filter: game modes and themes from IGDB (with counts), price tags `on_sale`, `historical_low` (dropped to the lowest price ever), `used` |
 | `GET /api/games/editions?ids=12,34` | Favourites: these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
 | `GET /api/stores` | Active stores with `last_updated`, `last_status` / `last_error` of the latest run and `is_stale` (no update in 36 h) |
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |

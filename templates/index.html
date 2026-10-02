@@ -113,6 +113,7 @@ let currentData = null;     // the search results on screen (a catalogue page)
 let hasSearched = false;
 let stores = {};
 let genres = [];     // categories with games in stock (/api/genres), for the category filter
+let tags = [];       // tags for the tag filter (/api/tags): game modes, themes, prices
 let favorites = [];     // the logged-in user's favourite edition ids (kept in the account: loadFavoriteIds)
 // esc(), storeName(), saved() / save(), toggleDark(): static/common.js
 
@@ -227,8 +228,16 @@ const CATALOG_PAGE = 48;
 let catalogSort = saved("catalogSort", "name");
 // Store filter for the catalogue tabs and the search (/?…&store=darty); not remembered between visits
 let catalogStore = new URLSearchParams(location.search).get("store") || "";
-// Category filter (/?…&genre=rpg), the same way
+// Category, tag and PEGI filters (/?…&genre=rpg&tags=coop&pegi=12), the same way
 let catalogGenre = new URLSearchParams(location.search).get("genre") || "";
+let catalogTag = new URLSearchParams(location.search).get("tags") || "";
+let catalogPegi = new URLSearchParams(location.search).get("pegi") || "";
+const PEGI_AGES = [3, 7, 12, 16, 18];
+
+// The filters other than platform and sort: [address / API parameter, current value]
+function extraFilters() {
+    return [["store", catalogStore], ["genre", catalogGenre], ["tags", catalogTag], ["pegi", catalogPegi]];
+}
 
 // /?tab=catalog&page=3 opens on that page (bookmarks, the game page's back button)
 // (a page in a search address, /?q=zelda&page=2, belongs to the search, not to the tab)
@@ -261,8 +270,7 @@ async function showCatalogPage(page) {
 function listUrl(params, page = 1) {
     const query = new URLSearchParams(params);
     if (page > 1) query.set("page", page);
-    if (catalogStore) query.set("store", catalogStore);
-    if (catalogGenre) query.set("genre", catalogGenre);
+    for (const [name, value] of extraFilters()) if (value) query.set(name, value);
     return `/?${query}`;
 }
 
@@ -302,12 +310,11 @@ function pagination(page, pages, showPage) {
     return nav;
 }
 
-// /api/games/catalog parameters: the chosen sort, page, platform, store and category, plus `extra`
+// /api/games/catalog parameters: the chosen sort, page, platform and the other filters, plus `extra`
 function catalogParams(page, platform, extra = {}) {
     const params = new URLSearchParams({ ...extra, sort: catalogSort, page, per_page: CATALOG_PAGE });
     if (platform) params.set("platform", platform);
-    if (catalogStore) params.set("store", catalogStore);
-    if (catalogGenre) params.set("genre", catalogGenre);
+    for (const [name, value] of extraFilters()) if (value) params.set(name, value);
     return params;
 }
 
@@ -376,6 +383,10 @@ function renderCatalog(data, showPage = showCatalogPage) {
     const genreOptions = [...genres]
         .sort((a, b) => t(`genre_${a.genre}`).localeCompare(t(`genre_${b.genre}`), LOCALE))
         .map(g => `<option value="${esc(g.genre)}">${esc(t(`genre_${g.genre}`))}</option>`).join("");
+    const tagOptions = ["mode", "theme", "price"].map(group => `<optgroup label="${esc(t(`tag_group_${group}`))}">
+        ${tags.filter(x => x.group === group)
+            .map(x => `<option value="${esc(x.tag)}">${esc(t(`tag_${x.tag}`))}</option>`).join("")}</optgroup>`).join("");
+    const pegiOptions = PEGI_AGES.map(age => `<option value="${age}">${esc(t("pegi_up_to", { age }))}</option>`).join("");
     const wrap = document.createElement("div");
     wrap.innerHTML = `
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -384,6 +395,14 @@ function renderCatalog(data, showPage = showCatalogPage) {
             <label class="small text-body-secondary" for="catalog-genre">${t("genre_filter")}</label>
             <select id="catalog-genre" class="form-select form-select-sm w-auto">
                 <option value="">${t("all_genres")}</option>${genreOptions}
+            </select>
+            <label class="small text-body-secondary" for="catalog-tag">${t("tag_filter")}</label>
+            <select id="catalog-tag" class="form-select form-select-sm w-auto">
+                <option value="">${t("all_tags")}</option>${tagOptions}
+            </select>
+            <label class="small text-body-secondary" for="catalog-pegi">${t("pegi_filter")}</label>
+            <select id="catalog-pegi" class="form-select form-select-sm w-auto">
+                <option value="">${t("all_ages")}</option>${pegiOptions}
             </select>
             <label class="small text-body-secondary" for="catalog-store">${t("store_filter")}</label>
             <select id="catalog-store" class="form-select form-select-sm w-auto">
@@ -404,18 +423,19 @@ function renderCatalog(data, showPage = showCatalogPage) {
         save("catalogSort", catalogSort);
         await showPage(1);
     };
-    const storeSelect = wrap.querySelector("#catalog-store");
-    storeSelect.value = catalogStore;
-    storeSelect.onchange = async () => {
-        catalogStore = storeSelect.value;
-        await showPage(1);
+    // Store, category, tag, PEGI: a change loads page 1 with the new choice
+    const filterSelect = (id, value, set) => {
+        const box = wrap.querySelector(id);
+        box.value = value;
+        box.onchange = async () => {
+            set(box.value);
+            await showPage(1);
+        };
     };
-    const genreSelect = wrap.querySelector("#catalog-genre");
-    genreSelect.value = catalogGenre;
-    genreSelect.onchange = async () => {
-        catalogGenre = genreSelect.value;
-        await showPage(1);
-    };
+    filterSelect("#catalog-store", catalogStore, v => catalogStore = v);
+    filterSelect("#catalog-genre", catalogGenre, v => catalogGenre = v);
+    filterSelect("#catalog-tag", catalogTag, v => catalogTag = v);
+    filterSelect("#catalog-pegi", catalogPegi, v => catalogPegi = v);
 
     // Games not out yet: "Pré-reserva" on the cover, release date next to the platform
     const grid = cardGrid();
@@ -555,8 +575,10 @@ function renderFront() {
     if (config.paged) {
         const data = frontData[frontTab];
         const hasGroups = Boolean(data?.groups?.length);
-        if (hasGroups) content.appendChild(config.render(data));
-        empty.textContent = t(config.empty);
+        // nothing with the chosen filters: keep them on screen so they can be changed
+        const filtered = extraFilters().some(([, value]) => value);
+        if (hasGroups || filtered) content.appendChild(config.render(data));
+        empty.textContent = t(filtered ? "empty_filtered" : config.empty);
         empty.classList.toggle("d-none", hasGroups);
         return;
     }
@@ -817,7 +839,7 @@ function renderSearch() {
     container.innerHTML = "";
     const found = currentData?.total > 0;
     // nothing at all for these words: "no games found"; nothing at one store / in one category: keep the filters visible
-    const filtered = !!(catalogStore || catalogGenre);
+    const filtered = extraFilters().some(([, value]) => value);
     document.getElementById("empty").classList.toggle("d-none", found || filtered);
     if (found || filtered) container.appendChild(renderCatalog(currentData, p => search(p)));
 }
@@ -828,15 +850,17 @@ document.getElementById("consoleFilter").addEventListener("change", () => {
     FRONT_TABS[frontTab].platformAware ? selectFrontTab(frontTab) : renderFront();
 });
 
-// Platforms, store names and categories come from the API, so new ones appear without editing this page
+// Platforms, store names, categories and tags come from the API, so new ones appear without editing this page
 async function loadFilters() {
     try {
-        const [platforms, storeList, genreList] = await Promise.all([
+        const [platforms, storeList, genreList, tagList] = await Promise.all([
             fetch("/api/platforms").then(r => r.json()),
             fetch("/api/stores").then(r => r.json()),
             fetch("/api/genres").then(r => r.json()),
+            fetch("/api/tags").then(r => r.json()),
         ]);
         genres = genreList;
+        tags = tagList;
         const select = document.getElementById("consoleFilter");
         platforms.forEach(p => select.add(new Option(p.name, p.code)));
         storeList.forEach(s => stores[s.slug] = s);
