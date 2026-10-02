@@ -1,18 +1,11 @@
 """Store update status (/api/stores) and the daily-run notification text."""
-import importlib.util
-
 import pytest
 
-from conftest import ROOT
 from scheduler.notify import run_summary
 
 
 @pytest.fixture
-def client(app_on_test_db):
-    spec = importlib.util.spec_from_file_location("webapp", ROOT / "app.py")
-    webapp = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(webapp)
-
+def client(app_on_test_db, web_client):
     cursor = app_on_test_db.conn.cursor()
     runs = [
         ("press_start", "success", 2, None),
@@ -27,7 +20,7 @@ def client(app_on_test_db):
             "FROM stores WHERE slug = ?",
             -hours_ago, -hours_ago, status, error, slug,
         )
-    yield webapp.app.test_client()
+    yield web_client
     cursor.execute("DELETE FROM scrape_runs")
 
 

@@ -1,5 +1,4 @@
 import json
-import re
 import sys
 import uuid
 from pathlib import Path
@@ -22,14 +21,6 @@ def fixture_json():
     return lambda name: json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
-def run_sql_script(cursor, path, database):
-    """Run a .sql file from database/ against `database` (scripts are split on GO lines)."""
-    sql = (ROOT / "database" / path).read_text(encoding="utf-8").replace("USE Project10794;", f"USE {database};")
-    for batch in re.split(r"^\s*GO\s*$", sql, flags=re.MULTILINE | re.IGNORECASE):
-        if batch.strip():
-            cursor.execute(batch)
-
-
 @pytest.fixture(scope="session")
 def test_db():
     """
@@ -39,21 +30,18 @@ def test_db():
     """
     pyodbc = pytest.importorskip("pyodbc")
     from app.config import DB_CONNECTION_STRING
+    from database.setup import connect_master, setup, with_database
 
-    master = re.sub(r"DATABASE=[^;]*;", "DATABASE=master;", DB_CONNECTION_STRING)
     name = f"Project10794_Test_{uuid.uuid4().hex[:8]}"
-
+    url = with_database(DB_CONNECTION_STRING, name)
     try:
-        admin = pyodbc.connect(master, autocommit=True, timeout=5)
+        admin = connect_master(DB_CONNECTION_STRING)
     except pyodbc.Error as e:
         pytest.skip(f"SQL Server not available: {e}")
 
-    admin.cursor().execute(f"CREATE DATABASE {name}")
-    url = re.sub(r"DATABASE=[^;]*;", f"DATABASE={name};", DB_CONNECTION_STRING)
+    setup(url)     # creates the database and runs the real scripts, like on a new machine
     conn = pyodbc.connect(url, autocommit=True)
     try:
-        for script in ("schema.sql", "indexes.sql", "views.sql", "seed_stores.sql"):
-            run_sql_script(conn.cursor(), script, name)
         yield SimpleNamespace(conn=conn, url=url)
     finally:
         conn.close()
@@ -67,3 +55,10 @@ def app_on_test_db(test_db, monkeypatch):
     import db
     monkeypatch.setattr(db, "DB_CONNECTION_STRING", test_db.url)
     return test_db
+
+
+@pytest.fixture
+def web_client(app_on_test_db):
+    """The web app (app/web.py) on the throwaway database, for requests in tests."""
+    from app.web import app
+    return app.test_client()

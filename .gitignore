@@ -1,6 +1,6 @@
 # Python
 
-**pycache**/
+__pycache__/
 *.py[cod]
 *$py.class
 
@@ -15,6 +15,7 @@ ENV/
 
 .env
 .env.*
+!.env.example
 
 # Flask
 
@@ -65,3 +66,6 @@ htmlcov/
 .ipynb_checkpoints
 # Scraper logs (rotated daily)
 logs/
+
+# Demo data (stores' descriptions, IGDB texts: not ours to publish; share the file privately)
+database/demo/

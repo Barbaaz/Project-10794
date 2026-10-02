@@ -99,15 +99,8 @@ def test_rematch_merges_duplicates_and_records_redirects(cursor, app_on_test_db)
     assert cursor.execute("SELECT igdb_id FROM games WHERE id = ?", full_game).fetchone()[0] == 77
 
 
-def test_old_links_and_favourites_follow_a_merge(cursor, app_on_test_db):
-    import importlib.util
-    from conftest import ROOT
-
-    # app.py (the web app), not the app/ package
-    spec = importlib.util.spec_from_file_location("webapp", ROOT / "app.py")
-    web = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(web)
-    client = web.app.test_client()
+def test_old_links_and_favourites_follow_a_merge(cursor, web_client):
+    client = web_client
 
     full_game, full_edition = match(matcher(cursor), "Doom: The Dark Ages PS5")
     cursor.execute("INSERT INTO merged_ids (kind, old_id, new_id) VALUES ('game', 999001, ?), ('edition', 999002, ?)",

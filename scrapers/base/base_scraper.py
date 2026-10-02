@@ -69,10 +69,6 @@ class BaseScraper:
 
     # --- shared behaviour ----------------------------------------------
 
-    def run(self, query):
-        """Kept for app.py: same as search()."""
-        return self.search(query)
-
     def search(self, query):
         return self.crawl(lambda page: self.build_search_url(query, page))
 

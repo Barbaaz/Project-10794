@@ -8,17 +8,61 @@ database on a schedule; an API reads from it. Users will also be able to sell us
 scheduler → scrapers → pipeline (normalise / match / dedupe) → SQL Server ← API
 ```
 
-## Setup
+## Try it with Docker
+
+The easiest way to run it on any computer (Windows, macOS, Linux): only
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) is needed. It starts SQL Server
+Express and the site in containers and creates the database by itself.
+
+1. Get the code and go into its folder:
+   ```
+   git clone https://github.com/Barbaaz/Project-10794.git
+   cd Project-10794
+   ```
+2. Copy `.env.example` to `.env` and set your own `DB_PASSWORD` in it (8+ characters with upper
+   case, lower case and a number).
+3. **Demo data** (recommended): if you were given a `demo.json.gz` file, put it in `database/demo/`.
+   It holds the games and prices collected so far, so you don't have to scrape the stores. It isn't
+   in the repository (it contains the stores' descriptions), so ask for it.
+4. Start:
+   ```
+   docker compose up --build
+   ```
+   The first start downloads SQL Server (about 600 MB) and takes a few minutes. When the log says
+   `Serving on http://0.0.0.0:5000`, open **http://localhost:5000**.
+
+Stop with `Ctrl+C` (or `docker compose down`); the data is kept for the next start
+(`docker compose down -v` deletes it).
+
+**Without demo data** the site starts empty. Fill it by scraping, one store at a time, gently (each
+store takes a few minutes; please don't repeat runs, the stores rate-limit):
+```
+docker compose run --rm web python -m scheduler.run_single_store cstech
+```
+Other stores: `press_start`, `mega-mania`, `darty`. Run the tests with
+`docker compose run --rm web python -m pytest -q`.
+
+On Apple Silicon Macs, enable "Use Rosetta for x86/amd64 emulation" in Docker Desktop's settings
+(Microsoft only publishes SQL Server for x86).
+
+## Setup on Windows without Docker
+
+Needs SQL Server Express and the [ODBC Driver 17 or 18](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server).
+The connection is in `app/config.py` (or the `DB_CONNECTION_STRING` environment variable).
 
 ```powershell
 pip install -r requirements.txt
-sqlcmd -S "localhost\SQLEXPRESS" -E -b -i database\schema.sql -i database\indexes.sql -i database\views.sql -i database\seed_stores.sql
+python -m database.setup                                        # creates / updates the database
+python -m database.setup --demo database\demo\demo.json.gz      # ... and loads demo data, if you have it
 ```
+
+Sharing the collected data: `python -m database.demo export database\demo\demo.json.gz`
+(`--without-texts` leaves out the stores' descriptions and IGDB summaries). Never commit it.
 
 ## API
 
 ```powershell
-python app.py      # http://127.0.0.1:5000 (web page) and /api/...
+python app.py      # development server: http://127.0.0.1:5000 (web page) and /api/...
 ```
 
 Read-only JSON, served from the database (nothing is scraped on request):
@@ -33,7 +77,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/deals?limit=12&min_percent=15` | Editions clearly cheaper at one store than at the next cheapest (15–60% gap, a comparison, not a discount); shown while there are no real discounts |
 | `GET /api/preorders?platform=` | Games on pre-order, one group per edition, soonest release first |
 | `GET /api/releases?platform=` | Games coming out from today on, by release date (`date_is_estimate` for "31/12" dates) |
-| `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special` | The whole catalogue: every edition with an offer in stock, paged; `editions=special` = only editions above Standard |
+| `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special&q=&store=` | The whole catalogue (and the search): every edition with an offer in stock, paged; `editions=special` = only editions above Standard; `q` = words in the title; `store` = only what that store has in stock |
 | `GET /api/games/editions?ids=12,34` | Favourites: these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
 | `GET /api/stores` | Active stores with `last_updated`, `last_status` / `last_error` of the latest run and `is_stale` (no update in 36 h) |
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |

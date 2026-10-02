@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+!.env.example
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.venv
+venv
+logs
+*.bak
+# mounted at run time instead (see docker-compose.yml), never baked into the image
+database/demo
