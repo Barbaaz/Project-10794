@@ -54,8 +54,11 @@
 <div class="container py-4" style="max-width: 1000px;">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <a href="/" onclick="if (document.referrer.includes(location.host)) { history.back(); return false; }"
-           class="btn btn-sm btn-outline-secondary">← Pesquisa</a>
+        <div class="d-flex gap-2">
+            <a href="/" onclick="if (document.referrer.includes(location.host)) { history.back(); return false; }"
+               class="btn btn-sm btn-outline-secondary">← Pesquisa</a>
+            <a href="/" class="btn btn-sm btn-outline-primary">🏠 Início</a>
+        </div>
         <button onclick="toggleDark()" class="btn btn-sm btn-secondary" aria-label="Modo escuro">🌙</button>
     </div>
 

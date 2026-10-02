@@ -103,6 +103,7 @@ def run_store(slug, accept_drop=False, force=False):
         else:
             finish_run(run_id, "success", products_found=len(products))
 
+        stats["status"] = "warning" if suspicious else "success"
         log.info("[%s] done: %s", slug, stats)
         return stats
 

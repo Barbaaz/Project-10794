@@ -30,10 +30,11 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/games/<id>/prices?days=90` | Price history per offer |
 | `GET /api/discounts?platform=&min_percent=&page=` | Offers that are really on sale, biggest discount first |
 | `GET /api/discounts/featured?limit=12&min_percent=10` | Front page: biggest real discounts, one per game edition (new, in stock) |
+| `GET /api/deals?limit=12&min_percent=15` | Editions clearly cheaper at one store than at the next cheapest (15–60% gap, a comparison, not a discount); shown while there are no real discounts |
 | `GET /api/preorders?platform=` | Games on pre-order, one group per edition, soonest release first |
 | `GET /api/releases?platform=` | Games coming out from today on, by release date (`date_is_estimate` for "31/12" dates) |
 | `GET /api/games/editions?ids=12,34` | Favourites: these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
-| `GET /api/stores` | Active stores and when each was last updated |
+| `GET /api/stores` | Active stores with `last_updated`, `last_status` / `last_error` of the latest run and `is_stale` (no update in 36 h) |
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |
 
 An offer has `price`, `in_stock`, `condition` (`new`/`used`), `url`, and — only when the
@@ -94,7 +95,10 @@ Unregister-ScheduledTask -TaskName Project10794-Scrapers -Confirm:$false        
 ```
 
 The task runs while you are logged on; if the computer was off at the scheduled time,
-it runs as soon as it is on again. A full run takes about 8 minutes. A new price row is
+it runs as soon as it is on again.
+
+When a store fails or looks half-broken, the daily run shows a **Windows notification**, and
+the front page footer shows ⚠ next to that store (also when a store hasn't updated for 36 h). A full run takes about 8 minutes. A new price row is
 only stored when a price or stock status changes.
 
 ## Tests

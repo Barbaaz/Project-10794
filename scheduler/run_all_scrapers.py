@@ -10,13 +10,14 @@ import logging
 import sys
 
 from scheduler.jobs import SCRAPERS, RanRecently, active_store_slugs, run_store, setup_logging
+from scheduler.notify import notify, run_summary
 
 log = logging.getLogger(__name__)
 
 
 def main():
     setup_logging()
-    failed = []
+    failed, warnings = [], []
 
     for slug in active_store_slugs():
         if slug not in SCRAPERS:
@@ -25,11 +26,18 @@ def main():
 
         # One store failing must not stop the others
         try:
-            run_store(slug)
+            stats = run_store(slug)
+            if stats.get("status") == "warning":
+                warnings.append(slug)
         except RanRecently as e:
             log.info("%s, skipped", e)
         except Exception:
             failed.append(slug)
+
+    # Tell the user on their desktop, so a broken store doesn't go unnoticed
+    summary = run_summary(failed, warnings)
+    if summary:
+        notify(*summary)
 
     if failed:
         log.error("Failed stores: %s", ", ".join(failed))

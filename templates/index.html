@@ -40,8 +40,12 @@
 <div class="container-xxl py-4">
 
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h3 mb-0">🎮 Game Price Tracker</h1>
-        <button onclick="toggleDark()" class="btn btn-sm btn-secondary" aria-label="Modo escuro">🌙</button>
+        <h1 class="h3 mb-0"><a href="/" onclick="goHome(); return false;" class="link-body-emphasis text-decoration-none">🎮 Game Price Tracker</a></h1>
+        <div class="d-flex gap-2">
+            <!-- Back to the front page; shown while search results are on screen -->
+            <button id="home-btn" onclick="goHome()" class="btn btn-sm btn-outline-primary d-none">🏠 Início</button>
+            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" aria-label="Modo escuro">🌙</button>
+        </div>
     </div>
 
     <form class="row g-2 mb-4" onsubmit="handleSearch(event)">
@@ -64,7 +68,7 @@
     <!-- Front page: the visitor picks what to see; the choice is remembered in this browser -->
     <section id="front" class="mb-4">
         <ul class="nav nav-pills mb-3 gap-1" role="tablist">
-            <li class="nav-item"><button class="nav-link" data-tab="discounts" role="tab">🔥 Descontos em destaque</button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="discounts" role="tab">🔥 Descontos e melhores preços</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="preorders" role="tab">📦 Pré-reservas</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="releases" role="tab">📅 Calendário de lançamentos</button></li>
             <li class="nav-item"><button class="nav-link" data-tab="favorites" role="tab">⭐ Favoritos</button></li>
@@ -78,6 +82,9 @@
     <p id="empty" class="text-body-secondary d-none">Nenhum jogo encontrado.</p>
 
     <div id="results" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 row-cols-xxl-8 g-2"></div>
+
+    <!-- When each store's prices were last updated; ⚠ when a run failed or a store is out of date -->
+    <footer id="store-status" class="small text-body-secondary border-top mt-5 pt-3"></footer>
 </div>
 
 <script>
@@ -170,7 +177,14 @@ function makeCard(group, { coverBadge = "", extraLine = "" } = {}) {
 
 const FRONT_TABS = {
     discounts: {
-        url: "/api/discounts/featured",
+        // Real discounts need 30 days of history; until there are some, show the biggest
+        // price gaps between stores (clearly labelled as a comparison, not a discount)
+        load: async () => {
+            const discounts = await fetch("/api/discounts/featured").then(r => r.json());
+            if (discounts.length) return discounts;
+            const deals = await fetch("/api/deals").then(r => r.json());
+            return deals.map(d => ({ ...d, isStoreDeal: true }));
+        },
         render: renderDiscounts,
         empty: "Ainda sem descontos para mostrar. Só contam descontos reais: o preço tem de estar abaixo "
              + "do mais baixo dos 30 dias anteriores, por isso os primeiros aparecem após um mês de histórico.",
@@ -225,8 +239,12 @@ async function selectFrontTab(tab) {
         document.getElementById("front-empty").classList.add("d-none");
         document.getElementById("front-loading").classList.remove("d-none");
         try {
-            const url = typeof config.url === "function" ? config.url() : config.url;
-            frontData[tab] = await fetch(url).then(r => r.json());
+            if (config.load) {
+                frontData[tab] = await config.load();
+            } else {
+                const url = typeof config.url === "function" ? config.url() : config.url;
+                frontData[tab] = await fetch(url).then(r => r.json());
+            }
         } catch (e) {
             console.error("Erro a carregar", tab, e);
             frontData[tab] = [];
@@ -335,18 +353,35 @@ function renderRestockAlerts(alerts) {
     };
 }
 
-// Biggest real discounts (from our own price history, never the store's crossed-out price)
+// Biggest real discounts (from our own price history, never the store's crossed-out price),
+// or, while there are none yet, the biggest price gaps between stores
 function renderDiscounts(offers) {
+    const wrap = document.createElement("div");
+    const storeDeals = offers[0]?.isStoreDeal;
+
+    if (storeDeals) {
+        wrap.innerHTML = `
+            <p class="small text-body-secondary mb-3">
+                <strong>Melhores preços entre lojas.</strong> Ainda não há descontos reais para mostrar
+                (o preço tem de estar abaixo do mais baixo dos 30 dias anteriores, e o histórico começou
+                a 1 de outubro). Entretanto, estes jogos estão bem mais baratos numa loja do que na seguinte.
+            </p>`;
+    }
+
     const grid = cardGrid();
     offers.forEach(o => {
         const name = o.edition_key === "" ? o.title : `${o.title} — ${o.edition}`;
         const group = { name, console: o.platform, platform_name: o.platform_name, game_id: o.game_id,
                         edition_id: o.edition_id, offers: [o] };
-        grid.appendChild(makeCard(group, {
+        grid.appendChild(makeCard(group, storeDeals ? {
+            coverBadge: `<span class="badge text-bg-success discount-badge">-${o.savings_percent}% vs outras lojas</span>`,
+            extraLine: `<span class="text-body-secondary">Na loja seguinte: ${eur.format(o.next_price)} (${esc(storeName(o.next_store))})</span>`,
+        } : {
             coverBadge: `<span class="badge text-bg-danger discount-badge">-${o.discount_percent}%</span>`,
         }));
     });
-    return grid;
+    wrap.appendChild(grid);
+    return wrap;
 }
 
 function renderPreorders(groups) {
@@ -425,6 +460,14 @@ function releaseItem(g, note = "") {
 
 function showFront(show) {
     document.getElementById("front").classList.toggle("d-none", !show);
+    document.getElementById("home-btn").classList.toggle("d-none", show);
+}
+
+// Clear the search and show the front page tabs again
+function goHome() {
+    document.getElementById("q").value = "";
+    search();
+    window.scrollTo({ top: 0 });
 }
 
 document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => selectFrontTab(b.dataset.tab)));
@@ -480,9 +523,31 @@ async function loadFilters() {
         const select = document.getElementById("consoleFilter");
         platforms.forEach(p => select.add(new Option(p.name, p.code)));
         storeList.forEach(s => stores[s.slug] = s);
+        renderStoreStatus(storeList);
     } catch (e) {
         console.error("Erro a carregar filtros:", e);
     }
+}
+
+function timeAgo(iso) {
+    const hours = (Date.now() - new Date(iso)) / 3600000;
+    if (hours < 1) return "há menos de 1 h";
+    if (hours < 48) return `há ${Math.floor(hours)} h`;
+    return `há ${Math.floor(hours / 24)} dias`;
+}
+
+// "Preços atualizados: CSTech há 3 h · Mega Mania há 3 h · ⚠ Press Start: falhou há 1 h"
+function renderStoreStatus(storeList) {
+    const parts = storeList.map(s => {
+        const problem = s.last_status === "failed" ? "a última atualização falhou"
+                      : s.last_status === "warning" ? "a última atualização teve um problema"
+                      : s.is_stale ? "desatualizada" : null;
+        const when = s.last_updated ? `atualizado ${timeAgo(s.last_updated)}` : "nunca atualizado";
+        if (!problem) return `<span>${esc(s.name)} ${when}</span>`;
+        return `<span class="text-warning-emphasis" title="${esc(s.last_error || "")}">⚠ ${esc(s.name)}: ${problem} (${when})</span>`;
+    });
+    document.getElementById("store-status").innerHTML =
+        `Preços das lojas, atualizados uma vez por dia: ${parts.join(" · ")}`;
 }
 
 // Favourites are game editions, saved in this browser by edition id

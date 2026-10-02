@@ -14,6 +14,15 @@ def featured_discounts():
     ))
 
 
+@bp.get("/deals")
+def best_store_deals():
+    """Editions clearly cheaper at one store than at the next cheapest (a comparison, not a discount)."""
+    return jsonify(price_service.best_store_deals(
+        limit=int_arg("limit", 12, minimum=1, maximum=50),
+        min_percent=int_arg("min_percent", 15, minimum=1, maximum=100),
+    ))
+
+
 @bp.get("/preorders")
 def preorders():
     """Pre-order games, one group per edition, soonest release first."""
