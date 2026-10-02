@@ -13,6 +13,9 @@ log = logging.getLogger(__name__)
 
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 
+# A run finding less than this share of the last successful run's products is suspicious
+MIN_PRODUCT_RATIO = 0.7
+
 # To add a store: write its scraper, register it here and add it to database/seed_stores.sql
 SCRAPERS = {
     "press_start": PressStartScraper,
@@ -48,8 +51,11 @@ def active_store_slugs():
         conn.close()
 
 
-def run_store(slug):
-    """Scrape one store's catalogue into the database, logging the run in scrape_runs."""
+def run_store(slug, accept_drop=False):
+    """
+    Scrape one store's catalogue into the database, logging the run in scrape_runs.
+    accept_drop=True: the store really has fewer products now; deactivate the missing ones.
+    """
     if slug not in SCRAPERS:
         raise ValueError(f"No scraper registered for '{slug}'. Known: {', '.join(SCRAPERS)}")
 
@@ -60,8 +66,24 @@ def run_store(slug):
         if not products:
             raise RuntimeError("Scraper returned 0 products, the site's HTML may have changed")
 
-        stats = process_products(slug, products)
-        finish_run(run_id, "success", products_found=len(products))
+        previous = previous_product_count(slug)
+        suspicious = not accept_drop and is_suspicious_drop(len(products), previous)
+
+        # A half-broken scraper (e.g. prices no longer found) returns only part of the
+        # catalogue. Prices are still saved, but nothing is deactivated until someone checks.
+        stats = process_products(slug, products, full_catalog=not suspicious)
+
+        if suspicious:
+            message = (
+                f"Only {len(products)} products, last successful run had {previous}. "
+                f"Missing products were NOT deactivated; the site may have changed. "
+                f"If the store really shrank: python -m scheduler.run_single_store {slug} --accept-drop"
+            )
+            finish_run(run_id, "warning", products_found=len(products), error_message=message)
+            log.warning("[%s] %s", slug, message)
+        else:
+            finish_run(run_id, "success", products_found=len(products))
+
         log.info("[%s] done: %s", slug, stats)
         return stats
 
@@ -69,6 +91,25 @@ def run_store(slug):
         log.exception("[%s] failed", slug)
         finish_run(run_id, "failed", error_message=str(e))
         raise
+
+
+def is_suspicious_drop(found, previous, min_ratio=MIN_PRODUCT_RATIO):
+    """True when a run found much less than the last successful one (no history = not suspicious)."""
+    return bool(previous) and found < previous * min_ratio
+
+
+def previous_product_count(slug):
+    """products_found of the store's last successful run ('warning' runs don't count)."""
+    conn = get_connection()
+    try:
+        row = conn.cursor().execute(
+            "SELECT TOP 1 r.products_found FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
+            "WHERE s.slug = ? AND r.status = 'success' ORDER BY r.id DESC",
+            slug,
+        ).fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
 
 
 def start_run(slug):

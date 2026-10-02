@@ -1,0 +1,141 @@
+{
+ "products": [
+  {
+   "title": "Dune: Awakening Day One Edition PS5",
+   "handle": "dune-awakening-day-one-edition-ps5",
+   "product_type": "Jogos PS5",
+   "tags": [
+    "Jogos PS5",
+    "order"
+   ],
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "44.89",
+     "compare_at_price": "49.99",
+     "available": true
+    }
+   ],
+   "images": [
+    {
+     "id": 85905191240022,
+     "created_at": "2026-10-02T00:52:24+01:00",
+     "position": 1,
+     "updated_at": "2026-10-02T00:52:28+01:00",
+     "product_id": 11330181955926,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0376/2320/1930/files/dune-awakening-ps5.png?v=1790898748",
+     "width": 1540,
+     "height": 2259
+    }
+   ]
+  },
+  {
+   "title": "Silent Hill: Townfall Day One Edition Steelbook PS5",
+   "handle": "sillent-hill",
+   "product_type": "Jogos PS5",
+   "tags": [
+    "Jogos PS5"
+   ],
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "64.99",
+     "compare_at_price": "69.99",
+     "available": false
+    }
+   ],
+   "images": [
+    {
+     "id": 84372176240982,
+     "created_at": "2026-08-31T18:00:43+01:00",
+     "position": 1,
+     "updated_at": "2026-08-31T18:00:47+01:00",
+     "product_id": 11215129051478,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0376/2320/1930/files/sillent-hill-ps5-steelbook-ps5-3.png?v=1788195647",
+     "width": 1054,
+     "height": 1086
+    }
+   ]
+  },
+  {
+   "title": "Yakuza Series 20th Anniversary Edition PC",
+   "handle": "yakuza-series-20th-anniversary-edition-pc",
+   "product_type": "Jogos PC",
+   "tags": [
+    "Jogos PC",
+    "sameday"
+   ],
+   "variants": [
+    {
+     "title": "UK",
+     "price": "69.99",
+     "compare_at_price": "79.99",
+     "available": true
+    },
+    {
+     "title": "ES/IT",
+     "price": "69.99",
+     "compare_at_price": "79.99",
+     "available": false
+    },
+    {
+     "title": "FR",
+     "price": "69.99",
+     "compare_at_price": "79.99",
+     "available": false
+    }
+   ],
+   "images": [
+    {
+     "id": 71242046669142,
+     "created_at": "2026-01-13T12:13:46+00:00",
+     "position": 1,
+     "updated_at": "2026-01-13T12:14:20+00:00",
+     "product_id": 10023139148118,
+     "variant_ids": [
+      52040729985366
+     ],
+     "src": "https://cdn.shopify.com/s/files/1/0376/2320/1930/files/yakuza-series-20th-anniversary-edition-pc_c9eb71b2-e902-40f4-97b0-8267f50d43d1.jpg?v=1768306460",
+     "width": 800,
+     "height": 800
+    }
+   ]
+  },
+  {
+   "title": "Bolsa Jurassic World Debossed para Nintendo Switch e Switch 2",
+   "handle": "bolsa-jurassic-world-debossed-para-nintendo-switch-e-switch-2",
+   "product_type": "Nintendo",
+   "tags": [
+    "Acessórios Nintendo",
+    "Acessórios Nintendo 2",
+    "Bolsas",
+    "Nintendo",
+    "Nintendo 2",
+    "order"
+   ],
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "19.99",
+     "compare_at_price": "19.99",
+     "available": true
+    }
+   ],
+   "images": [
+    {
+     "id": 85715892273494,
+     "created_at": "2026-09-27T14:00:50+01:00",
+     "position": 1,
+     "updated_at": "2026-09-27T14:00:52+01:00",
+     "product_id": 11307733385558,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0376/2320/1930/files/lazerbuilt-jurassic-world-tasche-fuer-nintendo-switch-csw2jw-claw.jpg?v=1790514052",
+     "width": 519,
+     "height": 313
+    }
+   ]
+  }
+ ]
+}

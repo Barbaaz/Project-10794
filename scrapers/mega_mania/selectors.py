@@ -6,4 +6,4 @@ BUY_BUTTON = ".produto_lista_botoes__bt"               # first one: "COMPRAR NOV
 BUY_LABEL = ".produto_lista_botoes__bt_texto"
 PRICE = ".produto_lista_botoes__bt_preco"              # price the customer pays
 OLD_PRICE = ".produto_desconto_valor"                  # crossed-out price, only when on sale
-OUT_OF_STOCK = ".produto_lista_stock_esgotado"
+OUT_OF_STOCK = ".produto_lista_stock_esgotado"              # also used for "Pré-encomenda"; check the text

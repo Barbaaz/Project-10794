@@ -107,7 +107,8 @@ CREATE TABLE dbo.scrape_runs (
     status          VARCHAR(10)    NOT NULL DEFAULT 'running',
     products_found  INT            NULL,
     error_message   NVARCHAR(MAX)  NULL,
-    CONSTRAINT ck_scrape_runs_status CHECK (status IN ('running', 'success', 'failed'))
+    -- warning: far fewer products than last time, missing products were not deactivated
+    CONSTRAINT ck_scrape_runs_status CHECK (status IN ('running', 'success', 'warning', 'failed'))
 );
 GO
 
@@ -150,6 +151,15 @@ GO
 -- ============================================================
 -- Upgrades for databases created before a column existed
 -- ============================================================
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints
+               WHERE name = 'ck_scrape_runs_status' AND definition LIKE '%warning%')
+BEGIN
+    ALTER TABLE dbo.scrape_runs DROP CONSTRAINT ck_scrape_runs_status;
+    ALTER TABLE dbo.scrape_runs ADD CONSTRAINT ck_scrape_runs_status
+        CHECK (status IN ('running', 'success', 'warning', 'failed'));
+END
+GO
 
 IF COL_LENGTH('dbo.platforms', 'sort_order') IS NULL
     ALTER TABLE dbo.platforms ADD sort_order INT NOT NULL DEFAULT 100;

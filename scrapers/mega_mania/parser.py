@@ -32,7 +32,7 @@ def parse_products(html, console=None):
                 "condition": detect_condition(label, name),   # the button says "COMPRAR USADO" for used games
                 "price": price,
                 "old_price": parse_price(text_of(card.select_one(OLD_PRICE))),
-                "in_stock": card.select_one(OUT_OF_STOCK) is None,
+                "in_stock": parse_stock(card),
                 "url": absolute_url(BASE_URL, card.select_one(LINK)["href"]),
                 "image": absolute_url(BASE_URL, image_tag.get("src")) if image_tag else None,
             })
@@ -41,6 +41,12 @@ def parse_products(html, console=None):
             log.warning("[Mega-Mania Parser] Erro: %s", e)
 
     return products
+
+
+def parse_stock(card):
+    # The "esgotado" box is also used for pre-orders ("Pré-encomenda"), which can be bought
+    tag = card.select_one(OUT_OF_STOCK)
+    return tag is None or "esgotado" not in tag.get_text(strip=True).lower()
 
 
 def text_of(tag):

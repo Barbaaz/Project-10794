@@ -87,6 +87,29 @@ The task runs while you are logged on; if the computer was off at the scheduled 
 it runs as soon as it is on again. A full run takes about 8 minutes. A new price row is
 only stored when a price or stock status changes.
 
+## Tests
+
+```powershell
+python -m pytest
+```
+
+- Parsers run against saved store pages in `tests/fixtures`. When a store changes its site,
+  refresh the fixture from the live page and see which tests break.
+- Edition splitting, platform detection, price parsing, the "código na caixa" exclusion and the
+  half-broken-scraper safeguard are plain unit tests.
+- The discount rule runs against a throwaway SQL Server database created and dropped by the
+  tests (skipped when SQL Server isn't available).
+
+## Safeguard against a half-broken scraper
+
+If a store returns less than 70% of its last successful run's products (e.g. the site changed
+and prices are no longer found), prices are still saved but missing products are **not**
+deactivated, and the run is marked `warning` in `scrape_runs`. If the store really shrank:
+
+```powershell
+python -m scheduler.run_single_store <store> --accept-drop
+```
+
 ## Stores
 
 | Store       | Source                                   |
