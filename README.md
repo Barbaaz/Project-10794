@@ -198,8 +198,10 @@ pages (one request per game). Details in the project plan.
 ### Adding a store
 
 1. Create `scrapers/<store>/scraper.py` with a class extending `BaseScraper`
-   (HTML stores: set `catalog_urls`, implement `build_page_url` and `parse_listing`)
-   or `ShopifyScraper` (Shopify stores: only `store_slug` and `base_url`; stores selling more
-   than games also set `collections`, see `scrapers/darty/scraper.py`).
+   (HTML stores: set `catalog_urls`, `listing_parser` — the `parse_products` of the store's
+   `parser.py` — and, if its product pages are useful, `product_page_parser`; implement
+   `build_page_url`) or `scrapers.base.shopify.ShopifyScraper` (Shopify stores: `store_slug`,
+   `base_url`; stores selling more than games also set `collections` / `game_type_prefix`, see
+   `scrapers/darty/scraper.py`).
 2. Register it in `SCRAPERS` in `scheduler/jobs.py`.
 3. Add a row to `database/seed_stores.sql` with the same slug and re-run it.

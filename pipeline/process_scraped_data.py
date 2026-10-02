@@ -1,8 +1,7 @@
-import json
 import logging
 
 from core.editions import is_excluded
-from db import get_connection
+from db import connection, json_or_none
 from pipeline.deduplicator import deduplicate
 from pipeline.matcher import GameMatcher
 
@@ -69,8 +68,7 @@ def process_products(store_slug, products, full_catalog=True):
         "new_products": 0, "price_changes": 0, "deactivated": 0,
     }
 
-    conn = get_connection()
-    try:
+    with connection() as conn:
         cursor = conn.cursor()
 
         row = cursor.execute("SELECT id FROM stores WHERE slug = ?", store_slug).fetchone()
@@ -96,8 +94,7 @@ def process_products(store_slug, products, full_catalog=True):
             release = (p.get("is_preorder", False), p.get("release_date"), p.get("release_date_checked", False))
             checked = p.get("details_checked", False)
             description = p.get("description")
-            details = json.dumps(p["details"], ensure_ascii=False) if p.get("details") else None
-            images = json.dumps(p["images"]) if p.get("images") else None
+            details, images = json_or_none(p.get("details")), json_or_none(p.get("images"))
             action, store_product_id = cursor.execute(
                 UPSERT_STORE_PRODUCT,
                 store_id, p["url"], p["condition"],
@@ -124,12 +121,4 @@ def process_products(store_slug, products, full_catalog=True):
             )
             stats["deactivated"] = cursor.rowcount
 
-        conn.commit()
-        return stats
-
-    except Exception:
-        conn.rollback()
-        raise
-
-    finally:
-        conn.close()
+    return stats

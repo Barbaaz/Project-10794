@@ -3,7 +3,7 @@ import sys
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
-from db import get_connection
+from db import connection
 from pipeline.process_scraped_data import process_products
 from scrapers.cstech.scraper import CSTechScraper
 from scrapers.darty.scraper import DartyScraper
@@ -54,12 +54,9 @@ def setup_logging():
 
 
 def active_store_slugs():
-    conn = get_connection()
-    try:
+    with connection() as conn:
         rows = conn.cursor().execute("SELECT slug FROM stores WHERE is_active = 1 ORDER BY id").fetchall()
-        return [r[0] for r in rows]
-    finally:
-        conn.close()
+    return [r[0] for r in rows]
 
 
 class RanRecently(Exception):
@@ -124,84 +121,64 @@ def is_suspicious_drop(found, previous, min_ratio=MIN_PRODUCT_RATIO):
 
 def previous_product_count(slug):
     """products_found of the store's last successful run ('warning' runs don't count)."""
-    conn = get_connection()
-    try:
+    with connection() as conn:
         row = conn.cursor().execute(
             "SELECT TOP 1 r.products_found FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
             "WHERE s.slug = ? AND r.status = 'success' ORDER BY r.id DESC",
             slug,
         ).fetchone()
-        return row[0] if row else None
-    finally:
-        conn.close()
+    return row[0] if row else None
 
 
 def hours_since_last_success(slug):
-    conn = get_connection()
-    try:
+    with connection() as conn:
         row = conn.cursor().execute(
             "SELECT DATEDIFF(MINUTE, MAX(r.finished_at), SYSUTCDATETIME()) / 60.0 "
             "FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
             "WHERE s.slug = ? AND r.status IN ('success', 'warning')",
             slug,
         ).fetchone()
-        return float(row[0]) if row and row[0] is not None else None
-    finally:
-        conn.close()
+    return float(row[0]) if row and row[0] is not None else None
 
 
 def fresh_release_urls(slug):
     """Pre-orders whose release date was read in the last RELEASE_DATE_RECHECK_DAYS days."""
-    conn = get_connection()
-    try:
-        rows = conn.cursor().execute(
-            "SELECT sp.url FROM store_products sp JOIN stores s ON s.id = sp.store_id "
-            "WHERE s.slug = ? AND sp.release_date_checked_at > DATEADD(DAY, ?, SYSUTCDATETIME())",
-            slug, -RELEASE_DATE_RECHECK_DAYS,
-        ).fetchall()
-        return {r[0] for r in rows}
-    finally:
-        conn.close()
+    return store_urls(slug, "sp.release_date_checked_at > DATEADD(DAY, ?, SYSUTCDATETIME())",
+                      -RELEASE_DATE_RECHECK_DAYS)
 
 
 def known_detail_urls(slug):
     """Products whose product page (description) was already read; read once."""
-    conn = get_connection()
-    try:
+    return store_urls(slug, "sp.details_checked_at IS NOT NULL")
+
+
+def store_urls(slug, condition, *params):
+    """The URLs of a store's products matching `condition` (SQL on store_products sp)."""
+    with connection() as conn:
         rows = conn.cursor().execute(
             "SELECT sp.url FROM store_products sp JOIN stores s ON s.id = sp.store_id "
-            "WHERE s.slug = ? AND sp.details_checked_at IS NOT NULL",
-            slug,
+            f"WHERE s.slug = ? AND {condition}",
+            slug, *params,
         ).fetchall()
-        return {r[0] for r in rows}
-    finally:
-        conn.close()
+    return {r[0] for r in rows}
 
 
 def start_run(slug):
-    conn = get_connection()
-    try:
+    with connection() as conn:
         run_id = conn.cursor().execute(
             "INSERT INTO scrape_runs (store_id) OUTPUT INSERTED.id "
             "SELECT id FROM stores WHERE slug = ?",
             slug,
         ).fetchone()
-        if not run_id:
-            raise ValueError(f"Store '{slug}' is not in the stores table (see database/seed_stores.sql)")
-        conn.commit()
-        return run_id[0]
-    finally:
-        conn.close()
+    if not run_id:
+        raise ValueError(f"Store '{slug}' is not in the stores table (see database/seed_stores.sql)")
+    return run_id[0]
 
 
 def finish_run(run_id, status, products_found=None, error_message=None):
-    conn = get_connection()
-    try:
+    with connection() as conn:
         conn.cursor().execute(
             "UPDATE scrape_runs SET finished_at = SYSUTCDATETIME(), status = ?, "
             "products_found = ?, error_message = ? WHERE id = ?",
             status, products_found, error_message, run_id,
         )
-        conn.commit()
-    finally:
-        conn.close()

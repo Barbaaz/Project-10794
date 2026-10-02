@@ -1,8 +1,11 @@
 import json
 import re
 
-from core.normalizer import normalize_name
-from db import fetch_all, fetch_one
+from app.services.common import (
+    EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, card_group, lowest_prices, page_result, title_word_filters,
+)
+from app.services.release_service import game_release_date, game_release_dates
+from db import fetch_all, fetch_one, placeholders
 
 # A special edition whose game is a download code, not a disc ("Jogo Completo (Download Digital)")
 DIGITAL_CODE = re.compile(r"download\s+digital|digital\s+download|c[oó]digo\s+(de\s+)?(download|digital|descarga)",
@@ -11,28 +14,10 @@ DIGITAL_CODE = re.compile(r"download\s+digital|digital\s+download|c[oó]digo\s+(
 # A favourite that came back in stock is flagged for this many days
 RESTOCK_ALERT_DAYS = 14
 
-# Offer columns sent to clients. The store's own crossed-out price is deliberately
-# not included: "was_price" is only set when our price history confirms a real discount.
-OFFER_COLUMNS = """
-    o.store_product_id AS offer_id, o.game_id, o.edition_id,
-    s.slug AS store, s.name AS store_name,
-    o.condition, o.price, o.in_stock, o.is_preorder, o.url, o.image_url AS image, o.external_name,
-    CASE WHEN o.is_discount = 1 THEN o.reference_price END AS was_price,
-    o.discount_percent, o.is_discount, o.last_seen_at
-"""
-
-# TWO_STEPS: queries pick the edition / game ids first, then read current_offers with
-# "IN (ids)". Joining current_offers to a subquery makes SQL Server recompute the view
-# for every row (30 s instead of 0.1 s).
-
-
 def search_filters(q, platform):
     """WHERE clause + params: every word of q must appear in the game's title."""
-    where, params = ["EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active = 1)"], []
-
-    for word in normalize_name(q or "").split():
-        where.append("g.normalized_title LIKE ?")
-        params.append(f"%{word}%")
+    words, params = title_word_filters(q)
+    where = ["EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active = 1)", *words]
 
     if platform:
         where.append("p.code = ?")
@@ -64,7 +49,7 @@ def list_games(q=None, platform=None, page=1, per_page=20):
     for game in games:
         game.update(summaries.get(game["id"], {}))
 
-    return {"page": page, "per_page": per_page, "total": total, "games": games}
+    return page_result(page, per_page, total, games=games)
 
 
 def offer_summaries(game_ids):
@@ -72,7 +57,6 @@ def offer_summaries(game_ids):
     if not game_ids:
         return {}
 
-    placeholders = ",".join("?" * len(game_ids))
     rows = fetch_all(
         f"""
         SELECT game_id,
@@ -81,7 +65,7 @@ def offer_summaries(game_ids):
                COUNT(DISTINCT edition_id) AS editions,
                CAST(MAX(CAST(is_discount AS INT)) AS BIT) AS has_discount
         FROM current_offers
-        WHERE is_active = 1 AND game_id IN ({placeholders})
+        WHERE is_active = 1 AND game_id IN ({placeholders(game_ids)})
         GROUP BY game_id
         """,
         *game_ids,
@@ -120,7 +104,7 @@ def get_game(game_id):
         game_id,
     )
 
-    lowest = lowest_prices(game_id)
+    lowest = lowest_prices("sp.game_id = ?", game_id)
     descriptions = store_descriptions(game_id)
     photos = store_photos(game_id)
 
@@ -144,7 +128,6 @@ def get_game(game_id):
     # Editions whose products all left the stores have nothing to show
     game["editions"] = [e for e in editions if e["offers"]]
 
-    from app.services.release_service import game_release_date   # avoids a circular import
     release = game_release_date(game_id) or {}
     game["release_date"] = release.get("release_date")
     game["date_is_estimate"] = release.get("date_is_estimate", False)
@@ -192,37 +175,12 @@ def store_photos(game_id, limit=12):
     return result
 
 
-def lowest_prices(game_id):
-    """
-    {edition_id: {price, date, store, offer_id}}: the lowest price ever recorded for each
-    edition, across all stores (also products no longer sold). Only new copies, and only
-    while in stock: a used copy or a sold-out price isn't a price you could have paid.
-    The earliest date wins a tie.
-    """
-    rows = fetch_all(
-        """
-        SELECT edition_id, price, date, store, offer_id
-        FROM (
-            SELECT sp.edition_id, ps.price, ps.scraped_at AS date, s.slug AS store, sp.id AS offer_id,
-                   ROW_NUMBER() OVER (PARTITION BY sp.edition_id ORDER BY ps.price, ps.scraped_at) AS rn
-            FROM store_products sp
-            JOIN price_snapshots ps ON ps.store_product_id = sp.id
-            JOIN stores s ON s.id = sp.store_id
-            WHERE sp.game_id = ? AND sp.condition = 'new' AND ps.in_stock = 1
-        ) x
-        WHERE rn = 1
-        """,
-        game_id,
-    )
-    return {r.pop("edition_id"): r for r in rows}
-
-
 def merged_into(kind, ids):
     """{old id: id now}: games / editions merged into another (pipeline/rematch.py, merged_ids)."""
     if not ids:
         return {}
     return dict((r["old_id"], r["new_id"]) for r in fetch_all(
-        f"SELECT old_id, new_id FROM merged_ids WHERE kind = ? AND old_id IN ({','.join('?' * len(ids))})",
+        f"SELECT old_id, new_id FROM merged_ids WHERE kind = ? AND old_id IN ({placeholders(ids)})",
         kind, *ids,
     ))
 
@@ -236,16 +194,15 @@ def editions_with_offers(edition_ids):
     """
     if not edition_ids:
         return []
-    placeholders = ",".join("?" * len(edition_ids))
+    ids = placeholders(edition_ids)
 
     editions = fetch_all(
         f"""
-        SELECT e.id AS edition_id, e.name AS edition, e.edition_key, g.id AS game_id, g.title,
-               p.code AS console, p.name AS platform_name, g.image_url AS image
+        SELECT {EDITION_CARD_COLUMNS}, g.image_url AS image
         FROM game_editions e
         JOIN games g ON g.id = e.game_id
         JOIN platforms p ON p.id = g.platform_id
-        WHERE e.id IN ({placeholders})
+        WHERE e.id IN ({ids})
         """,
         *edition_ids,
     )
@@ -254,27 +211,12 @@ def editions_with_offers(edition_ids):
         f"""
         SELECT {OFFER_COLUMNS}
         FROM current_offers o JOIN stores s ON s.id = o.store_id
-        WHERE o.is_active = 1 AND o.edition_id IN ({placeholders})
+        WHERE o.is_active = 1 AND o.edition_id IN ({ids})
         ORDER BY o.in_stock DESC, o.price
         """,
         *edition_ids,
     )
-    lowest = {r.pop("edition_id"): r for r in fetch_all(
-        f"""
-        SELECT edition_id, price, date, store, tracked_since
-        FROM (
-            SELECT sp.edition_id, ps.price, ps.scraped_at AS date, s.slug AS store,
-                   ROW_NUMBER() OVER (PARTITION BY sp.edition_id ORDER BY ps.price, ps.scraped_at) AS rn,
-                   MIN(ps.scraped_at) OVER (PARTITION BY sp.edition_id) AS tracked_since
-            FROM store_products sp
-            JOIN price_snapshots ps ON ps.store_product_id = sp.id
-            JOIN stores s ON s.id = sp.store_id
-            WHERE sp.edition_id IN ({placeholders}) AND sp.condition = 'new' AND ps.in_stock = 1
-        ) x
-        WHERE rn = 1
-        """,
-        *edition_ids,
-    )}
+    lowest = lowest_prices(f"sp.edition_id IN ({ids})", *edition_ids)
 
     # Back in stock: the latest change from sold out to in stock, if recent. Read from the
     # price history, so it works even if the visitor wasn't here while it was sold out.
@@ -286,7 +228,7 @@ def editions_with_offers(edition_ids):
                    LAG(ps.in_stock) OVER (PARTITION BY ps.store_product_id ORDER BY ps.scraped_at, ps.id) AS was_in_stock
             FROM price_snapshots ps
             JOIN store_products sp ON sp.id = ps.store_product_id
-            WHERE sp.edition_id IN ({placeholders})
+            WHERE sp.edition_id IN ({ids})
         ) x
         WHERE in_stock = 1 AND was_in_stock = 0
         GROUP BY store_product_id
@@ -298,19 +240,11 @@ def editions_with_offers(edition_ids):
         o["restocked_at"] = restocked.get(o["offer_id"]) if o["in_stock"] else None
 
     order = {edition_id: i for i, edition_id in enumerate(edition_ids)}
-    groups = []
-    for e in sorted(editions, key=lambda e: order[e["edition_id"]]):
-        groups.append({
-            "edition_id": e["edition_id"],
-            "game_id": e["game_id"],
-            "name": e["title"] if e["edition_key"] == "" else f"{e['title']} — {e['edition']}",
-            "console": e["console"],
-            "platform_name": e["platform_name"],
-            "image": e["image"],
-            "lowest_price": lowest.get(e["edition_id"]),
-            "offers": [o for o in offers if o["edition_id"] == e["edition_id"]],
-        })
-    return groups
+    return [
+        card_group(e, [o for o in offers if o["edition_id"] == e["edition_id"]],
+                   image=e["image"], lowest_price=lowest.get(e["edition_id"]))
+        for e in sorted(editions, key=lambda e: order[e["edition_id"]])
+    ]
 
 
 CATALOG_SORTS = {
@@ -330,12 +264,10 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
     store: only editions this store has in stock (all stores' offers are still shown, to compare).
     """
     order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS["name"])
-    in_stock_editions = """
+    in_stock_editions = f"""
         WITH offers AS (
             SELECT sp.edition_id, sp.store_id, last.price
-            FROM store_products sp
-            CROSS APPLY (SELECT TOP 1 price, in_stock FROM price_snapshots ps
-                         WHERE ps.store_product_id = sp.id ORDER BY ps.scraped_at DESC, ps.id DESC) last
+            FROM store_products sp {LATEST_PRICE}
             WHERE sp.is_active = 1 AND last.in_stock = 1 AND sp.edition_id IS NOT NULL
         ),
         ed AS (SELECT edition_id, MIN(price) AS best_price FROM offers GROUP BY edition_id)
@@ -343,9 +275,9 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
     filters, params = ["(? IS NULL OR p.code = ?)"], [platform, platform]
     if special_only:
         filters.append("e.edition_key <> '' AND e.edition_key NOT LIKE '|%'")
-    for word in normalize_name(q or "").split():
-        filters.append("g.normalized_title LIKE ?")
-        params.append(f"%{word}%")
+    words, word_params = title_word_filters(q)
+    filters += words
+    params += word_params
     if store:
         filters.append("ed.edition_id IN (SELECT o.edition_id FROM offers o JOIN stores s ON s.id = o.store_id "
                        "WHERE s.slug = ?)")
@@ -364,8 +296,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
 
     page_editions = fetch_all(
         f"""{in_stock_editions}
-        SELECT e.id AS edition_id, e.name AS edition, e.edition_key, g.id AS game_id, g.title,
-               p.code AS console, p.name AS platform_name
+        SELECT {EDITION_CARD_COLUMNS}
         FROM ed
         JOIN game_editions e ON e.id = ed.edition_id
         JOIN games g ON g.id = e.game_id
@@ -384,23 +315,14 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             f"""
             SELECT {OFFER_COLUMNS}
             FROM current_offers o JOIN stores s ON s.id = o.store_id
-            WHERE o.is_active = 1 AND o.in_stock = 1 AND o.edition_id IN ({",".join("?" * len(ids))})
+            WHERE o.is_active = 1 AND o.in_stock = 1 AND o.edition_id IN ({placeholders(ids)})
             ORDER BY o.price
             """,
             *ids,
         )
-        for e in page_editions:
-            groups.append({
-                "edition_id": e["edition_id"],
-                "game_id": e["game_id"],
-                "name": e["title"] if e["edition_key"] == "" else f"{e['title']} — {e['edition']}",
-                "console": e["console"],
-                "platform_name": e["platform_name"],
-                "offers": [o for o in offers if o["edition_id"] == e["edition_id"]],
-            })
+        groups = [card_group(e, [o for o in offers if o["edition_id"] == e["edition_id"]]) for e in page_editions]
 
         # Games not out yet: their release date, so the card can say so
-        from app.services.release_service import game_release_dates   # avoids a circular import
         pre_order_games = {g["game_id"] for g in groups if g["offers"] and all(o["is_preorder"] for o in g["offers"])}
         dates = game_release_dates(list(pre_order_games))
         for g in groups:
@@ -409,8 +331,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             g["release_date"] = release.get("release_date")
             g["date_is_estimate"] = release.get("date_is_estimate", False)
 
-    pages = max(1, -(-total // per_page))
-    return {"page": page, "per_page": per_page, "pages": pages, "total": total, "groups": groups}
+    return page_result(page, per_page, total, groups=groups)
 
 
 def game_exists(game_id):

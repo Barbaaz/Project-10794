@@ -19,7 +19,7 @@ import time
 import requests
 
 from core.normalizer import normalize_name
-from db import get_connection
+from db import connection
 
 log = logging.getLogger(__name__)
 
@@ -141,8 +141,13 @@ def best_match(game_key, results):
     return best if best_score >= MIN_SCORE else None
 
 
+# The games columns filled from IGDB (game_info() gives a value for each)
+IGDB_COLUMNS = ("igdb_id", "summary", "genres", "publishers", "developers", "first_release_date", "rating",
+                "pegi", "cover_image_id", "screenshot_ids", "video_ids")
+
+
 def game_info(g):
-    """The columns we store from an IGDB game."""
+    """{column: value} for IGDB_COLUMNS, from an IGDB game."""
     companies = g.get("involved_companies", [])
     names = lambda role: ", ".join(dict.fromkeys(c["company"]["name"] for c in companies if c.get(role))) or None
     pegi = next((a.get("rating_category", {}).get("rating") for a in g.get("age_ratings", [])
@@ -176,8 +181,7 @@ def video_list(g):
 def enrich_games(limit=300):
     """Look up games never looked up (or unmatched for a while), those on sale first."""
     client = IGDBClient()
-    conn = get_connection()
-    try:
+    with connection() as conn:
         cursor = conn.cursor()
         games = cursor.execute(
             f"""
@@ -202,20 +206,17 @@ def enrich_games(limit=300):
             if g:
                 info = game_info(g)
                 cursor.execute(
-                    """UPDATE games SET igdb_id = ?, summary = ?, genres = ?, publishers = ?, developers = ?,
-                       first_release_date = ?, rating = ?, pegi = ?, cover_image_id = ?, screenshot_ids = ?,
-                       video_ids = ?, igdb_checked_at = SYSUTCDATETIME() WHERE id = ?""",
-                    *info.values(), game_id,
+                    f"UPDATE games SET {', '.join(f'{c} = ?' for c in IGDB_COLUMNS)}, "
+                    "igdb_checked_at = SYSUTCDATETIME() WHERE id = ?",
+                    *(info[c] for c in IGDB_COLUMNS), game_id,
                 )
                 matched += 1
             else:
                 cursor.execute("UPDATE games SET igdb_checked_at = SYSUTCDATETIME() WHERE id = ?", game_id)
-            conn.commit()
+            conn.commit()   # each game as it's looked up: an interrupted fill keeps its work
 
-        log.info("IGDB: %d games looked up, %d matched", len(games), matched)
-        return len(games), matched
-    finally:
-        conn.close()
+    log.info("IGDB: %d games looked up, %d matched", len(games), matched)
+    return len(games), matched
 
 
 def fill_videos(client=None):
@@ -223,8 +224,7 @@ def fill_videos(client=None):
     Videos for games matched before videos were kept (video_ids still NULL), asked by
     IGDB id, 500 games per request. Does nothing once every matched game has them.
     """
-    conn = get_connection()
-    try:
+    with connection() as conn:
         cursor = conn.cursor()
         ids = [r[0] for r in cursor.execute(
             "SELECT DISTINCT igdb_id FROM games WHERE igdb_id IS NOT NULL AND video_ids IS NULL").fetchall()]
@@ -240,10 +240,8 @@ def fill_videos(client=None):
                 cursor.execute("UPDATE games SET video_ids = ? WHERE igdb_id = ?",
                                video_list(found.get(igdb_id, {})), igdb_id)
             conn.commit()
-        log.info("IGDB: videos filled for %d games", len(ids))
-        return len(ids)
-    finally:
-        conn.close()
+    log.info("IGDB: videos filled for %d games", len(ids))
+    return len(ids)
 
 
 if __name__ == "__main__":

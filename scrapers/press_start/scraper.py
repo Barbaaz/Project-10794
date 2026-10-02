@@ -8,6 +8,10 @@ class PressStartScraper(BaseScraper):
     store_slug = "press_start"
     base_url = "https://www.pressstart.pt"
 
+    listing_parser = parse_products
+    product_page_parser = parse_product_page
+    reads_release_date_from_page = True   # pre-order dates are only on the product page
+
     catalog_urls = {
         "https://www.pressstart.pt/pt/jogos-ps5/": "PS5",
         "https://www.pressstart.pt/pt/jogos-ps4/": "PS4",
@@ -23,11 +27,3 @@ class PressStartScraper(BaseScraper):
 
     def build_page_url(self, url, page):
         return f"{url}?page={page}"
-
-    def parse_listing(self, html, console=None):
-        return parse_products(html, console)
-
-    reads_release_date_from_page = True
-
-    def fetch_product_page(self, url):
-        return parse_product_page(self.http.get_text(url))

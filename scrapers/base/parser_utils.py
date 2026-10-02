@@ -5,6 +5,11 @@ from urllib.parse import quote, urljoin
 USED_PATTERN = re.compile(r"\b(usado|usada|semi[\s-]?novo|seminovo|pre[\s-]?owned)\b", re.IGNORECASE)
 
 
+def text_of(tag):
+    """A BeautifulSoup tag's text, stripped; None when the tag isn't there."""
+    return tag.get_text(strip=True) if tag else None
+
+
 def parse_price(price_text):
     """
     Ex:

@@ -1,11 +1,6 @@
 """Pre-orders and upcoming releases for the front page."""
-import time
-
-from app.services.game_service import OFFER_COLUMNS
-from db import fetch_all
-
-CACHE_SECONDS = 600   # data changes once a day
-_cache = {}
+from app.services.common import EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, cached, card_group
+from db import fetch_all, placeholders
 
 # One release date per game, from what the stores announce for its products:
 # a real date beats a "31/12" placeholder, then the date most stores agree on, then the earliest.
@@ -29,15 +24,6 @@ game_release AS (
 """
 
 
-def _cached(key, compute):
-    hit = _cache.get(key)
-    if hit and time.monotonic() - hit[0] < CACHE_SECONDS:
-        return hit[1]
-    value = compute()
-    _cache[key] = (time.monotonic(), value)
-    return value
-
-
 def game_release_date(game_id):
     """{release_date, date_is_estimate} for one game, or None."""
     return game_release_dates([game_id]).get(game_id)
@@ -49,7 +35,7 @@ def game_release_dates(game_ids):
         return {}
     rows = fetch_all(
         f"WITH {GAME_RELEASE_DATES} SELECT game_id, release_date, CAST(date_is_estimate AS BIT) AS date_is_estimate "
-        f"FROM game_release WHERE game_id IN ({','.join('?' * len(game_ids))})",
+        f"FROM game_release WHERE game_id IN ({placeholders(game_ids)})",
         *game_ids,
     )
     return {r.pop("game_id"): r for r in rows}
@@ -65,7 +51,7 @@ def preorders():
     def compute():
         rows = fetch_all(f"""
             WITH {GAME_RELEASE_DATES}
-            SELECT g.title, p.code AS console, p.name AS platform_name, e.name AS edition, e.edition_key,
+            SELECT {EDITION_CARD_COLUMNS},
                    r.release_date AS game_release_date, CAST(r.date_is_estimate AS BIT) AS date_is_estimate,
                    {OFFER_COLUMNS}
             FROM current_offers o
@@ -84,16 +70,12 @@ def preorders():
 
         groups = {}
         for r in rows:
-            name = r["title"] if r["edition_key"] == "" else f"{r['title']} — {r['edition']}"
-            group = groups.setdefault(r["edition_id"], {
-                "name": name, "console": r["console"], "platform_name": r["platform_name"],
-                "game_id": r["game_id"], "edition_id": r["edition_id"], "release_date": r["game_release_date"],
-                "date_is_estimate": r["date_is_estimate"], "offers": [],
-            })
+            group = groups.setdefault(r["edition_id"], card_group(
+                r, [], release_date=r["game_release_date"], date_is_estimate=r["date_is_estimate"]))
             group["offers"].append(r)
         return list(groups.values())
 
-    return _cached("preorders", compute)
+    return cached("preorders", compute)
 
 
 def upcoming_releases():
@@ -109,8 +91,7 @@ def upcoming_releases():
                        ROW_NUMBER() OVER (PARTITION BY sp.game_id ORDER BY last.price) AS rn
                 FROM store_products sp
                 JOIN stores s ON s.id = sp.store_id
-                CROSS APPLY (SELECT TOP 1 price, in_stock FROM price_snapshots ps
-                             WHERE ps.store_product_id = sp.id ORDER BY ps.scraped_at DESC, ps.id DESC) last
+                {LATEST_PRICE}
                 -- a sold-out pre-order (e.g. a limited edition) can't be bought, so it isn't a price
                 WHERE sp.is_active = 1 AND sp.condition = 'new' AND last.in_stock = 1
                   AND sp.game_id IN (SELECT game_id FROM game_release
@@ -129,4 +110,4 @@ def upcoming_releases():
             ORDER BY r.date_is_estimate, r.release_date, g.title, p.sort_order
         """)
 
-    return _cached("releases", compute)
+    return cached("releases", compute)

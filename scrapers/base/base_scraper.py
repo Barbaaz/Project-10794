@@ -17,11 +17,13 @@ class BaseScraper:
     and, when the product page was read this run (or the listing has it, like CSTech):
         description (plain text), details (dict), images (photos besides the cover), details_checked
 
-    Subclasses set store_slug / base_url and implement:
-        parse_listing(html, console=None) -> list of products from one listing page
+    Subclasses set store_slug / base_url and:
+        listing_parser                    -> parse_products(html, console) from the store's parser.py
+        product_page_parser               -> parse_product_page(html), for stores with useful product pages
         build_search_url(query, page)     -> needed for search()
         build_page_url(url, page)         -> needed for scrape_catalog()
         catalog_urls                      -> {category url: console code}
+    (Stores with another kind of catalogue, like a JSON feed, override scrape_catalog instead.)
     """
 
     store_slug = None
@@ -30,6 +32,8 @@ class BaseScraper:
     max_pages = 200                  # safety limit per listing
     max_product_pages = 100          # product pages opened per run; the rest wait for the next run
     reads_release_date_from_page = False   # True when the release date is only on the product page
+    listing_parser = None
+    product_page_parser = None
     # The pause between requests is enforced by HttpClient (see http_client.py)
 
     def __init__(self, http=None, fresh_release_urls=(), known_detail_urls=()):
@@ -42,7 +46,7 @@ class BaseScraper:
     # --- implemented by each store -------------------------------------
 
     def parse_listing(self, html, console=None):
-        raise NotImplementedError
+        return type(self).listing_parser(html, console)
 
     def build_search_url(self, query, page):
         raise NotImplementedError
@@ -50,12 +54,18 @@ class BaseScraper:
     def build_page_url(self, url, page):
         raise NotImplementedError
 
+    @property
+    def reads_product_pages(self):
+        return self.product_page_parser is not None
+
     def fetch_product_page(self, url):
         """
-        Stores with useful product pages override this and return
-        {"description": str | None, "details": dict | None, "release_date": date | None, "images": [url]}.
+        {"description": str | None, "details": dict | None, "release_date": date | None, "images": [url]}
+        from the product page, for stores with a product_page_parser.
         """
-        return None
+        if not self.reads_product_pages:
+            return None
+        return type(self).product_page_parser(self.http.get_text(url))
 
     # --- shared behaviour ----------------------------------------------
 
@@ -90,7 +100,7 @@ class BaseScraper:
         At most max_product_pages per run: special editions first (their description says what
         they include), then pre-orders, then the rest; the others wait for the next runs.
         """
-        if type(self).fetch_product_page is BaseScraper.fetch_product_page:
+        if not self.reads_product_pages:
             return
 
         def priority(p):

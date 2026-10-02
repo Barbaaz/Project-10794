@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 
 from app.utils.utils import detetar_plataforma
 from scrapers.base.parser_utils import (
-    parse_price, parse_release_date, detect_condition, html_to_text, html_images, photo_list, absolute_url,
+    text_of, parse_price, parse_release_date, detect_condition, html_to_text, html_images, photo_list, absolute_url,
 )
 from .selectors import (
     PRODUCT_CARD, NAME, IMAGE, PRICE, PRICE_VALUE, OLD_PRICE, LINK, STOCK, PREORDER_FLAG,
@@ -53,11 +53,6 @@ def parse_products(html, console=None):
             log.warning("[PressStart Parser] Erro: %s", e)
 
     return products
-
-
-def parse_release_date_page(html):
-    """Release date from a product page: "Data prevista de lançamento: 2026-12-31"."""
-    return parse_product_page(html)["release_date"]
 
 
 def parse_product_page(html):
@@ -111,7 +106,3 @@ def parse_stock(card):
 
     # low-stock = red light = "add to cart" disabled on the product page
     return "low-stock" not in stock_tag.get("class", [])
-
-
-def text_of(tag):
-    return tag.get_text(strip=True) if tag else None

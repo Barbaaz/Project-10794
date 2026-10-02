@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 
 from app.utils.utils import detetar_plataforma
 from scrapers.base.parser_utils import (
-    parse_price, parse_release_date, detect_condition, absolute_url, html_to_text, html_images, photo_list,
+    text_of, parse_price, parse_release_date, detect_condition, absolute_url, html_to_text, html_images, photo_list,
 )
 from .selectors import (
     PRODUCT_CARD, NAME, IMAGE, LINK, BUY_BUTTON, BUY_LABEL, PRICE, OLD_PRICE, OUT_OF_STOCK, RELEASE_DATE,
@@ -68,7 +68,3 @@ def parse_stock(card):
     # The "esgotado" box is also used for pre-orders ("Pré-encomenda"), which can be bought
     tag = card.select_one(OUT_OF_STOCK)
     return tag is None or "esgotado" not in tag.get_text(strip=True).lower()
-
-
-def text_of(tag):
-    return tag.get_text(strip=True) if tag else None

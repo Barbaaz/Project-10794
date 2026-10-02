@@ -1,7 +1,7 @@
 """Best prices between stores (price_service.best_store_deals), shown while there are no real discounts."""
 import pytest
 
-from app.services import price_service
+from app.services import common, price_service
 
 # edition → {store slug: (price, in stock)}
 EDITIONS = {
@@ -15,7 +15,7 @@ EDITIONS = {
 
 @pytest.fixture
 def deals(app_on_test_db):
-    price_service._featured_cache.clear()
+    common.clear_cache()
     cursor = app_on_test_db.conn.cursor()
     platform_id = cursor.execute("SELECT id FROM platforms WHERE code = 'PS5'").fetchone()[0]
 
@@ -43,7 +43,7 @@ def deals(app_on_test_db):
     cursor.execute("DELETE FROM store_products")
     cursor.execute("DELETE FROM game_editions")
     cursor.execute("DELETE FROM games")
-    price_service._featured_cache.clear()
+    common.clear_cache()
 
 
 def test_big_gap_between_stores_is_shown(deals):
@@ -65,7 +65,7 @@ def test_deal_lists_every_store_in_stock(deals):
 
 
 def test_platform_filter(deals, app_on_test_db):
-    price_service._featured_cache.clear()
+    common.clear_cache()
     assert price_service.best_store_deals(platform="PS5")
     assert price_service.best_store_deals(platform="PC") == []
 

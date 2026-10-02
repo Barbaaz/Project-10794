@@ -8,7 +8,7 @@ from scrapers.press_start.parser import parse_products as parse_press_start
 
 from datetime import date
 
-from scrapers.press_start.parser import parse_release_date_page
+from scrapers.press_start.parser import parse_product_page
 
 KEYS = {"store", "external_name", "console", "condition", "price", "old_price", "in_stock", "url", "image",
         "is_preorder", "release_date", "release_date_checked"}
@@ -112,9 +112,9 @@ def test_mega_mania_pre_order_and_release_date(fixture_text):
 
 def test_press_start_release_date_from_product_page():
     html = "<div>Data prevista de lançamento: 2026-12-31 Ficha técnica Etiqueta PRÉ-RESERVA</div>"
-    assert parse_release_date_page(html) == date(2026, 12, 31)
-    assert parse_release_date_page("<div>Data prevista de lançamento: 06/10/2026</div>") == date(2026, 10, 6)
-    assert parse_release_date_page("<div>Sem data</div>") is None
+    assert parse_product_page(html)["release_date"] == date(2026, 12, 31)
+    assert parse_product_page("<div>Data prevista de lançamento: 06/10/2026</div>")["release_date"] == date(2026, 10, 6)
+    assert parse_product_page("<div>Sem data</div>")["release_date"] is None
 
 
 def product(url, name="Some Game PS5", preorder=True):

@@ -16,19 +16,17 @@ import logging
 from collections import Counter, defaultdict
 
 from core.editions import edition_key_of, is_excluded
-from db import get_connection
+from db import connection
+from pipeline.igdb import IGDB_COLUMNS
 from pipeline.matcher import GameMatcher
 from scheduler.jobs import setup_logging
 
 log = logging.getLogger(__name__)
 
-IGDB_COLUMNS = ["igdb_id", "igdb_checked_at", "summary", "genres", "publishers", "developers", "first_release_date",
-                "rating", "pegi", "cover_image_id", "screenshot_ids", "video_ids"]
 
 
 def rematch_all(dry_run=False):
-    conn = get_connection()
-    try:
+    with connection() as conn:
         cursor = conn.cursor()
         platform_ids = dict(cursor.execute("SELECT code, id FROM platforms").fetchall())
         codes = {v: k for k, v in platform_ids.items()}
@@ -85,18 +83,9 @@ def rematch_all(dry_run=False):
                  "merged %s, removed %s", len(rows), changed, rekeyed, renamed,
                  {k: len(v) for k, v in merged.items()}, removed)
         if dry_run:
-            conn.rollback()
+            conn.rollback()     # connection() commits what's left at the end: nothing
             log.info("Dry run: nothing was changed")
-        else:
-            conn.commit()
-        return changed, merged, removed
-
-    except Exception:
-        conn.rollback()
-        raise
-
-    finally:
-        conn.close()
+    return changed, merged, removed
 
 
 def rekey_editions(cursor):
@@ -139,7 +128,7 @@ def record_merges(cursor, moves):
             cursor.execute("DELETE FROM merged_ids WHERE kind = ? AND old_id = ?", kind, old)
             cursor.execute("INSERT INTO merged_ids (kind, old_id, new_id) VALUES (?, ?, ?)", kind, old, new)
 
-    columns = ", ".join(f"{c} = old.{c}" for c in IGDB_COLUMNS)
+    columns = ", ".join(f"{c} = old.{c}" for c in (*IGDB_COLUMNS, "igdb_checked_at"))
     for old, new in merged["game"].items():
         cursor.execute(f"""
             UPDATE g SET {columns}

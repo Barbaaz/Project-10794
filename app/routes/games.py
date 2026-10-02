@@ -1,6 +1,6 @@
 from flask import Blueprint, abort, jsonify, request
 
-from app.routes.params import int_arg, page_args
+from app.routes.params import choice_arg, int_arg, page_args, text_arg
 from app.services import game_service
 
 bp = Blueprint("games", __name__, url_prefix="/api/games")
@@ -10,8 +10,8 @@ bp = Blueprint("games", __name__, url_prefix="/api/games")
 def list_games():
     page, per_page = page_args()
     return jsonify(game_service.list_games(
-        q=request.args.get("q"),
-        platform=request.args.get("platform"),
+        q=text_arg("q"),
+        platform=text_arg("platform"),
         page=page,
         per_page=per_page,
     ))
@@ -24,15 +24,12 @@ def catalog():
     editions=special: only editions above Standard (Deluxe, Collector's...)
     q: search words (all of them in the title); store: only editions that store has in stock
     """
-    sort = request.args.get("sort", "name")
-    if sort not in game_service.CATALOG_SORTS:
-        abort(400, description=f"'sort' must be one of: {', '.join(game_service.CATALOG_SORTS)}")
+    sort = choice_arg("sort", "name", game_service.CATALOG_SORTS)
     page = int_arg("page", 1, minimum=1)
     per_page = int_arg("per_page", 48, minimum=1, maximum=100)
     special_only = request.args.get("editions") == "special"
     return jsonify(game_service.catalog(
-        request.args.get("platform") or None, sort, page, per_page, special_only,
-        q=request.args.get("q") or None, store=request.args.get("store") or None,
+        text_arg("platform"), sort, page, per_page, special_only, q=text_arg("q"), store=text_arg("store"),
     ))
 
 

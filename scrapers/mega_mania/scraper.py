@@ -8,6 +8,9 @@ class MegaManiaScraper(BaseScraper):
     store_slug = "mega-mania"
     base_url = "https://mega-mania.com.pt"
 
+    listing_parser = parse_products
+    product_page_parser = parse_product_page
+
     catalog_urls = {
         "https://mega-mania.com.pt/pt/catalogo/456-ps/457-jogos": "PS5",
         "https://mega-mania.com.pt/pt/catalogo/1-ps/93-jogos": "PS4",
@@ -23,9 +26,3 @@ class MegaManiaScraper(BaseScraper):
 
     def build_page_url(self, url, page):
         return f"{url}?p={page}&ppage=50"
-
-    def parse_listing(self, html, console=None):
-        return parse_products(html, console)
-
-    def fetch_product_page(self, url):
-        return parse_product_page(self.http.get_text(url))

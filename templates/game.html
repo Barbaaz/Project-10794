@@ -7,6 +7,7 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="/static/common.js"></script>
     <script src="/static/i18n.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -135,12 +136,6 @@ const fmtDateTime = d => new Date(d).toLocaleString(LOCALE, { dateStyle: "short"
 let game, history, stores = {}, rangeDays = 90;
 const charts = [];
 
-function esc(text) {
-    const div = document.createElement("div");
-    div.textContent = text ?? "";
-    return div.innerHTML;
-}
-
 function css(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
@@ -148,10 +143,6 @@ function css(name) {
 function storeColor(slug) {
     const slot = stores[slug]?.color_slot || 6;
     return css(`--series-${Math.min(slot, 6)}`);
-}
-
-function storeName(slug) {
-    return stores[slug]?.name || slug;
 }
 
 async function load() {
@@ -599,30 +590,21 @@ document.querySelectorAll("[data-days]").forEach(btn => btn.addEventListener("cl
     drawCharts();
 }));
 
-function toggleDark() {
-    const next = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-bs-theme", next);
-    try { localStorage.setItem("theme", next); } catch (e) {}
-    if (game) render();   // charts read their colors from CSS, so redraw them
+// toggleDark(): static/common.js. The charts read their colours from CSS, so redraw them
+function onThemeChange() {
+    if (game) render();
 }
 
 // Back to the search or front page tab this game was opened from (remembered by the
 // search page for this browser tab); works after reloads and doesn't rely on browser history
 function setBackLink() {
-    let last = null;
-    try { last = sessionStorage.getItem("lastListPage"); } catch (e) {}
+    const last = saved("lastListPage", null, "sessionStorage");
     if (!last || !last.startsWith("/?")) return;   // only our own pages
     const link = document.getElementById("back-link");
     link.href = last;
     if (new URLSearchParams(last.slice(1)).get("q")) link.textContent = t("back_search");
 }
 
-function savedTheme() {
-    let theme = null;
-    try { theme = localStorage.getItem("theme"); } catch (e) {}
-    return theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-}
-document.documentElement.setAttribute("data-bs-theme", savedTheme());
 applyI18n();
 setBackLink();   // after applyI18n, which sets the default "← Voltar"
 load();

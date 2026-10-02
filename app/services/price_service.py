@@ -1,10 +1,5 @@
-import time
-
-from app.services.game_service import OFFER_COLUMNS
-from db import fetch_all, fetch_one
-
-FEATURED_CACHE_SECONDS = 600   # prices change once a day; no need to recompute on every visit
-_featured_cache = {}
+from app.services.common import LATEST_PRICE, OFFER_COLUMNS, cached, page_result
+from db import fetch_all, fetch_one, placeholders
 
 
 def attach_store_offers(items):
@@ -16,16 +11,14 @@ def attach_store_offers(items):
         return items
 
     edition_ids = list({i["edition_id"] for i in items})
-    placeholders = ",".join("?" * len(edition_ids))
     others = fetch_all(
         f"""
         SELECT sp.id AS offer_id, sp.edition_id, s.slug AS store, s.name AS store_name, sp.condition,
                last.price, CAST(1 AS BIT) AS in_stock, sp.is_preorder, sp.url, sp.image_url AS image
         FROM store_products sp
         JOIN stores s ON s.id = sp.store_id
-        CROSS APPLY (SELECT TOP 1 price, in_stock FROM price_snapshots ps
-                     WHERE ps.store_product_id = sp.id ORDER BY ps.scraped_at DESC, ps.id DESC) last
-        WHERE sp.edition_id IN ({placeholders}) AND sp.is_active = 1 AND sp.condition = 'new' AND last.in_stock = 1
+        {LATEST_PRICE}
+        WHERE sp.edition_id IN ({placeholders(edition_ids)}) AND sp.is_active = 1 AND sp.condition = 'new' AND last.in_stock = 1
         ORDER BY last.price
         """,
         *edition_ids,
@@ -46,12 +39,12 @@ def featured_discounts(limit=12, min_percent=10, platform=None):
     new copies in stock only, optionally for one platform (so a filtered list still has
     `limit` games). Cached for a few minutes.
     """
-    key = (limit, min_percent, platform)
-    cached = _featured_cache.get(key)
-    if cached and time.monotonic() - cached[0] < FEATURED_CACHE_SECONDS:
-        return cached[1]
+    return cached(("featured", limit, min_percent, platform),
+                  lambda: attach_store_offers(_featured_discounts(limit, min_percent, platform)))
 
-    offers = fetch_all(
+
+def _featured_discounts(limit, min_percent, platform):
+    return fetch_all(
         f"""
         WITH ranked AS (
             SELECT o.*, ROW_NUMBER() OVER (PARTITION BY o.edition_id ORDER BY o.price, o.discount_percent DESC) AS rn
@@ -71,10 +64,6 @@ def featured_discounts(limit=12, min_percent=10, platform=None):
         """,
         min_percent, platform, platform,
     )
-    attach_store_offers(offers)
-
-    _featured_cache[key] = (time.monotonic(), offers)
-    return offers
 
 
 def best_store_deals(limit=12, min_percent=15, max_percent=60, platform=None):
@@ -85,18 +74,16 @@ def best_store_deals(limit=12, min_percent=15, max_percent=60, platform=None):
     Gaps above max_percent are left out: they're more often two different products matched
     together than a real bargain.
     """
-    key = ("deals", limit, min_percent, max_percent, platform)
-    cached = _featured_cache.get(key)
-    if cached and time.monotonic() - cached[0] < FEATURED_CACHE_SECONDS:
-        return cached[1]
+    return cached(("deals", limit, min_percent, max_percent, platform),
+                  lambda: attach_store_offers(_best_store_deals(limit, min_percent, max_percent, platform)))
 
-    deals = fetch_all(
+
+def _best_store_deals(limit, min_percent, max_percent, platform):
+    return fetch_all(
         f"""
         WITH offers AS (
             SELECT sp.id AS offer_id, sp.edition_id, sp.store_id, last.price
-            FROM store_products sp
-            CROSS APPLY (SELECT TOP 1 price, in_stock FROM price_snapshots ps
-                         WHERE ps.store_product_id = sp.id ORDER BY ps.scraped_at DESC, ps.id DESC) last
+            FROM store_products sp {LATEST_PRICE}
             WHERE sp.is_active = 1 AND sp.condition = 'new' AND last.in_stock = 1 AND sp.edition_id IS NOT NULL
         ),
         -- the cheapest offer of each store, then the stores ranked by price
@@ -132,10 +119,6 @@ def best_store_deals(limit=12, min_percent=15, max_percent=60, platform=None):
         """,
         min_percent, max_percent, platform, platform,
     )
-    attach_store_offers(deals)
-
-    _featured_cache[key] = (time.monotonic(), deals)
-    return deals
 
 
 def list_discounts(platform=None, min_percent=0, page=1, per_page=20):
@@ -167,4 +150,4 @@ def list_discounts(platform=None, min_percent=0, page=1, per_page=20):
         *params, (page - 1) * per_page, per_page,
     )
 
-    return {"page": page, "per_page": per_page, "total": total, "offers": offers}
+    return page_result(page, per_page, total, offers=offers)

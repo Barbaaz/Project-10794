@@ -20,5 +20,18 @@ def int_arg(name, default, minimum=None, maximum=None):
     return value
 
 
+def text_arg(name):
+    """Text query parameter, stripped; None when missing or empty."""
+    return (request.args.get(name) or "").strip() or None
+
+
+def choice_arg(name, default, choices):
+    """A query parameter that must be one of `choices`, 400 otherwise."""
+    value = text_arg(name) or default
+    if value not in choices:
+        abort(400, description=f"'{name}' must be one of: {', '.join(choices)}")
+    return value
+
+
 def page_args():
     return int_arg("page", 1, minimum=1), int_arg("per_page", 20, minimum=1, maximum=100)

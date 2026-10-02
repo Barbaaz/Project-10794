@@ -1,4 +1,4 @@
-from scrapers.cstech.scraper import ShopifyScraper
+from scrapers.base.shopify import ShopifyScraper
 
 
 class DartyScraper(ShopifyScraper):
@@ -14,8 +14,5 @@ class DartyScraper(ShopifyScraper):
     collections = ("videojogos",)
     preorder_collection = "pre-vendas-gaming"
     vendor_is_publisher = False
-
-    def is_game(self, item):
-        # product_type "Jogos PS5", "Jogos Switch 2"...; skips consoles and headsets
-        # ("Jogos de Tabuleiro" has no platform, so parse_item drops it anyway)
-        return (item.get("product_type") or "").lower().startswith("jogos")
+    # "Jogos PS5", "Jogos Switch 2"; "Jogos de Tabuleiro" has no platform, so parse_item drops it
+    game_type_prefix = "jogos"

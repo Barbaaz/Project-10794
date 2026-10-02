@@ -92,6 +92,7 @@ def test_fill_videos_asks_by_igdb_id_in_batches(monkeypatch):
         def cursor(self):
             return self.c
         def commit(self): pass
+        def rollback(self): pass
         def close(self): pass
 
     class FakeClient:
@@ -101,7 +102,8 @@ def test_fill_videos_asks_by_igdb_id_in_batches(monkeypatch):
             return [{"id": 1, "videos": [{"video_id": "yt1", "name": "Trailer"}]}] if "(1," in body else []
 
     conn = FakeConn()
-    monkeypatch.setattr(igdb, "get_connection", lambda: conn)
+    import db
+    monkeypatch.setattr(db, "get_connection", lambda: conn)
     assert igdb.fill_videos(FakeClient()) == 502
     assert len(FakeClient.queries) == 2 and "limit 500" in FakeClient.queries[0]
     updates = dict((igdb_id, json.loads(v)) for v, igdb_id in conn.c.updates)

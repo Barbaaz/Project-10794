@@ -257,8 +257,7 @@ const STRINGS = {
 };
 
 function savedLanguage() {
-    let lang = null;
-    try { lang = localStorage.getItem("lang"); } catch (e) {}
+    const lang = saved("lang");     // static/common.js
     if (STRINGS[lang]) return lang;
     return (navigator.language || "pt").toLowerCase().startsWith("pt") ? "pt" : "en";
 }
@@ -296,7 +295,7 @@ function renderLanguageSwitch() {
             data-lang="${lang}" aria-pressed="${lang === LANG}">${lang.toUpperCase()}</button>`).join("");
     box.querySelectorAll("[data-lang]").forEach(b => b.onclick = () => {
         if (b.dataset.lang === LANG) return;
-        try { localStorage.setItem("lang", b.dataset.lang); } catch (e) {}
+        save("lang", b.dataset.lang);
         location.reload();
     });
 }
