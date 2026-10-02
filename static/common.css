@@ -17,3 +17,8 @@
 /* Used tab: seller (and rating) on one line, the copy's condition under it */
 .offer-btn .seller-lines { display: flex; flex-direction: column; line-height: 1.15; text-align: left; min-width: 0; }
 .offer-btn .seller-lines small { font-weight: 400; opacity: .85; overflow: hidden; text-overflow: ellipsis; }
+
+/* The header's buttons (account, language, theme) wrap onto a second line on narrow screens
+   instead of making the page scroll sideways */
+div:has(> #account-area) { flex-wrap: wrap; justify-content: flex-end; }
+div:has(> div > #account-area) { flex-wrap: wrap; gap: .5rem; }

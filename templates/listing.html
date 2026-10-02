@@ -65,8 +65,10 @@
                 <button type="button" id="message-btn" class="btn btn-primary flex-fill" data-i18n="listing_message"></button>
             </div>
             <div id="buyer-error" class="alert alert-warning d-none py-2 small" role="alert"></div>
+            <div id="report" class="mb-3"></div>
 
             <!-- Only the seller sees this -->
+            <div id="removed-notice" class="alert alert-danger d-none small" role="status" data-i18n="listing_removed_by_moderator"></div>
             <section id="owner" class="card d-none">
                 <div class="card-body">
                     <h2 class="h6" data-i18n="listing_manage"></h2>
@@ -129,8 +131,13 @@ function render() {
     gameLink.classList.remove("d-none");
 
     renderGallery(0);
-    if (currentUser && currentUser.id === listing.user_id) renderOwner();
-    else renderBuyerActions();
+    if (currentUser && currentUser.id === listing.user_id) {
+        if (listing.removed_by_moderator) document.getElementById("removed-notice").classList.remove("d-none");
+        else renderOwner();
+    } else {
+        renderBuyerActions();
+        document.getElementById("report").innerHTML = reportButton("listing", listing.id);
+    }
     document.getElementById("listing").classList.remove("d-none");
 }
 

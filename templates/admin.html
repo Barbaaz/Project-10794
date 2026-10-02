@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Game Price Tracker</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/common.css" rel="stylesheet">
+    <script src="/static/common.js"></script>
+    <script src="/static/i18n.js"></script>
+    <script src="/static/market.js"></script>
+</head>
+<body class="bg-body-tertiary">
+
+<div class="container py-4" style="max-width: 1000px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <a href="/" class="btn btn-sm btn-primary" data-i18n="home"></a>
+        <div class="d-flex gap-2">
+            <div id="account-area" class="d-flex gap-2"></div>
+            <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
+            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
+        </div>
+    </div>
+
+    <h1 class="h3 mb-3" data-i18n="mod_title"></h1>
+    <div id="not-allowed" class="alert alert-warning d-none" data-i18n="mod_not_allowed"></div>
+
+    <div id="tools" class="d-none">
+        <ul class="nav nav-pills mb-3" role="tablist">
+            <li class="nav-item"><button class="nav-link active" data-tab="reports" role="tab" data-i18n="mod_tab_reports"></button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="problems" role="tab" data-i18n="mod_tab_problems"></button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="log" role="tab" data-i18n="mod_tab_log"></button></li>
+            <li class="nav-item d-none" id="staff-tab"><button class="nav-link" data-tab="staff" role="tab" data-i18n="mod_tab_staff"></button></li>
+        </ul>
+        <div id="message" class="alert d-none py-2 small" role="alert"></div>
+
+        <!-- Open reports, one card per reported thing -->
+        <section id="tab-reports" role="tabpanel">
+            <div id="reports" class="d-flex flex-column gap-3"></div>
+            <p id="no-reports" class="text-body-secondary d-none" data-i18n="mod_no_reports"></p>
+        </section>
+
+        <!-- Purchases where the buyer reported a problem -->
+        <section id="tab-problems" role="tabpanel" class="d-none">
+            <div id="problems" class="list-group"></div>
+            <p id="no-problems" class="text-body-secondary d-none" data-i18n="mod_no_problems"></p>
+            <div id="conversation" class="card mt-3 d-none"><div class="card-body"></div></div>
+        </section>
+
+        <section id="tab-log" role="tabpanel" class="d-none">
+            <div class="table-responsive">
+                <table class="table table-sm small">
+                    <thead><tr><th data-i18n="col_date"></th><th data-i18n="mod_col_moderator"></th>
+                        <th data-i18n="mod_col_action"></th><th data-i18n="mod_col_target"></th><th data-i18n="mod_note"></th></tr></thead>
+                    <tbody id="log"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Admins only: name or remove moderators (admins are made from the command line) -->
+        <section id="tab-staff" role="tabpanel" class="d-none">
+            <ul id="staff" class="list-group mb-3"></ul>
+            <form id="staff-form" class="row g-2 align-items-end" style="max-width: 32rem;">
+                <div class="col">
+                    <label for="staff-username" class="form-label small" data-i18n="mod_username"></label>
+                    <input id="staff-username" name="username" required class="form-control form-control-sm">
+                </div>
+                <div class="col-auto">
+                    <button name="role" value="moderator" class="btn btn-sm btn-primary" data-i18n="mod_make_moderator"></button>
+                </div>
+            </form>
+        </section>
+    </div>
+</div>
+
+<script>
+const ACTIONS_BY_KIND = { listing: ["hide_listing", "restore_listing"], user: ["block_user", "unblock_user"],
+                          rating: ["hide_rating", "restore_rating"] };
+
+function showMessage(ok, text) {
+    const box = document.getElementById("message");
+    box.className = `alert ${ok ? "alert-success" : "alert-warning"} py-2 small`;
+    box.textContent = text;
+}
+
+async function getJSON(path) {
+    const response = await fetch(path);
+    return response.ok ? response.json() : [];
+}
+
+function date(value) {
+    return value ? new Date(value).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) : "";
+}
+
+function userLink(username) {
+    return `<a href="/user/${encodeURIComponent(username)}">@${esc(username)}</a>`;
+}
+
+// --- reports ----------------------------------------------------------------------------------
+function targetSummary(kind, target) {
+    if (!target) return `<em class="text-body-secondary">${esc(t("mod_target_gone"))}</em>`;
+    if (kind === "listing") {
+        const hidden = target.removed_by_moderator ? ` <span class="badge text-bg-dark">${esc(t("mod_hidden"))}</span>` : "";
+        return `<div><strong>${esc(target.title)}</strong> · ${esc(target.platform)} · ${eur.format(target.price)}
+                    ${statusBadge(target.status)}${hidden}</div>
+                <div class="small">${esc(t("listing_seller"))}: ${userLink(target.seller)} ·
+                    <a href="/listing/${target.id}">${esc(t("mod_open_listing"))}</a></div>
+                ${target.description ? `<div class="small text-body-secondary mt-1" style="white-space: pre-line;">${esc(target.description)}</div>` : ""}`;
+    }
+    if (kind === "user") {
+        const blocked = target.is_active ? "" : ` <span class="badge text-bg-danger">${esc(t("mod_blocked"))}</span>`;
+        return `<div>${userLink(target.username)} ${target.display_name !== target.username ? `(${esc(target.display_name)})` : ""}
+                    <span class="badge text-bg-secondary">${esc(t(`role_${target.role}`))}</span>${blocked}</div>
+                <div class="small text-body-secondary">${esc(t("member_since"))} ${new Date(target.created_at).toLocaleDateString(LOCALE)}</div>`;
+    }
+    const hidden = target.hidden ? ` <span class="badge text-bg-dark">${esc(t("mod_hidden"))}</span>` : "";
+    return `<div><span class="text-warning">${"★".repeat(target.stars)}${"☆".repeat(5 - target.stars)}</span>${hidden}
+                <span class="small">${userLink(target.rater)} → ${userLink(target.rated)} (${esc(target.title)})</span></div>
+            ${target.comment ? `<div>${esc(target.comment)}</div>` : ""}
+            ${target.reply ? `<div class="small ms-3 border-start ps-2">${esc(t("reply_from", { user: target.rated }))} ${esc(target.reply)}</div>` : ""}`;
+}
+
+function reportCard(group) {
+    const [hide, restore] = ACTIONS_BY_KIND[group.kind];
+    const hidden = group.target && (group.target.removed_by_moderator || group.target.hidden || group.target.is_active === false);
+    return `
+        <div class="card" data-kind="${group.kind}" data-target="${group.target_id}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="badge text-bg-primary">${esc(t(`mod_kind_${group.kind}`))}</span>
+                    <span class="small text-body-secondary">${esc(t("mod_report_count", { count: group.reports.length }))}</span>
+                </div>
+                ${targetSummary(group.kind, group.target)}
+                <ul class="list-group list-group-flush small my-2">
+                    ${group.reports.map(r => `<li class="list-group-item px-0 d-flex justify-content-between gap-2">
+                        <span><strong>${esc(t(`reason_${r.reason}`))}</strong> · ${userLink(r.reporter)} · ${date(r.created_at)}
+                            ${r.details ? `<div>${esc(r.details)}</div>` : ""}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary align-self-start" data-dismiss="${r.id}">${esc(t("mod_dismiss"))}</button>
+                    </li>`).join("")}
+                </ul>
+                ${group.target ? `<form class="d-flex flex-wrap gap-2 act-form">
+                    <input name="note" maxlength="500" class="form-control form-control-sm flex-fill" style="min-width: 12rem;"
+                           placeholder="${esc(t("mod_note_placeholder"))}" aria-label="${esc(t("mod_note"))}">
+                    <button class="btn btn-sm ${hidden ? "btn-success" : "btn-danger"}" name="action" value="${hidden ? restore : hide}">
+                        ${esc(t(`action_${hidden ? restore : hide}`))}</button>
+                </form>` : ""}
+            </div>
+        </div>`;
+}
+
+async function loadReports() {
+    const groups = await getJSON("/api/mod/reports");
+    const box = document.getElementById("reports");
+    box.innerHTML = groups.map(reportCard).join("");
+    document.getElementById("no-reports").classList.toggle("d-none", groups.length > 0);
+    box.querySelectorAll("[data-dismiss]").forEach(b => b.onclick = () => act("dismiss", Number(b.dataset.dismiss)));
+    box.querySelectorAll(".act-form").forEach(form => form.onsubmit = e => {
+        e.preventDefault();
+        const action = e.submitter.value;
+        if (action === "block_user" && !confirm(t("mod_confirm_block"))) return;
+        act(action, Number(form.closest("[data-target]").dataset.target), form.note.value);
+    });
+}
+
+async function act(action, targetId, note) {
+    const { ok, data } = await api("/api/mod/actions", { body: { action, target_id: targetId, note } });
+    showMessage(ok, ok ? t("mod_done", { action: t(`action_${action}`) }) : t(`error_${data?.error || "unknown"}`));
+    loadReports();
+}
+
+// --- problem purchases ------------------------------------------------------------------------
+async function loadProblems() {
+    const problems = await getJSON("/api/mod/problems");
+    const list = document.getElementById("problems");
+    list.innerHTML = problems.map(p => `
+        <button type="button" class="list-group-item list-group-item-action" data-conversation="${p.id}">
+            <div class="d-flex justify-content-between"><strong>${esc(p.title)}</strong><span>${eur.format(p.price)}</span></div>
+            <div class="small">${esc(t("mod_buyer_seller", { buyer: p.buyer, seller: p.seller }))} ·
+                ${esc(t("deal_sent"))} ${date(p.sent_at)}</div>
+        </button>`).join("");
+    document.getElementById("no-problems").classList.toggle("d-none", problems.length > 0);
+    list.querySelectorAll("[data-conversation]").forEach(b => b.onclick = () => showConversation(Number(b.dataset.conversation)));
+}
+
+// A purchase's messages, read-only: who said what, and the purchase steps
+async function showConversation(id) {
+    const c = await fetch(`/api/mod/conversations/${id}`).then(r => r.json());
+    const box = document.getElementById("conversation");
+    box.querySelector(".card-body").innerHTML = `
+        <h2 class="h6">${esc(c.title)} · ${esc(t(`deal_${c.deal_status}`))}</h2>
+        ${c.messages.map(m => m.event
+            ? `<div class="small text-body-secondary text-center my-1">${esc(t(`event_${m.event}`))} · ${date(m.created_at)}</div>`
+            : `<div class="small my-1"><strong>@${esc(m.sender_id === c.buyer_id ? c.buyer : c.seller)}</strong>
+                   <span class="text-body-secondary">${date(m.created_at)}</span><div style="white-space: pre-line;">${esc(m.body)}</div></div>`).join("")}`;
+    box.classList.remove("d-none");
+}
+
+// --- log --------------------------------------------------------------------------------------
+async function loadLog() {
+    const entries = await getJSON("/api/mod/log");
+    document.getElementById("log").innerHTML = entries.length ? entries.map(e => `
+        <tr><td class="text-nowrap">${date(e.created_at)}</td><td>@${esc(e.moderator)}</td>
+            <td>${esc(t(`action_${e.action}`))}</td><td>${esc(t(`mod_kind_${e.kind}`))} #${e.target_id}</td>
+            <td>${esc(e.note || "")}</td></tr>`).join("")
+        : `<tr><td colspan="5" class="text-body-secondary">${esc(t("mod_no_log"))}</td></tr>`;
+}
+
+// --- staff (admins) ---------------------------------------------------------------------------
+function renderStaff(staff) {
+    const list = document.getElementById("staff");
+    list.innerHTML = staff.map(u => `
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>${userLink(u.username)} <span class="badge text-bg-secondary">${esc(t(`role_${u.role}`))}</span></span>
+            ${u.role === "moderator" ? `<button type="button" class="btn btn-sm btn-outline-danger" data-remove="${esc(u.username)}">${esc(t("mod_remove_moderator"))}</button>` : ""}
+        </li>`).join("");
+    list.querySelectorAll("[data-remove]").forEach(b => b.onclick = () => setRole(b.dataset.remove, "user"));
+}
+
+async function setRole(username, role) {
+    const { ok, data } = await api("/api/mod/staff", { body: { username, role } });
+    showMessage(ok, ok ? t("mod_role_saved", { user: username }) : t(`error_${data?.error || "unknown"}`));
+    if (ok) renderStaff(data);
+}
+
+document.getElementById("staff-form").onsubmit = e => {
+    e.preventDefault();
+    setRole(e.target.username.value.trim().replace(/^@/, ""), "moderator");
+    e.target.reset();
+};
+
+// --- tabs -------------------------------------------------------------------------------------
+const LOADERS = { reports: loadReports, problems: loadProblems, log: loadLog,
+                  staff: async () => renderStaff(await getJSON("/api/mod/staff")) };
+
+function showTab(name) {
+    document.querySelectorAll("[data-tab]").forEach(b => {
+        b.classList.toggle("active", b.dataset.tab === name);
+        b.setAttribute("aria-selected", b.dataset.tab === name);
+    });
+    document.querySelectorAll("[id^=tab-]").forEach(s => s.classList.toggle("d-none", s.id !== `tab-${name}`));
+    document.getElementById("message").classList.add("d-none");
+    LOADERS[name]();
+}
+
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+async function load() {
+    await renderAccountArea();
+    if (!currentUser) return location.assign("/account?next=/admin");
+    if (!["moderator", "admin"].includes(currentUser.role)) {
+        return document.getElementById("not-allowed").classList.remove("d-none");
+    }
+    document.getElementById("staff-tab").classList.toggle("d-none", currentUser.role !== "admin");
+    document.getElementById("tools").classList.remove("d-none");
+    showTab("reports");
+}
+
+applyI18n();
+load();
+</script>
+</body>
+</html>

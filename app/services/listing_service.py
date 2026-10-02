@@ -47,7 +47,7 @@ def as_dicts(listings):
         rating, count = ratings.get(l.user_id, (None, 0))
         result.append(fields(
             l, "id", "user_id", "game_id", "edition_id", "price", "condition", "description", "status",
-            "created_at", "updated_at", "sold_at",
+            "created_at", "updated_at", "sold_at", "removed_by_moderator",
             title=l.game.title, platform=l.game.platform.code, platform_name=l.game.platform.name,
             edition=l.edition.name if l.edition else None,
             seller_username=l.seller.username, seller_name=l.seller.display_name,

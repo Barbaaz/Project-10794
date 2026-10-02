@@ -104,6 +104,18 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `POST /api/conversations/<id>/rating` `{stars, comment?}` | Rate the other side of a completed purchase (changeable for 14 days) |
 | `POST /api/ratings/<id>/reply` `{reply}` | The rated user answers a rating |
 | `GET /api/users/<username>` | Public profile: average rating, ratings received, listings (never the email) |
+| `POST /api/reports` `{kind: listing\|user\|rating, target_id, reason, details?}` | Report something to the moderators (not your own; once while open; 20 a day) |
+| `GET /api/mod/reports` · `GET /api/mod/problems` · `GET /api/mod/log` | Moderators: open reports grouped by what was reported · purchases with a problem · past actions |
+| `POST /api/mod/actions` `{action, target_id, note?}` | Moderators: `hide_listing` / `restore_listing`, `hide_rating` / `restore_rating`, `block_user` / `unblock_user`, `dismiss` (target = the report) |
+| `GET /api/mod/conversations/<id>` | Moderators: a purchase's messages, read-only |
+| `GET` / `POST /api/mod/staff` `{username, role: moderator\|user}` | Admins: the moderators and admins · name or remove a moderator |
+
+**Moderation.** Users have a role: `user`, `moderator` or `admin`. Moderators and admins get a 🛡️
+button in the header that opens `/admin` (reports, problem purchases, the log; admins also the
+staff list). Admins are only made from the command line:
+
+    python -m database.users role <username> admin     # or moderator / user
+    python -m database.users list                      # who has which role
 
 Requests that change something (POST / PUT / DELETE) must send the header `X-Requested-With: fetch`
 (the pages' `api()` helper in `static/common.js` does): another site can't add it, so it can't act

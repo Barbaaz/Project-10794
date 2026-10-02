@@ -63,6 +63,7 @@ def test_only_moderators_see_the_tools(market):
         assert client.get(path).status_code == 403
     assert act(client, "dismiss", 1).status_code == 403
 
+    assert client.get("/admin").status_code == 200          # the page itself; its data is what's guarded
     make(market, "someone", "moderator")
     assert client.get("/api/mod/reports").status_code == 200
     assert client.get("/api/mod/staff").status_code == 403             # admins only
@@ -96,6 +97,7 @@ def test_hiding_a_listing(market):
 
     # the seller can't put it back up; a moderator can
     log_in(client, "seller")
+    assert client.get(f"/api/listings/{listing['id']}").get_json()["removed_by_moderator"] is True
     changed = client.patch(f"/api/listings/{listing['id']}", json={"status": "active"}, headers=HEADERS)
     assert (changed.status_code, changed.get_json()["error"]) == (403, "removed_by_moderator")
     log_in(client, "mod")

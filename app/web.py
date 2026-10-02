@@ -87,6 +87,13 @@ def profile_page(username):
     return render_template("profile.html", username=username)
 
 
+@app.route("/admin")
+def admin_page():
+    """The moderators' tools: reports, problem purchases, the log, and (admins) the staff list.
+    The page is plain HTML; its data comes from /api/mod/…, which checks the role."""
+    return render_template("admin.html")
+
+
 @app.route("/media/<path:key>")
 def media(key):
     """Uploaded photos kept on this computer (app/services/photo_storage.py); no paths outside it."""

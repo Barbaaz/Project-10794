@@ -1,6 +1,7 @@
 /*
  * The pre-owned marketplace's shared pieces (game page, listing page, sell page, account page):
- * condition names, status badges, and the small listing card. Needs common.js and i18n.js.
+ * condition names, status badges, the small listing card and the report dialog. Needs common.js
+ * and i18n.js.
  */
 
 const CONDITIONS = ["new", "like_new", "good", "fair", "poor"];
@@ -24,6 +25,62 @@ function sellerName(listing) {
 function ratingBadge(rating, count) {
     if (!count) return "";
     return `<span class="text-warning-emphasis" title="${esc(t("rating_title", { rating: fmtNumber(rating), count }))}">★ ${fmtNumber(rating)} (${count})</span>`;
+}
+
+// --- reporting a listing, a user or a rating to the moderators (app/services/moderation_service.py) ---
+const REPORT_REASONS = ["fake", "scam", "offensive", "wrong_game", "prohibited", "other"];
+
+// A small "Report" link; clicking it opens the report dialog (logged out: log in first)
+function reportButton(kind, id) {
+    return `<button type="button" class="btn btn-link btn-sm p-0 text-body-secondary small" data-report-kind="${kind}"
+                data-report-id="${id}">⚑ ${esc(t("report"))}</button>`;
+}
+
+document.addEventListener("click", e => {
+    const button = e.target.closest("[data-report-kind]");
+    if (button) openReport(button.dataset.reportKind, Number(button.dataset.reportId));
+});
+
+function openReport(kind, id) {
+    if (!currentUser) return location.assign(`/account?next=${encodeURIComponent(location.pathname)}`);
+    document.getElementById("report-dialog")?.remove();
+    const dialog = document.createElement("dialog");
+    dialog.id = "report-dialog";
+    dialog.className = "border rounded shadow p-0 bg-body text-body";
+    dialog.style.maxWidth = "28rem";
+    dialog.innerHTML = `
+        <form method="dialog" class="p-3">
+            <h2 class="h5">${esc(t(`report_title_${kind}`))}</h2>
+            <fieldset class="mb-2">
+                <legend class="form-label small">${esc(t("report_reason"))}</legend>
+                ${REPORT_REASONS.map((r, i) => `<div class="form-check">
+                    <input class="form-check-input" type="radio" name="reason" id="reason-${r}" value="${r}" ${i ? "" : "required"}>
+                    <label class="form-check-label" for="reason-${r}">${esc(t(`reason_${r}`))}</label></div>`).join("")}
+            </fieldset>
+            <label for="report-details" class="form-label small">${esc(t("report_details"))}</label>
+            <textarea id="report-details" name="details" maxlength="1000" rows="3" class="form-control form-control-sm mb-2"></textarea>
+            <div class="alert d-none py-1 px-2 small" role="alert"></div>
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" value="cancel" class="btn btn-sm btn-secondary">${esc(t("cancel"))}</button>
+                <button type="submit" class="btn btn-sm btn-danger">${esc(t("report_send"))}</button>
+            </div>
+        </form>`;
+    document.body.append(dialog);
+    const form = dialog.querySelector("form");
+    const message = dialog.querySelector(".alert");
+    dialog.querySelector("[value=cancel]").onclick = () => dialog.close();
+    form.onsubmit = async e => {
+        e.preventDefault();
+        const { ok, data } = await api("/api/reports", {
+            body: { kind, target_id: id, reason: form.reason.value, details: form.details.value } });
+        message.className = `alert ${ok ? "alert-success" : "alert-warning"} py-1 px-2 small`;
+        message.textContent = ok ? t("report_sent") : t(`error_${data?.error || "unknown"}`);
+        if (ok) {
+            form.querySelector("[type=submit]").remove();
+            setTimeout(() => dialog.close(), 1500);
+        }
+    };
+    dialog.showModal();
 }
 
 // A card linking to the listing. Like the catalogue cards: the game's name first under the photo,
