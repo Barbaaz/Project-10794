@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Game Price Tracker</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/common.css" rel="stylesheet">
+    <script src="/static/common.js"></script>
+    <script src="/static/i18n.js"></script>
+    <script src="/static/market.js"></script>
+    <style>
+        .main-photo { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: var(--bs-secondary-bg); border-radius: .5rem; }
+        .thumbs { display: flex; gap: .4rem; overflow-x: auto; }
+        .thumbs button { padding: 0; border: 2px solid transparent; border-radius: .375rem; background: none; flex-shrink: 0; }
+        .thumbs button[aria-current="true"] { border-color: var(--bs-primary); }
+        .thumbs img { width: 80px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: .25rem; display: block; }
+        .owner-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: .4rem; }
+        .owner-photos figure { position: relative; margin: 0; }
+        .owner-photos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: .25rem; }
+        .owner-photos button { position: absolute; top: .2rem; right: .2rem; }
+    </style>
+</head>
+<body class="bg-body-tertiary">
+
+<div class="container py-4" style="max-width: 1000px;">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex gap-2">
+            <a href="/" class="btn btn-sm btn-primary" data-i18n="home"></a>
+            <a href="#" id="game-link" class="btn btn-sm btn-secondary d-none"></a>
+        </div>
+        <div class="d-flex gap-2">
+            <div id="account-area" class="d-flex gap-2"></div>
+            <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
+            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
+        </div>
+    </div>
+
+    <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
+    <div id="error" class="alert alert-warning d-none"></div>
+
+    <div id="listing" class="row g-4 d-none">
+        <div class="col-md-7">
+            <img id="main-photo" class="main-photo mb-2" alt="">
+            <div id="thumbs" class="thumbs"></div>
+        </div>
+        <div class="col-md-5">
+            <h1 id="title" class="h4 mb-1"></h1>
+            <div id="subtitle" class="text-body-secondary mb-3"></div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span id="price" class="fs-2 fw-bold"></span><span id="status"></span>
+            </div>
+            <div id="compare" class="small mb-3"></div>
+            <dl class="row small mb-3">
+                <dt class="col-5 text-body-secondary" data-i18n="sell_condition"></dt><dd id="condition" class="col-7"></dd>
+                <dt class="col-5 text-body-secondary" data-i18n="listing_seller"></dt><dd id="seller" class="col-7"></dd>
+                <dt class="col-5 text-body-secondary" data-i18n="listing_published"></dt><dd id="published" class="col-7"></dd>
+            </dl>
+            <p id="description" class="mb-3" style="white-space: pre-line;"></p>
+
+            <!-- Only the seller sees this -->
+            <section id="owner" class="card d-none">
+                <div class="card-body">
+                    <h2 class="h6" data-i18n="listing_manage"></h2>
+                    <form id="price-form" class="input-group input-group-sm mb-2">
+                        <input id="new-price" type="number" min="0.5" max="10000" step="0.01" class="form-control"
+                               data-i18n-aria-label="sell_price">
+                        <span class="input-group-text">€</span>
+                        <button class="btn btn-primary" data-i18n="listing_change_price"></button>
+                    </form>
+                    <div id="status-buttons" class="d-flex flex-wrap gap-1 mb-3"></div>
+                    <div id="owner-photos" class="owner-photos mb-2"></div>
+                    <label class="btn btn-sm btn-secondary">
+                        <span data-i18n="listing_add_photos"></span>
+                        <input id="add-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+                    </label>
+                    <div id="owner-error" class="alert alert-danger d-none py-1 px-2 small mt-2" role="alert"></div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+<script>
+const LISTING_ID = {{ listing_id }};
+let listing;
+
+async function load() {
+    await renderAccountArea();
+    const response = await fetch(`/api/listings/${LISTING_ID}`);
+    document.getElementById("loading").classList.add("d-none");
+    if (!response.ok) {
+        document.getElementById("error").textContent = t("listing_not_found");
+        document.getElementById("error").classList.remove("d-none");
+        return;
+    }
+    listing = await response.json();
+    render();
+    compareWithStores();
+}
+
+function render() {
+    document.title = `${listing.title} · ${eur.format(listing.price)} · Game Price Tracker`;
+    const edition = listing.edition && listing.edition !== "Standard" ? ` — ${listing.edition}` : "";
+    document.getElementById("title").textContent = listing.title + edition;
+    document.getElementById("subtitle").textContent = listing.platform_name;
+    document.getElementById("price").textContent = eur.format(listing.price);
+    document.getElementById("status").innerHTML = statusBadge(listing.status);
+    document.getElementById("condition").textContent = conditionLabel(listing.condition);
+    document.getElementById("seller").textContent =
+        `${sellerName(listing)} · ${t("member_since").toLowerCase()} ${new Date(listing.seller_since).toLocaleDateString(LOCALE)}`;
+    document.getElementById("published").textContent = new Date(listing.created_at).toLocaleDateString(LOCALE);
+    document.getElementById("description").textContent = listing.description || "";
+
+    const gameLink = document.getElementById("game-link");
+    gameLink.href = `/game/${listing.game_id}`;
+    gameLink.textContent = t("listing_store_prices");
+    gameLink.classList.remove("d-none");
+
+    renderGallery(0);
+    if (currentUser && currentUser.id === listing.user_id) renderOwner();
+    document.getElementById("listing").classList.remove("d-none");
+}
+
+function renderGallery(selected) {
+    const photo = listing.photos[selected];
+    document.getElementById("main-photo").src = photo?.url || "";
+    document.getElementById("main-photo").alt = t("photo_n", { n: selected + 1 });
+    const thumbs = document.getElementById("thumbs");
+    thumbs.innerHTML = listing.photos.map((p, i) => `
+        <button type="button" data-i="${i}" aria-current="${i === selected}" aria-label="${esc(t("photo_n", { n: i + 1 }))}">
+            <img src="${esc(p.thumb_url)}" alt=""></button>`).join("");
+    thumbs.querySelectorAll("[data-i]").forEach(b => b.onclick = () => renderGallery(Number(b.dataset.i)));
+}
+
+// "New at the stores: €X (Press Start)": the cheapest new copy in stock of the same edition
+async function compareWithStores() {
+    const game = await fetch(`/api/games/${listing.game_id}`).then(r => r.ok ? r.json() : null).catch(() => null);
+    const edition = game?.editions.find(e => e.id === listing.edition_id) || game?.editions[0];
+    const best = edition?.offers.find(o => o.in_stock && o.condition === "new");
+    if (!best) return;
+    document.getElementById("compare").innerHTML =
+        `${esc(t("listing_new_in_stores"))} <strong>${eur.format(best.price)}</strong> · ${esc(best.store_name)}`;
+}
+
+// --- the seller's controls ----------------------------------------------------------------
+function ownerError(code) {
+    const box = document.getElementById("owner-error");
+    box.textContent = t(`error_${code || "unknown"}`);
+    box.classList.toggle("d-none", !code);
+}
+
+async function change(request) {
+    ownerError(null);
+    const response = await request;
+    const data = await (response.json ? response.json() : response.data);
+    if (!(response.ok)) return ownerError(data?.error);
+    listing = data;
+    render();
+}
+
+function renderOwner() {
+    document.getElementById("owner").classList.remove("d-none");
+    document.getElementById("new-price").value = listing.price;
+    document.getElementById("price-form").onsubmit = e => {
+        e.preventDefault();
+        change(api(`/api/listings/${LISTING_ID}`, { method: "PATCH", body: { price: document.getElementById("new-price").value } }));
+    };
+
+    // the statuses it can move to from here
+    const next = { active: ["reserved", "sold", "removed"], reserved: ["active", "sold", "removed"], sold: ["active"], removed: ["active"] };
+    const buttons = document.getElementById("status-buttons");
+    buttons.innerHTML = next[listing.status].map(s => `
+        <button type="button" class="btn btn-sm ${s === "removed" ? "btn-danger" : "btn-secondary"}" data-status="${s}">
+            ${t(`listing_mark_${s}`)}</button>`).join("");
+    buttons.querySelectorAll("[data-status]").forEach(b => b.onclick = () => {
+        if (b.dataset.status === "removed" && !confirm(t("listing_remove_confirm"))) return;
+        change(api(`/api/listings/${LISTING_ID}`, { method: "PATCH", body: { status: b.dataset.status } }));
+    });
+
+    const photos = document.getElementById("owner-photos");
+    photos.innerHTML = listing.photos.map(p => `
+        <figure><img src="${esc(p.thumb_url)}" alt="">
+            <button type="button" class="btn btn-sm btn-danger" data-photo="${p.id}" aria-label="${esc(t("remove_photo"))}">✕</button>
+        </figure>`).join("");
+    photos.querySelectorAll("[data-photo]").forEach(b => b.onclick = () =>
+        change(api(`/api/listings/${LISTING_ID}/photos/${b.dataset.photo}`, { method: "DELETE" })));
+
+    document.getElementById("add-photos").onchange = e => {
+        const form = new FormData();
+        [...e.target.files].forEach(f => form.append("photos", f));
+        e.target.value = "";
+        change(fetch(`/api/listings/${LISTING_ID}/photos`, { method: "POST", body: form, headers: { "X-Requested-With": "fetch" } }));
+    };
+}
+
+applyI18n();
+load();
+</script>
+</body>
+</html>

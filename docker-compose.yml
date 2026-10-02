@@ -27,6 +27,9 @@ services:
     volumes:
       # The demo data file, if you were given one (not in the repository)
       - ./database/demo:/app/database/demo:ro
+      # Photos people upload to their listings, kept between restarts and rebuilds
+      - uploads:/app/instance/uploads
 
 volumes:
   dbdata:
+  uploads:

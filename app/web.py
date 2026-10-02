@@ -62,6 +62,18 @@ def account_page():
     return render_template("account.html")
 
 
+@app.route("/sell")
+def sell_page():
+    """Put a game up for sale (the page sends logged-out visitors to /account first)."""
+    return render_template("sell.html")
+
+
+@app.route("/listing/<int:listing_id>")
+def listing_page(listing_id):
+    """A game someone sells: photos, price, seller; the seller manages it here too."""
+    return render_template("listing.html", listing_id=listing_id)
+
+
 @app.route("/media/<path:key>")
 def media(key):
     """Uploaded photos kept on this computer (app/services/photo_storage.py); no paths outside it."""

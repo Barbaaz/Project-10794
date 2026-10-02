@@ -3,3 +3,8 @@
 /* Tabs are solid buttons too (no outline-only buttons): the selected one blue, the others grey */
 .nav-pills .nav-link:not(.active) { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); }
 .nav-pills .nav-link:not(.active):hover { background: var(--bs-tertiary-bg); }
+
+/* Marketplace listing cards (static/market.js) */
+.listing-card { color: inherit; }
+.listing-card img { aspect-ratio: 4 / 3; object-fit: cover; background: var(--bs-secondary-bg); }
+.listing-card:hover { border-color: var(--bs-primary); }

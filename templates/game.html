@@ -10,6 +10,7 @@
     <link href="/static/common.css" rel="stylesheet">
     <script src="/static/common.js"></script>
     <script src="/static/i18n.js"></script>
+    <script src="/static/market.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
@@ -126,6 +127,16 @@
         </div>
 
         <div id="editions"></div>
+
+        <!-- Pre-owned copies people sell (the marketplace) -->
+        <section id="market" class="mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h2 class="h5 mb-0" data-i18n="market_title"></h2>
+                <a id="sell-link" href="/sell" class="btn btn-sm btn-success" data-i18n="market_sell_this"></a>
+            </div>
+            <div id="market-listings" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 g-2"></div>
+            <p id="market-empty" class="small text-body-secondary d-none" data-i18n="market_empty"></p>
+        </section>
     </div>
 </div>
 
@@ -195,6 +206,7 @@ function render() {
     container.innerHTML = "";
     game.editions.forEach((edition, i) => container.appendChild(renderEdition(edition, i)));
     drawCharts();
+    loadMarket();
 
     document.getElementById("game").classList.remove("d-none");
 }
@@ -455,6 +467,17 @@ function historyTable(edition) {
     return `<table class="table table-sm mt-2 mb-0 prices">
         <thead><tr><th>${t("col_date")}</th><th>${t("col_store")}</th><th class="text-end">${t("col_price")}</th><th>${t("col_stock")}</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="4" class="text-body-secondary">${t("no_history")}</td></tr>`}</tbody></table>`;
+}
+
+// The copies people sell for this game (render() runs again on theme changes: loaded once)
+let marketLoaded = false;
+async function loadMarket() {
+    document.getElementById("sell-link").href = `/sell?game_id=${GAME_ID}`;
+    if (marketLoaded) return;
+    marketLoaded = true;
+    const listings = await fetch(`/api/listings?game_id=${GAME_ID}`).then(r => r.json()).catch(() => []);
+    document.getElementById("market-listings").innerHTML = listings.map(l => listingCard(l)).join("");
+    document.getElementById("market-empty").classList.toggle("d-none", listings.length > 0);
 }
 
 // Vertical crosshair under the cursor
