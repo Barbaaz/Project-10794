@@ -60,7 +60,7 @@ MONTHS_PT = {
 
 def parse_release_date(text):
     """
-    "15 Outubro 2026" / "2026-12-31" / "31/12/2026" → date, or None.
+    "15 Outubro 2026" / "2026-12-31" / "31/12/2026" / "31-12-2026" → date, or None.
     """
     if not text:
         return None
@@ -68,7 +68,7 @@ def parse_release_date(text):
     try:
         if m := re.search(r"(\d{4})-(\d{2})-(\d{2})", text):
             return date(int(m[1]), int(m[2]), int(m[3]))
-        if m := re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", text):
+        if m := re.search(r"(\d{1,2})[/-](\d{1,2})[/-](\d{4})", text):
             return date(int(m[3]), int(m[2]), int(m[1]))
         if m := re.search(r"(\d{1,2})\s+(?:de\s+)?([a-zç]+)\s+(?:de\s+)?(\d{4})", text.lower()):
             month = MONTHS_PT.get(m[2])

@@ -40,6 +40,7 @@ STANDARD_PHRASES = {"", "edition", "standard", "standard edition", "edicao stand
 # Products we don't track at all: a download code (in a box or digital), no disc / cartridge
 EXCLUDED = re.compile(
     r"c[oó]digo\s+(na\s+caixa|de\s+descarga|de\s+download|digital)|code\s+in\s+(a\s+)?box|[\[\(]\s*cod\s*[\]\)]"
+    r"|[\[\(]\s*coib\s*[\]\)]"                      # Gaming Replay: "(COIB)" = code in box
     r"|download\s+digital|digital\s+download",
     re.IGNORECASE,
 )
@@ -47,8 +48,12 @@ EXCLUDED = re.compile(
 # Tags in brackets that make it a different product. Other brackets ("OFERTA DLC", "PT") are ignored.
 BRACKET_TAGS = [
     ("PlayStation Hits", re.compile(r"playstation\s+hits", re.IGNORECASE)),
-    ("Import JP", re.compile(r"import\s+jap", re.IGNORECASE)),
+    ("Import JP", re.compile(r"import\s+jap|edi[cç][aã]o\s+japonesa", re.IGNORECASE)),
+    ("Import US", re.compile(r"edi[cç][aã]o\s+americana", re.IGNORECASE)),       # Gaming Replay's imports
+    ("Import Asia", re.compile(r"edi[cç][aã]o\s+asi[aá]tica", re.IGNORECASE)),
 ]
+# A bonus that comes with the game, written after it: "Mortal Kombat 1 Switch - Oferta DLC" (Gaming Replay)
+OFFER_SUFFIX = re.compile(r"\s+[-–]\s+oferta\b.*$", re.IGNORECASE)
 # Tags that appear anywhere in the name
 NAME_TAGS = [
     ("Game Key Card", re.compile(r"\bgame[\s-]*key[\s-]*card\b", re.IGNORECASE)),
@@ -123,15 +128,16 @@ def extract_tags(name):
 
     def bracket(match):
         content = match.group(1).strip()
+        found = {tag for tag, pattern in BRACKET_TAGS if pattern.search(content)}
+        if found:                        # "(Edição Americana)": a tag, not an edition name
+            tags.update(found)
+            return " "
         # "[STEELBOOK EDITION]": an edition written in brackets, keep it in the name
         if set(normalize_name(content).split()) & EDITION_END:
             return f" {content} "
-        for tag, pattern in BRACKET_TAGS:
-            if pattern.search(content):
-                tags.add(tag)
         return " "
 
-    text = BRACKETS.sub(bracket, name)
+    text = BRACKETS.sub(bracket, OFFER_SUFFIX.sub("", name))
 
     for tag, pattern in NAME_TAGS:
         if pattern.search(text):

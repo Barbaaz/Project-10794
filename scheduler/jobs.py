@@ -7,6 +7,7 @@ from db import connection
 from pipeline.process_scraped_data import process_products
 from scrapers.cstech.scraper import CSTechScraper
 from scrapers.darty.scraper import DartyScraper
+from scrapers.gaming_replay.scraper import GamingReplayScraper
 from scrapers.mega_mania.scraper import MegaManiaScraper
 from scrapers.press_start.scraper import PressStartScraper
 from scrapers.radio_popular.scraper import RadioPopularScraper
@@ -32,6 +33,7 @@ SCRAPERS = {
     "cstech": CSTechScraper,
     "darty": DartyScraper,
     "radio_popular": RadioPopularScraper,
+    "gaming_replay": GamingReplayScraper,
 }
 
 

@@ -27,7 +27,8 @@ def client(app_on_test_db, web_client):
 def test_store_status(client):
     stores = {s["slug"]: s for s in client.get("/api/stores").get_json()}
 
-    assert "gaming_replay" not in stores     # inactive
+    assert "radio_popular" not in stores     # switched off
+    assert "gaming_replay" in stores
     assert stores["press_start"]["last_status"] == "success"
     assert stores["press_start"]["is_stale"] is False
     assert stores["press_start"]["last_error"] is None

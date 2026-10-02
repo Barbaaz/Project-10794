@@ -38,7 +38,7 @@ USING (VALUES
     ('darty',         N'Darty',         N'https://darty.pt',             1),
     -- off until a first manual run is checked: python -m scheduler.run_single_store radio_popular
     ('radio_popular', N'Rádio Popular', N'https://www.radiopopular.pt',  0),
-    ('gaming_replay', N'Gaming Replay', N'https://www.gamingreplay.com/pt/', 0)  -- scraper not written yet
+    ('gaming_replay', N'Gaming Replay', N'https://www.gamingreplay.com/pt/', 1)  -- since 2026-10-03
 ) AS s (slug, name, base_url, is_active)
 ON t.slug = s.slug
 -- is_active is not updated, so a store switched off in the database stays off

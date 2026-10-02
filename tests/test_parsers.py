@@ -354,3 +354,21 @@ def test_cstech_ignores_compare_at_price_not_above_price():
         "variants": [{"title": "Default Title", "price": "19.99", "compare_at_price": "19.99", "available": True}],
     }
     assert CSTechScraper().parse_item(item)["old_price"] is None
+
+
+def test_gaming_replay(fixture_text):
+    from scrapers.gaming_replay.parser import parse_products as parse_gaming_replay
+    products = parse_gaming_replay(fixture_text("gaming_replay_listing.html"), "PS5")
+
+    assert len(products) == 5
+    assert all(set(p) == KEYS for p in products)
+    assert all(p["url"].startswith("https://www.gamingreplay.com/pt/") for p in products)
+    assert by_name(products, "Soul Hackers 2")["price"] == 34.99
+
+    # "Em Reserva (31-12-2026)": a pre-order that can be bought, with its date
+    pre_order = by_name(products, "Silent Hill: Townfall")
+    assert (pre_order["is_preorder"], pre_order["in_stock"], pre_order["release_date"]) == (True, True, date(2026, 12, 31))
+    assert by_name(products, "(Seminovo)")["condition"] == "used"
+    on_sale = by_name(products, "Miles Morales")
+    assert (on_sale["price"], on_sale["old_price"]) == (29.99, 49.99)
+    assert by_name(products, "DualSense")["in_stock"] is False          # "Esgotado"

@@ -89,3 +89,23 @@ def test_same_game_from_different_stores_normalizes_the_same(a, b):
 ])
 def test_codigo_na_caixa_is_excluded(name, excluded):
     assert is_excluded(name) == excluded
+
+
+@pytest.mark.parametrize("name, game_key, edition_key", [
+    # Gaming Replay (2026-10-03): a bonus after the name isn't part of the title
+    ("Mortal Kombat 1 Switch - Oferta DLC", "mortal kombat 1", ""),
+    ("Animal Crossing New Horizons - Nintendo Switch 2 Edition Switch 2 - Oferta Postal", "animal crossing new horizons", ""),
+    ("Ofertas Especiais Game - Deluxe Edition PS5", "ofertas especiais game", "deluxe"),
+    # regional imports are their own product, tagged like "Import JP"
+    ("Capcom Fighting Collection 2 (Edição Americana) Switch", "capcom fighting collection 2", "|Import US"),
+    ("Hyke: Northern Light(s) (Edição Asiática) Switch", "hyke northern light", "|Import Asia"),
+    ("Food Girls 2: Civil War (Edição Japonesa) Switch", "food girls 2 civil war", "|Import JP"),
+])
+def test_gaming_replay_names(name, game_key, edition_key):
+    parsed = parse_title(name)
+    assert (parsed.game_key, parsed.edition_key) == (game_key, edition_key)
+
+
+def test_coib_is_code_in_box():
+    assert is_excluded("Sushi Bar Express (COIB) Switch")
+    assert not is_excluded("Coibra Racing PS5")
