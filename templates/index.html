@@ -42,6 +42,7 @@
         .offer-btn .price { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
         .offer-btn .was { font-weight: 400; text-decoration: line-through; opacity: .75; margin-right: .2rem; }
         .discount-badge { position: absolute; top: .4rem; left: .4rem; font-size: .8rem; }
+        .low-price-badge { position: absolute; bottom: .4rem; left: .4rem; font-size: .75rem; }
         .release-date { width: 3.2rem; }
         .release-item img { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: #000; }
         .min-w-0 { min-width: 0; }
@@ -159,6 +160,8 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
             <div class="position-relative">
                 <a href="${gameUrl}" class="cover-link"><img src="${esc(best?.image || group.image || "")}" alt="" loading="lazy"></a>
                 ${coverBadge}
+                ${group.at_historical_low ? `<span class="badge text-bg-success low-price-badge"
+                    title="${esc(t("low_badge_hint"))}">${t("low_badge")}</span>` : ""}
                 <button type="button" class="btn btn-light fav-btn shadow-sm"
                     aria-label="${t("favorite")}" aria-pressed="${isFavorite(group)}">${isFavorite(group) ? "★" : "☆"}</button>
             </div>

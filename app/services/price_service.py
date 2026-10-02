@@ -1,4 +1,5 @@
 from app.services.common import LATEST_PRICE, OFFER_COLUMNS, cached, page_result
+from app.services.tag_service import mark_historical_lows
 from db import fetch_all, fetch_one, placeholders
 
 
@@ -30,7 +31,7 @@ def attach_store_offers(items):
         own.update(was_price=item.get("was_price"), discount_percent=item.get("discount_percent"))
         item["offers"] = [own] + [o for o in others
                                   if o["edition_id"] == item["edition_id"] and o["offer_id"] != item["offer_id"]]
-    return items
+    return mark_historical_lows(items)
 
 
 def featured_discounts(limit=12, min_percent=10, platform=None):

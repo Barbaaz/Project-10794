@@ -387,10 +387,9 @@ function renderEdition(edition, i) {
 
     const low = edition.lowest_price;
     const best = edition.offers.find(o => o.in_stock);
-    // "Lowest ever" only means something after a while (same 30 days as the discount rule)
-    const firstSeen = editionHistory(edition).flatMap(o => o.history.map(p => p.date)).sort()[0];
-    const trackedDays = firstSeen ? (Date.now() - new Date(firstSeen)) / 86400000 : 0;
-    const isLowNow = low && best && best.condition === "new" && best.price <= low.price && trackedDays >= 30;
+    // A store dropped it to the lowest price ever: the same rule as the cards' badge and the tag
+    // (app/services/tag_service.py, AT_HISTORICAL_LOW)
+    const isLowNow = edition.at_historical_low;
 
     card.innerHTML = `
         <div class="card-body">

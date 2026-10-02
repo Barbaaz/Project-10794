@@ -52,3 +52,40 @@ def test_catalog_with_tags(web_client):
         response = web_client.get("/api/games/catalog", query_string={"tags": tags, "pegi": 16, "genre": "rpg"})
         assert response.status_code == 200, tags
     assert web_client.get("/api/games/catalog?pegi=x").status_code == 400
+
+
+def test_historical_low_needs_a_real_drop(app_on_test_db):
+    """Only an edition a store dropped to its lowest price ever; not a price that never changed,
+    nor a drop that is still above an earlier low."""
+    from app.services.tag_service import mark_historical_lows
+    c = app_on_test_db.conn.cursor()
+    ps5 = c.execute("SELECT id FROM platforms WHERE code = 'PS5'").fetchone()[0]
+    store = c.execute("SELECT id FROM stores WHERE slug = 'press_start'").fetchone()[0]
+    made = {"games": [], "editions": [], "products": []}
+
+    def edition_with_prices(name, prices):
+        game = c.execute("INSERT INTO games (platform_id, title, normalized_title) OUTPUT INSERTED.id VALUES (?, ?, ?)",
+                         ps5, name, name.lower()).fetchone()[0]
+        edition = c.execute("INSERT INTO game_editions (game_id, edition_key, name) OUTPUT INSERTED.id "
+                            "VALUES (?, '', 'Standard')", game).fetchone()[0]
+        sp = c.execute("INSERT INTO store_products (store_id, game_id, edition_id, platform_id, external_name, url) "
+                       "OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)", store, game, edition, ps5, name,
+                       f"https://low.test/{name}").fetchone()[0]
+        for days_ago, price in prices:
+            c.execute("INSERT INTO price_snapshots (store_product_id, price, in_stock, scraped_at) "
+                      "VALUES (?, ?, 1, DATEADD(DAY, ?, SYSUTCDATETIME()))", sp, price, -days_ago)
+        made["games"].append(game); made["editions"].append(edition); made["products"].append(sp)
+        return edition
+
+    try:
+        dropped = edition_with_prices("Low Dropped", [(10, 30), (1, 25)])
+        steady = edition_with_prices("Low Steady", [(10, 25)])
+        above = edition_with_prices("Low Above", [(20, 20), (10, 30), (1, 27)])
+        marked = mark_historical_lows([{"edition_id": e} for e in (dropped, steady, above)])
+        assert [g["at_historical_low"] for g in marked] == [True, False, False]
+    finally:
+        ids = lambda kind: ",".join(map(str, made[kind]))
+        c.execute(f"DELETE FROM price_snapshots WHERE store_product_id IN ({ids('products')})")
+        c.execute(f"DELETE FROM store_products WHERE id IN ({ids('products')})")
+        c.execute(f"DELETE FROM game_editions WHERE id IN ({ids('editions')})")
+        c.execute(f"DELETE FROM games WHERE id IN ({ids('games')})")

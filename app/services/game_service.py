@@ -6,7 +6,7 @@ from app.services.common import (
 )
 from app.services.genre_service import genre_filter
 from app.services.listing_service import used_summaries
-from app.services.tag_service import pegi_filter, tag_filters
+from app.services.tag_service import mark_historical_lows, pegi_filter, tag_filters
 from app.services.release_service import game_release_date, game_release_dates
 from db import fetch_all, fetch_one, placeholders
 
@@ -129,7 +129,7 @@ def get_game(game_id):
             game["store_details"].setdefault(key, value)
 
     # Editions whose products all left the stores have nothing to show
-    game["editions"] = [e for e in editions if e["offers"]]
+    game["editions"] = mark_historical_lows([e for e in editions if e["offers"]], key="id")
 
     release = game_release_date(game_id) or {}
     game["release_date"] = release.get("release_date")
@@ -244,11 +244,11 @@ def editions_with_offers(edition_ids):
 
     order = {edition_id: i for i, edition_id in enumerate(edition_ids)}
     used = used_summaries(edition_ids)
-    return [
+    return mark_historical_lows([
         card_group(e, [o for o in offers if o["edition_id"] == e["edition_id"]],
                    image=e["image"], lowest_price=lowest.get(e["edition_id"]), used=used.get(e["edition_id"]))
         for e in sorted(editions, key=lambda e: order[e["edition_id"]])
-    ]
+    ])
 
 
 CATALOG_SORTS = {
@@ -355,7 +355,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             g["release_date"] = release.get("release_date")
             g["date_is_estimate"] = release.get("date_is_estimate", False)
 
-    return page_result(page, per_page, total, groups=groups)
+    return page_result(page, per_page, total, groups=mark_historical_lows(groups))
 
 
 def game_exists(game_id):
