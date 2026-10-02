@@ -6,6 +6,7 @@
     <title>Game Price Tracker</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="/static/i18n.js"></script>
 
     <style>
         .game-card .cover-link { display: block; overflow: hidden; background: #000; }
@@ -54,22 +55,23 @@
         <h1 class="h3 mb-0"><a href="/" onclick="goHome(); return false;" class="link-body-emphasis text-decoration-none">🎮 Game Price Tracker</a></h1>
         <div class="d-flex gap-2">
             <!-- Back to the front page; shown while search results are on screen -->
-            <button id="home-btn" onclick="goHome()" class="btn btn-sm btn-primary d-none">🏠 Início</button>
-            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" aria-label="Modo escuro">🌙</button>
+            <button id="home-btn" onclick="goHome()" class="btn btn-sm btn-primary d-none" data-i18n="home">🏠 Início</button>
+            <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
+            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
         </div>
     </div>
 
     <form class="row g-2 mb-4" onsubmit="handleSearch(event)">
         <div class="col-md-6">
-            <input type="text" id="q" class="form-control" placeholder="Ex: resident evil" autofocus>
+            <input type="text" id="q" class="form-control" data-i18n-placeholder="search_placeholder" autofocus>
         </div>
         <div class="col-md-3">
-            <select id="consoleFilter" class="form-select" aria-label="Plataforma">
-                <option value="">Todas as plataformas</option>
+            <select id="consoleFilter" class="form-select" data-i18n-aria-label="platform">
+                <option value="" data-i18n="all_platforms"></option>
             </select>
         </div>
         <div class="col-md-3 d-grid">
-            <button type="submit" class="btn btn-primary">Pesquisar</button>
+            <button type="submit" class="btn btn-primary" data-i18n="search"></button>
         </div>
     </form>
 
@@ -79,12 +81,12 @@
     <!-- Front page: the visitor picks what to see; the choice is remembered in this browser -->
     <section id="front" class="mb-4">
         <ul class="nav nav-pills mb-3 gap-1" role="tablist">
-            <li class="nav-item"><button class="nav-link" data-tab="discounts" role="tab">🔥 Descontos e melhores preços</button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="preorders" role="tab">📦 Pré-reservas</button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="releases" role="tab">📅 Calendário de lançamentos</button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="catalog" role="tab">📚 Catálogo</button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="special" role="tab">💎 Edições especiais</button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="favorites" role="tab">⭐ Favoritos</button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="discounts" role="tab" data-i18n="tab_discounts"></button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="preorders" role="tab" data-i18n="tab_preorders"></button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="releases" role="tab" data-i18n="tab_releases"></button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="catalog" role="tab" data-i18n="tab_catalog"></button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="special" role="tab" data-i18n="tab_special"></button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="favorites" role="tab" data-i18n="tab_favorites"></button></li>
         </ul>
         <div id="front-loading" class="text-center my-4 d-none"><div class="spinner-border text-primary"></div></div>
         <div id="front-content"></div>
@@ -92,7 +94,7 @@
     </section>
 
     <div id="loading" class="text-center my-4 d-none"><div class="spinner-border text-primary"></div></div>
-    <p id="empty" class="text-body-secondary d-none">Nenhum jogo encontrado.</p>
+    <p id="empty" class="text-body-secondary d-none" data-i18n="no_results"></p>
 
     <div id="results" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 row-cols-xxl-8 g-2"></div>
 
@@ -102,7 +104,7 @@
 
 <script>
 const MAX_OFFERS = 3;   // offers shown on a card; the game page has all of them
-const eur = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" });
+// t(), eur, LOCALE, fmtNumber: static/i18n.js
 
 let currentData = [];
 let hasSearched = false;
@@ -152,8 +154,8 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
     const rows = offers.slice(0, MAX_OFFERS).map((o, i) => `
         <a href="${esc(o.url)}" target="_blank" rel="noopener"
            class="btn offer-btn ${i === 0 && o.in_stock ? "btn-success" : "btn-secondary"} ${o.in_stock ? "" : "opacity-75"}"
-           title="Ver na ${esc(storeName(o.store))}">
-            <span class="store">${esc(storeName(o.store))}${o.condition === "used" ? " · Usado" : ""}${o.in_stock ? "" : " · Esgotado"}</span>
+           title="${esc(t("view_at", { store: storeName(o.store) }))}">
+            <span class="store">${esc(storeName(o.store))}${o.condition === "used" ? ` · ${t("used")}` : ""}${o.in_stock ? "" : ` · ${t("sold_out")}`}</span>
             <span class="price">
                 ${o.discount_percent && !coverBadge ? `<span class="badge text-bg-danger">-${o.discount_percent}%</span>` : ""}
                 ${o.was_price ? `<span class="was">${eur.format(o.was_price)}</span>` : ""}${eur.format(o.price)}
@@ -161,8 +163,8 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
         </a>`).join("");
 
     const more = offers.length > MAX_OFFERS
-        ? `<a href="${gameUrl}" class="btn btn-primary offer-btn justify-content-center">Ver todas as lojas (+${offers.length - MAX_OFFERS})</a>`
-        : offers.length ? "" : '<div class="small text-body-secondary">Sem ofertas de momento</div>';
+        ? `<a href="${gameUrl}" class="btn btn-primary offer-btn justify-content-center">${t("see_all_stores", { count: offers.length - MAX_OFFERS })}</a>`
+        : offers.length ? "" : `<div class="small text-body-secondary">${t("no_offers")}</div>`;
 
     const col = document.createElement("div");
     col.className = "col";
@@ -172,7 +174,7 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
                 <a href="${gameUrl}" class="cover-link"><img src="${esc(best?.image || group.image || "")}" alt="" loading="lazy"></a>
                 ${coverBadge}
                 <button type="button" class="btn btn-light fav-btn shadow-sm"
-                    aria-label="Favorito" aria-pressed="${isFavorite(group)}">${isFavorite(group) ? "★" : "☆"}</button>
+                    aria-label="${t("favorite")}" aria-pressed="${isFavorite(group)}">${isFavorite(group) ? "★" : "☆"}</button>
             </div>
             <div class="card-body d-flex flex-column">
                 <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(group.name)}">${esc(group.name)}</a>
@@ -227,7 +229,7 @@ async function showCatalogPage(page) {
 function pagination(page, pages) {
     const nav = document.createElement("nav");
     nav.className = "d-flex flex-wrap justify-content-center gap-1 mt-4";
-    nav.setAttribute("aria-label", "Páginas");
+    nav.setAttribute("aria-label", t("pages"));
     if (!Number.isInteger(pages) || pages <= 1) return nav;
 
     const shown = new Set([1, pages]);
@@ -245,7 +247,7 @@ function pagination(page, pages) {
         return b;
     };
 
-    nav.appendChild(button("« Anterior", page - 1, { disabled: page === 1 }));
+    nav.appendChild(button(t("previous"), page - 1, { disabled: page === 1 }));
     numbers.forEach((p, i) => {
         if (i > 0 && p - numbers[i - 1] > 1) {
             const gap = document.createElement("span");
@@ -255,7 +257,7 @@ function pagination(page, pages) {
         }
         nav.appendChild(button(String(p), p, { current: p === page }));
     });
-    nav.appendChild(button("Seguinte »", page + 1, { disabled: page === pages }));
+    nav.appendChild(button(t("next"), page + 1, { disabled: page === pages }));
     return nav;
 }
 
@@ -273,13 +275,13 @@ function renderCatalog(data) {
     const wrap = document.createElement("div");
     wrap.innerHTML = `
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <span class="small text-body-secondary me-auto">${data.total.toLocaleString("pt-PT")}
-                ${data.special ? "edições especiais" : "edições"} em stock · página ${data.page} de ${data.pages}</span>
-            <label class="small text-body-secondary" for="catalog-sort">Ordenar:</label>
+            <span class="small text-body-secondary me-auto">${t(data.special ? "special_count" : "catalog_count",
+                { count: fmtNumber(data.total), page: data.page, pages: data.pages })}</span>
+            <label class="small text-body-secondary" for="catalog-sort">${t("sort")}</label>
             <select id="catalog-sort" class="form-select form-select-sm w-auto">
-                <option value="name">Nome (A–Z)</option>
-                <option value="price_asc">Preço: mais barato primeiro</option>
-                <option value="price_desc">Preço: mais caro primeiro</option>
+                <option value="name">${t("sort_name")}</option>
+                <option value="price_asc">${t("sort_price_asc")}</option>
+                <option value="price_desc">${t("sort_price_desc")}</option>
             </select>
         </div>`;
 
@@ -297,7 +299,7 @@ function renderCatalog(data) {
         if (!g.is_preorder) return grid.appendChild(makeCard(g));
         const card = { ...g, platform_name: `${g.platform_name} · 📅 ${releaseLabel(g.release_date, g.date_is_estimate)}` };
         grid.appendChild(makeCard(card, {
-            coverBadge: `<span class="badge text-bg-primary discount-badge">Pré-reserva</span>`,
+            coverBadge: `<span class="badge text-bg-primary discount-badge">${t("preorder")}</span>`,
         }));
     });
     wrap.appendChild(grid);
@@ -320,19 +322,18 @@ const FRONT_TABS = {
             return deals.map(d => ({ ...d, isStoreDeal: true }));
         },
         render: renderDiscounts,
-        empty: "Ainda sem descontos para mostrar. Só contam descontos reais: o preço tem de estar abaixo "
-             + "do mais baixo dos 30 dias anteriores, por isso os primeiros aparecem após um mês de histórico.",
+        empty: "empty_discounts",
     },
-    preorders: { url: "/api/preorders", render: renderPreorders, empty: "Sem jogos em pré-reserva de momento." },
-    releases: { url: "/api/releases", render: renderReleases, empty: "Ainda sem datas de lançamento anunciadas." },
-    catalog: catalogTab(false, "Sem jogos em stock para esta plataforma."),
-    special: catalogTab(true, "Sem edições especiais em stock para esta plataforma."),
+    preorders: { url: "/api/preorders", render: renderPreorders, empty: "empty_preorders" },
+    releases: { url: "/api/releases", render: renderReleases, empty: "empty_releases" },
+    catalog: catalogTab(false, "empty_catalog"),
+    special: catalogTab(true, "empty_special"),
     favorites: {
         // the list changes as the visitor stars games, so it's fetched every time
         url: () => `/api/games/editions?ids=${favorites.join(",")}`,
         fresh: true,
         render: renderFavorites,
-        empty: "Ainda não tens favoritos. Carrega na ☆ de um jogo para o acompanhares aqui.",
+        empty: "empty_favorites",
     },
 };
 const frontData = {};      // tab → data, loaded once per visit
@@ -343,9 +344,9 @@ try { frontTab = FRONT_TABS[localStorage.getItem("frontTab")] ? localStorage.get
 const tabFromUrl = new URLSearchParams(location.search).get("tab");
 if (FRONT_TABS[tabFromUrl]) frontTab = tabFromUrl;
 
-const MONTHS = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
-                "agosto", "setembro", "outubro", "novembro", "dezembro"];
-const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+// Month and weekday names in the visitor's language
+const monthName = d => d.toLocaleDateString(LOCALE, { month: "long" });
+const weekdayName = d => d.toLocaleDateString(LOCALE, { weekday: "short" }).replace(".", "");
 
 // "2026-10-15" → Date at local midnight (new Date("2026-10-15") would be UTC)
 function parseDay(iso) {
@@ -354,10 +355,10 @@ function parseDay(iso) {
 }
 
 function releaseLabel(iso, isEstimate) {
-    if (!iso) return "Data por anunciar";
+    if (!iso) return t("date_tba");
     const day = parseDay(iso);
-    if (isEstimate) return `Data por anunciar (${day.getFullYear()})`;
-    return `${day.getDate()} ${MONTHS[day.getMonth()].slice(0, 3)} ${day.getFullYear()}`;
+    if (isEstimate) return t("date_tba_year", { year: day.getFullYear() });
+    return day.toLocaleDateString(LOCALE, { day: "numeric", month: "short", year: "numeric" }).replace(".", "");
 }
 
 // Keep the address bar in step with what's on screen (/?q=… or /?tab=…), and remember it
@@ -420,7 +421,7 @@ function renderFront() {
         const data = frontData[frontTab];
         const hasGroups = Boolean(data?.groups?.length);
         if (hasGroups) content.appendChild(config.render(data));
-        empty.textContent = config.empty;
+        empty.textContent = t(config.empty);
         empty.classList.toggle("d-none", hasGroups);
         return;
     }
@@ -430,7 +431,7 @@ function renderFront() {
 
     if (items.length) content.appendChild(config.render(items));
 
-    empty.textContent = selected && frontData[frontTab]?.length ? "Nada para esta plataforma." : FRONT_TABS[frontTab].empty;
+    empty.textContent = selected && frontData[frontTab]?.length ? t("empty_platform") : t(FRONT_TABS[frontTab].empty);
     empty.classList.toggle("d-none", items.length > 0);
 }
 
@@ -448,14 +449,14 @@ function renderFavorites(groups) {
         const best = g.offers.find(o => o.in_stock && o.condition === "new");
         const lines = [];
         if (g.offers.some(o => o.restocked_at)) {
-            lines.push('<span class="badge text-bg-warning">🔔 De volta ao stock</span>');
+            lines.push(`<span class="badge text-bg-warning">${t("back_in_stock")}</span>`);
         }
         // "Lowest ever" only means something after a while (same 30 days as the discount rule)
         const trackedDays = low ? (Date.now() - new Date(low.tracked_since)) / 86400000 : 0;
         if (low && best && best.price <= low.price && trackedDays >= 30) {
-            lines.push('<span class="badge text-bg-success">★ Preço mais baixo de sempre</span>');
+            lines.push(`<span class="badge text-bg-success">${t("lowest_ever")}</span>`);
         } else if (low) {
-            lines.push(`<span class="text-body-secondary">Mínimo histórico: ${eur.format(low.price)}</span>`);
+            lines.push(`<span class="text-body-secondary">${t("historical_low_short", { price: eur.format(low.price) })}</span>`);
         }
         grid.appendChild(makeCard(g, { extraLine: lines.join(" ") }));
     });
@@ -500,14 +501,14 @@ function renderRestockAlerts(alerts) {
             <a href="/game/${group.game_id}" class="fw-semibold link-body-emphasis">${esc(group.name)}</a>
             <span class="text-body-secondary small">${esc(group.platform_name)}</span>
             <span>· ${esc(storeName(offer.store))} · <strong>${eur.format(offer.price)}</strong></span>
-            <a href="${esc(offer.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-success py-0">Ver na loja</a>
+            <a href="${esc(offer.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-success py-0">${t("view_in_store")}</a>
         </li>`).join("");
 
     box.innerHTML = `
         <div class="alert alert-warning alert-dismissible mb-4" role="status">
-            <div class="fw-semibold mb-1">🔔 ${alerts.length === 1 ? "Um favorito voltou" : `${alerts.length} favoritos voltaram`} ao stock</div>
+            <div class="fw-semibold mb-1">🔔 ${alerts.length === 1 ? t("restock_one") : t("restock_many", { count: alerts.length })}</div>
             <ul class="list-unstyled mb-0">${items}</ul>
-            <button type="button" class="btn-close" aria-label="Dispensar"></button>
+            <button type="button" class="btn-close" aria-label="${t("dismiss")}"></button>
         </div>`;
 
     box.querySelector(".btn-close").onclick = () => {
@@ -526,11 +527,7 @@ function renderDiscounts(offers) {
 
     if (storeDeals) {
         wrap.innerHTML = `
-            <p class="small text-body-secondary mb-3">
-                <strong>Melhores preços entre lojas.</strong> Ainda não há descontos reais para mostrar
-                (o preço tem de estar abaixo do mais baixo dos 30 dias anteriores, e o histórico começou
-                a 1 de outubro). Entretanto, estes jogos estão bem mais baratos numa loja do que na seguinte.
-            </p>`;
+            <p class="small text-body-secondary mb-3">${t("store_deals_intro")}</p>`;
     }
 
     const grid = cardGrid();
@@ -541,7 +538,7 @@ function renderDiscounts(offers) {
                         edition_id: o.edition_id, offers: o.offers || [o] };
         grid.appendChild(makeCard(group, {
             coverBadge: storeDeals
-                ? `<span class="badge text-bg-success discount-badge">-${o.savings_percent}% vs outras lojas</span>`
+                ? `<span class="badge text-bg-success discount-badge">${t("vs_other_stores", { percent: o.savings_percent })}</span>`
                 : `<span class="badge text-bg-danger discount-badge">-${o.discount_percent}%</span>`,
         }));
     });
@@ -552,7 +549,7 @@ function renderDiscounts(offers) {
 function renderPreorders(groups) {
     const grid = cardGrid();
     groups.forEach(g => grid.appendChild(makeCard(g, {
-        coverBadge: `<span class="badge text-bg-primary discount-badge">Pré-reserva</span>`,
+        coverBadge: `<span class="badge text-bg-primary discount-badge">${t("preorder")}</span>`,
         extraLine: `📅 ${esc(releaseLabel(g.release_date, g.date_is_estimate))}`,
     })));
     return grid;
@@ -573,7 +570,7 @@ function renderReleases(games) {
         if (monthKey !== month) {
             month = monthKey;
             wrap.insertAdjacentHTML("beforeend",
-                `<h3 class="h6 text-uppercase text-body-secondary mt-4 mb-2">${MONTHS[day.getMonth()]} ${day.getFullYear()}</h3>`);
+                `<h3 class="h6 text-uppercase text-body-secondary mt-4 mb-2">${monthName(day)} ${day.getFullYear()}</h3>`);
         }
         if (g.release_date !== dayKey) {
             dayKey = g.release_date;
@@ -583,8 +580,8 @@ function renderReleases(games) {
             row.innerHTML = `
                 <div class="release-date text-center flex-shrink-0">
                     <div class="fs-4 fw-bold lh-1">${day.getDate()}</div>
-                    <div class="small text-body-secondary">${WEEKDAYS[day.getDay()]}</div>
-                    ${isToday ? '<span class="badge text-bg-success">Hoje</span>' : ""}
+                    <div class="small text-body-secondary">${weekdayName(day)}</div>
+                    ${isToday ? `<span class="badge text-bg-success">${t("today")}</span>` : ""}
                 </div>
                 <div class="release-games flex-grow-1 row row-cols-1 row-cols-md-2 row-cols-xl-3 g-2"></div>`;
             wrap.appendChild(row);
@@ -594,7 +591,7 @@ function renderReleases(games) {
     });
 
     if (estimated.length) {
-        wrap.insertAdjacentHTML("beforeend", `<h3 class="h6 text-uppercase text-body-secondary mt-4 mb-2">Data por anunciar</h3>`);
+        wrap.insertAdjacentHTML("beforeend", `<h3 class="h6 text-uppercase text-body-secondary mt-4 mb-2">${t("date_tba")}</h3>`);
         const list = document.createElement("div");
         list.className = "row row-cols-1 row-cols-md-2 row-cols-xl-3 g-2";
         estimated.forEach(g => list.appendChild(releaseItem(g, `${parseDay(g.release_date).getFullYear()}`)));
@@ -607,7 +604,7 @@ function releaseItem(g, note = "") {
     const col = document.createElement("div");
     col.className = "col";
     const gameUrl = `/game/${g.game_id}`;
-    const editions = g.editions > 1 ? ` · ${g.editions} edições` : "";
+    const editions = g.editions > 1 ? ` · ${t("editions_count", { count: g.editions })}` : "";
     col.innerHTML = `
         <div class="d-flex gap-2 align-items-center release-item">
             <a href="${gameUrl}" class="flex-shrink-0"><img src="${esc(g.image || "")}" alt="" loading="lazy"></a>
@@ -617,7 +614,7 @@ function releaseItem(g, note = "") {
                 <div class="small text-body-secondary">${esc(g.platform_name)}${editions}${note ? ` · ${esc(note)}` : ""}</div>
             </div>
             ${g.best_price != null ? `<a href="${esc(g.url)}" target="_blank" rel="noopener"
-                class="btn btn-sm btn-success flex-shrink-0" title="Ver na ${esc(storeName(g.store))}">
+                class="btn btn-sm btn-success flex-shrink-0" title="${esc(t("view_at", { store: storeName(g.store) }))}">
                 ${eur.format(g.best_price)}<span class="d-none d-sm-inline"> · ${esc(storeName(g.store))}</span></a>` : ""}
         </div>`;
     return col;
@@ -700,23 +697,23 @@ async function loadFilters() {
 
 function timeAgo(iso) {
     const hours = (Date.now() - new Date(iso)) / 3600000;
-    if (hours < 1) return "há menos de 1 h";
-    if (hours < 48) return `há ${Math.floor(hours)} h`;
-    return `há ${Math.floor(hours / 24)} dias`;
+    if (hours < 1) return t("ago_less_hour");
+    if (hours < 48) return t("ago_hours", { count: Math.floor(hours) });
+    return t("ago_days", { count: Math.floor(hours / 24) });
 }
 
 // "Preços atualizados: CSTech há 3 h · Mega Mania há 3 h · ⚠ Press Start: falhou há 1 h"
 function renderStoreStatus(storeList) {
     const parts = storeList.map(s => {
-        const problem = s.last_status === "failed" ? "a última atualização falhou"
-                      : s.last_status === "warning" ? "a última atualização teve um problema"
-                      : s.is_stale ? "desatualizada" : null;
-        const when = s.last_updated ? `atualizado ${timeAgo(s.last_updated)}` : "nunca atualizado";
+        const problem = s.last_status === "failed" ? t("status_failed")
+                      : s.last_status === "warning" ? t("status_warning")
+                      : s.is_stale ? t("status_stale") : null;
+        const when = s.last_updated ? t("updated_ago", { ago: timeAgo(s.last_updated) }) : t("never_updated");
         if (!problem) return `<span>${esc(s.name)} ${when}</span>`;
         return `<span class="text-warning-emphasis" title="${esc(s.last_error || "")}">⚠ ${esc(s.name)}: ${problem} (${when})</span>`;
     });
     document.getElementById("store-status").innerHTML =
-        `Preços das lojas, atualizados uma vez por dia: ${parts.join(" · ")}`;
+        `${t("status_intro")} ${parts.join(" · ")}`;
 }
 
 // Favourites are game editions, saved in this browser by edition id
@@ -747,6 +744,7 @@ function savedTheme() {
 }
 
 document.documentElement.setAttribute("data-bs-theme", savedTheme());
+applyI18n();
 
 // /?q=zelda opens with that search, so searches can be bookmarked or shared
 loadFilters().then(() => {

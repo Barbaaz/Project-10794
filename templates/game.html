@@ -6,6 +6,7 @@
     <title>Game Price Tracker</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="/static/i18n.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
@@ -63,10 +64,13 @@
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div class="d-flex gap-2">
-            <a href="/" id="back-link" class="btn btn-sm btn-secondary">← Voltar</a>
-            <a href="/" class="btn btn-sm btn-primary">🏠 Início</a>
+            <a href="/" id="back-link" class="btn btn-sm btn-secondary" data-i18n="back"></a>
+            <a href="/" class="btn btn-sm btn-primary" data-i18n="home"></a>
         </div>
-        <button onclick="toggleDark()" class="btn btn-sm btn-secondary" aria-label="Modo escuro">🌙</button>
+        <div class="d-flex gap-2">
+            <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
+            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
+        </div>
     </div>
 
     <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
@@ -89,18 +93,18 @@
         <!-- About the game: the store's description (Portuguese) and/or IGDB's summary, screenshots -->
         <section id="about" class="card shadow-sm mb-4 d-none">
             <div class="card-body">
-                <h2 class="h5 mb-2">Sobre o jogo</h2>
+                <h2 class="h5 mb-2" data-i18n="about"></h2>
                 <div id="about-text"></div>
                 <div id="screenshots" class="screenshots mt-3"></div>
             </div>
         </section>
 
         <!-- Período do gráfico: um filtro para todos os gráficos da página -->
-        <div class="btn-group btn-group-sm mb-3" role="group" aria-label="Período">
-            <button class="btn btn-secondary" data-days="30">30 dias</button>
-            <button class="btn btn-primary active" data-days="90">90 dias</button>
-            <button class="btn btn-secondary" data-days="365">1 ano</button>
-            <button class="btn btn-secondary" data-days="0">Tudo</button>
+        <div class="btn-group btn-group-sm mb-3" role="group" data-i18n-aria-label="period">
+            <button class="btn btn-secondary" data-days="30" data-i18n="days_30"></button>
+            <button class="btn btn-primary active" data-days="90" data-i18n="days_90"></button>
+            <button class="btn btn-secondary" data-days="365" data-i18n="year_1"></button>
+            <button class="btn btn-secondary" data-days="0" data-i18n="all_time"></button>
         </div>
 
         <div id="editions"></div>
@@ -109,9 +113,9 @@
 
 <script>
 const GAME_ID = {{ game_id }};
-const eur = new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" });
-const fmtDate = d => new Date(d).toLocaleDateString("pt-PT");
-const fmtDateTime = d => new Date(d).toLocaleString("pt-PT", { dateStyle: "short", timeStyle: "short" });
+// t(), eur, LOCALE: static/i18n.js
+const fmtDate = d => new Date(d).toLocaleDateString(LOCALE);
+const fmtDateTime = d => new Date(d).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" });
 
 let game, history, stores = {}, rangeDays = 90;
 const charts = [];
@@ -147,7 +151,7 @@ async function load() {
         render();
     } catch (status) {
         document.getElementById("error").textContent =
-            status === 404 ? "Jogo não encontrado." : "Não foi possível carregar o jogo.";
+            status === 404 ? t("game_not_found") : t("game_load_error");
         document.getElementById("error").classList.remove("d-none");
     }
     document.getElementById("loading").classList.add("d-none");
@@ -162,7 +166,7 @@ function render() {
     if (game.release_date && new Date(game.release_date + "T23:59:59") >= new Date()) {
         const [y, m, d] = game.release_date.split("-");
         const release = document.getElementById("release");
-        release.textContent = game.date_is_estimate ? `Lançamento: data por anunciar (${y})` : `Lançamento: ${d}/${m}/${y}`;
+        release.textContent = game.date_is_estimate ? t("release_tba", { year: y }) : t("release_on", { date: fmtDate(`${y}-${m}-${d}T12:00:00`) });
         release.classList.remove("d-none");
     }
 
@@ -176,7 +180,7 @@ function render() {
 
     const firstDate = history.flatMap(o => o.history).map(p => p.date).sort()[0];
     document.getElementById("history-note").textContent = firstDate
-        ? `Preços acompanhados desde ${fmtDate(firstDate)}. O mínimo histórico conta só cópias novas em stock.`
+        ? t("tracked_since", { date: fmtDate(firstDate) })
         : "";
 
     const container = document.getElementById("editions");
@@ -207,10 +211,10 @@ function renderFacts() {
 
     const released = game.first_release_date;
     const facts = [
-        ["Editora", game.publishers || sd["Editora"]],
-        ["Produtora", game.developers || sd["Produtora"]],
-        ["Lançamento", released && new Date(released + "T12:00:00") <= new Date() ? fmtDate(released + "T12:00:00") : null],
-        ["Classificação", game.rating ? `${game.rating}/100 (IGDB)` : null],
+        [t("publisher"), game.publishers || sd["Editora"]],
+        [t("developer"), game.developers || sd["Produtora"]],
+        [t("released"), released && new Date(released + "T12:00:00") <= new Date() ? fmtDate(released + "T12:00:00") : null],
+        [t("rating"), game.rating ? `${game.rating}/100 (IGDB)` : null],
     ].filter(([, value]) => value);
     document.getElementById("facts").innerHTML =
         facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
@@ -222,28 +226,29 @@ function renderAbout() {
     const parts = [];
     const storeText = aboutStoreText();
 
-    if (storeText) {
-        parts.push(`${clampedText(storeText.text, 6)}
-            <div class="small text-body-secondary mt-1">Descrição da ${esc(storeName(storeText.store))}</div>`);
+    const store = storeText && { text: storeText.text, label: t(LANG === "pt" ? "store_description" : "store_description_pt", { store: storeName(storeText.store) }) };
+    const igdb = game.summary && { text: game.summary, label: t("igdb_summary") };
+    const [main, extra] = LANG === "pt" ? [store || igdb, store && igdb] : [igdb || store, igdb && store];
+
+    if (main) {
+        parts.push(`${clampedText(main.text, 6)}<div class="small text-body-secondary mt-1">${esc(main.label)}</div>`);
     }
-    if (game.summary) {
-        const summary = clampedText(game.summary, storeText ? 3 : 6);
-        parts.push(storeText
-            ? `<details class="mt-2"><summary class="small">Resumo do IGDB (em inglês)</summary><div class="mt-1">${summary}</div></details>`
-            : `${summary}<div class="small text-body-secondary mt-1">Resumo do IGDB (em inglês)</div>`);
+    if (extra) {
+        parts.push(`<details class="mt-2"><summary class="small">${esc(extra.label)}</summary>
+            <div class="mt-1">${clampedText(extra.text, 4)}</div></details>`);
     }
 
     const shots = game.screenshot_ids || [];
     document.getElementById("screenshots").innerHTML = shots.map(id => `
         <a href="${igdbImage(id, "t_1080p")}" target="_blank" rel="noopener">
-            <img src="${igdbImage(id, "t_screenshot_med")}" alt="Imagem do jogo" loading="lazy"></a>`).join("");
+            <img src="${igdbImage(id, "t_screenshot_med")}" alt="${t("screenshot")}" loading="lazy"></a>`).join("");
 
     document.getElementById("about-text").innerHTML = parts.join("");
     document.getElementById("about").classList.toggle("d-none", !parts.length && !shots.length);
     document.querySelectorAll(".clamp-toggle").forEach(btn => btn.onclick = () => {
         const text = btn.previousElementSibling;
         const open = text.classList.toggle("open");
-        btn.textContent = open ? "Ler menos" : "Ler mais";
+        btn.textContent = open ? t("read_less") : t("read_more");
     });
 }
 
@@ -273,7 +278,7 @@ function clampedText(text, lines) {
     const long = text.length > lines * 90;
     const html = esc(text).replace(/\n/g, "<br>");
     return `<div class="clamped" style="--lines:${lines}">${html}</div>`
-        + (long ? `<button type="button" class="btn btn-sm btn-secondary mt-1 clamp-toggle">Ler mais</button>` : "");
+        + (long ? `<button type="button" class="btn btn-sm btn-secondary mt-1 clamp-toggle">${t("read_more")}</button>` : "");
 }
 
 // "Conteúdo da Collector's Edition: - Estátua - Artbook ..." → ["Estátua", "Artbook", ...]
@@ -303,9 +308,9 @@ function editionInfo(edition) {
         : clampedText(source.text, 4);
     return `
         <div class="edition-info mb-3">
-            <h3 class="h6 mb-1">O que inclui</h3>
+            <h3 class="h6 mb-1">${t("whats_included")}</h3>
             ${body}
-            <div class="small text-body-secondary">Segundo a ${esc(storeName(source.store))}</div>
+            <div class="small text-body-secondary">${esc(t("according_to", { store: storeName(source.store) }))}</div>
         </div>`;
 }
 
@@ -324,27 +329,27 @@ function renderEdition(edition, i) {
         <div class="card-body">
             <h2 class="h5 mb-3">${esc(edition.name)}
                 ${edition.digital_code ? `<span class="badge text-bg-warning ms-1 align-middle"
-                    title="Segundo a descrição da loja, o jogo vem em código de download">⚠ Jogo em código digital (sem disco)</span>` : ""}</h2>
+                    title="${t("digital_code_hint")}">${t("digital_code")}</span>` : ""}</h2>
 
             ${editionInfo(edition)}
 
             <div class="d-flex flex-wrap gap-2 mb-3">
                 ${best ? `<span class="badge bg-body-secondary text-body border fs-6 fw-normal">
-                    Melhor preço agora: <strong>${eur.format(best.price)}</strong> · ${esc(storeName(best.store))}</span>` : ""}
+                    ${t("best_price_now")} <strong>${eur.format(best.price)}</strong> · ${esc(storeName(best.store))}</span>` : ""}
                 ${low ? `<span class="badge low-badge fs-6 fw-normal">
-                    ★ Mínimo histórico: <strong>${eur.format(low.price)}</strong> · ${fmtDate(low.date)} · ${esc(storeName(low.store))}</span>` : ""}
-                ${isLowNow ? `<span class="badge text-bg-success fs-6 fw-normal">Preço mais baixo de sempre</span>` : ""}
+                    ${t("historical_low")} <strong>${eur.format(low.price)}</strong> · ${fmtDate(low.date)} · ${esc(storeName(low.store))}</span>` : ""}
+                ${isLowNow ? `<span class="badge text-bg-success fs-6 fw-normal">${t("lowest_ever_now")}</span>` : ""}
             </div>
 
             ${offersTable(edition)}
 
-            <h3 class="h6 mt-4 mb-2">Histórico de preços <span class="text-body-secondary fw-normal small">(cópias novas)</span></h3>
+            <h3 class="h6 mt-4 mb-2">${t("price_history")} <span class="text-body-secondary fw-normal small">${t("new_copies")}</span></h3>
             <div class="chart-box"><canvas id="chart-${i}" role="img"
-                aria-label="Histórico de preços de ${esc(edition.name)}"></canvas></div>
-            <p class="small text-body-secondary mt-1 mb-0">Linha tracejada: esgotado nesse período.</p>
+                aria-label="${esc(t("price_history_of", { name: edition.name }))}"></canvas></div>
+            <p class="small text-body-secondary mt-1 mb-0">${t("dashed_sold_out")}</p>
 
             <details class="mt-2">
-                <summary class="small">Ver histórico em tabela</summary>
+                <summary class="small">${t("history_table")}</summary>
                 ${historyTable(edition)}
             </details>
         </div>`;
@@ -355,21 +360,21 @@ function offersTable(edition) {
     const rows = edition.offers.map(o => `
         <tr class="${o.in_stock ? "" : "text-body-secondary"}">
             <td><span class="swatch" style="background:${storeColor(o.store)}"></span>${esc(storeName(o.store))}</td>
-            <td>${o.condition === "used" ? '<span class="badge text-bg-secondary">Usado</span>' : "Novo"}</td>
+            <td>${o.condition === "used" ? `<span class="badge text-bg-secondary">${t("used")}</span>` : t("new")}</td>
             <td class="text-end">
                 ${o.was_price ? `<small class="text-decoration-line-through text-body-secondary me-1">${eur.format(o.was_price)}</small>
                     <span class="badge text-bg-danger me-1">-${o.discount_percent}%</span>` : ""}
                 <strong>${eur.format(o.price)}</strong>
             </td>
-            <td>${o.is_preorder ? '<span class="badge text-bg-primary">Pré-reserva</span>' : o.in_stock ? "Em stock" : "Esgotado"}</td>
+            <td>${o.is_preorder ? `<span class="badge text-bg-primary">${t("preorder")}</span>` : o.in_stock ? t("in_stock") : t("sold_out")}</td>
             <td class="text-end"><a href="${esc(o.url)}" target="_blank" rel="noopener"
-                class="btn btn-sm ${o.in_stock ? "btn-primary" : "btn-secondary"}">Ver na loja</a></td>
+                class="btn btn-sm ${o.in_stock ? "btn-primary" : "btn-secondary"}">${t("view_in_store")}</a></td>
         </tr>`).join("");
 
     return `
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0 prices">
-                <thead><tr><th>Loja</th><th>Estado</th><th class="text-end">Preço</th><th>Stock</th><th></th></tr></thead>
+                <thead><tr><th>${t("col_store")}</th><th>${t("col_condition")}</th><th class="text-end">${t("col_price")}</th><th>${t("col_stock")}</th><th></th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>
         </div>`;
@@ -389,12 +394,12 @@ function historyTable(edition) {
             return `<tr class="${isLow ? "table-success" : ""}">
                 <td>${fmtDateTime(p.date)}</td><td>${esc(storeName(p.store))}</td>
                 <td class="text-end">${eur.format(p.price)}${isLow ? " ★" : ""}</td>
-                <td>${p.in_stock ? "Em stock" : "Esgotado"}</td></tr>`;
+                <td>${p.in_stock ? t("in_stock") : t("sold_out")}</td></tr>`;
         }).join("");
 
     return `<table class="table table-sm mt-2 mb-0 prices">
-        <thead><tr><th>Data</th><th>Loja</th><th class="text-end">Preço</th><th>Stock</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="4" class="text-body-secondary">Sem histórico.</td></tr>'}</tbody></table>`;
+        <thead><tr><th>${t("col_date")}</th><th>${t("col_store")}</th><th class="text-end">${t("col_price")}</th><th>${t("col_stock")}</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="4" class="text-body-secondary">${t("no_history")}</td></tr>`}</tbody></table>`;
 }
 
 // Vertical crosshair under the cursor
@@ -463,7 +468,7 @@ function drawCharts() {
                 borderWidth: 1,
                 label: {
                     display: true,
-                    content: `Mínimo histórico ${eur.format(low.price)}`,
+                    content: t("chart_low", { price: eur.format(low.price) }),
                     position: "start",
                     color: css("--text-primary"),
                     backgroundColor: css("--surface-1"),
@@ -509,7 +514,7 @@ function drawCharts() {
                         callbacks: {
                             label: ctx => {
                                 const p = ctx.raw;
-                                return `${ctx.dataset.label}: ${eur.format(p.y)}${p.in_stock ? "" : " (esgotado)"}${p.extended ? " (atual)" : ""}`;
+                                return `${ctx.dataset.label}: ${eur.format(p.y)}${p.in_stock ? "" : ` ${t("chart_sold_out")}`}${p.extended ? ` ${t("chart_current")}` : ""}`;
                             },
                         },
                     },
@@ -547,9 +552,8 @@ function setBackLink() {
     if (!last || !last.startsWith("/?")) return;   // only our own pages
     const link = document.getElementById("back-link");
     link.href = last;
-    if (new URLSearchParams(last.slice(1)).get("q")) link.textContent = "← Pesquisa";
+    if (new URLSearchParams(last.slice(1)).get("q")) link.textContent = t("back_search");
 }
-setBackLink();
 
 function savedTheme() {
     let theme = null;
@@ -557,6 +561,8 @@ function savedTheme() {
     return theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 }
 document.documentElement.setAttribute("data-bs-theme", savedTheme());
+applyI18n();
+setBackLink();   // after applyI18n, which sets the default "← Voltar"
 load();
 </script>
 </body>
