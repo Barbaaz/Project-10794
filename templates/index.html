@@ -236,6 +236,7 @@ let catalogGenre = new URLSearchParams(location.search).get("genre") || "";
 let catalogTag = new URLSearchParams(location.search).get("tags") || "";
 let catalogPegi = new URLSearchParams(location.search).get("pegi") || "";
 const PEGI_AGES = [3, 7, 12, 16, 18];
+const MAX_TAGS = 5;      // as many as /api/games/catalog takes
 
 // The filters other than platform and sort: [address / API parameter, current value]
 function extraFilters() {
@@ -386,9 +387,15 @@ function renderCatalog(data, showPage = showCatalogPage) {
     const genreOptions = [...genres]
         .sort((a, b) => t(`genre_${a.genre}`).localeCompare(t(`genre_${b.genre}`), LOCALE))
         .map(g => `<option value="${esc(g.genre)}">${esc(t(`genre_${g.genre}`))}</option>`).join("");
+    // Several tags at once (all must match): the dropdown adds one, its chip's × removes it
+    const chosenTags = catalogTag.split(",").filter(Boolean);
     const tagOptions = ["mode", "theme", "price"].map(group => `<optgroup label="${esc(t(`tag_group_${group}`))}">
-        ${tags.filter(x => x.group === group)
+        ${tags.filter(x => x.group === group && !chosenTags.includes(x.tag))
             .map(x => `<option value="${esc(x.tag)}">${esc(t(`tag_${x.tag}`))}</option>`).join("")}</optgroup>`).join("");
+    const tagChips = chosenTags.map(tag => `
+        <span class="badge rounded-pill text-bg-primary d-inline-flex align-items-center gap-1">${esc(t(`tag_${tag}`))}
+            <button type="button" class="btn-close btn-close-white" style="font-size: .55rem;" data-remove-tag="${esc(tag)}"
+                    aria-label="${esc(t("remove_tag", { tag: t(`tag_${tag}`) }))}"></button></span>`).join("");
     const pegiOptions = PEGI_AGES.map(age => `<option value="${age}">${esc(t("pegi_up_to", { age }))}</option>`).join("");
     const wrap = document.createElement("div");
     wrap.innerHTML = `
@@ -400,8 +407,8 @@ function renderCatalog(data, showPage = showCatalogPage) {
                 <option value="">${t("all_genres")}</option>${genreOptions}
             </select>
             <label class="small text-body-secondary" for="catalog-tag">${t("tag_filter")}</label>
-            <select id="catalog-tag" class="form-select form-select-sm w-auto">
-                <option value="">${t("all_tags")}</option>${tagOptions}
+            <select id="catalog-tag" class="form-select form-select-sm w-auto" ${chosenTags.length >= MAX_TAGS ? "disabled" : ""}>
+                <option value="">${t(chosenTags.length ? "add_tag" : "all_tags")}</option>${tagOptions}
             </select>
             <label class="small text-body-secondary" for="catalog-pegi">${t("pegi_filter")}</label>
             <select id="catalog-pegi" class="form-select form-select-sm w-auto">
@@ -417,7 +424,8 @@ function renderCatalog(data, showPage = showCatalogPage) {
                 <option value="price_asc">${t("sort_price_asc")}</option>
                 <option value="price_desc">${t("sort_price_desc")}</option>
             </select>
-        </div>`;
+        </div>
+        ${chosenTags.length ? `<div class="d-flex flex-wrap gap-1 mb-3" aria-label="${esc(t("chosen_tags"))}">${tagChips}</div>` : ""}`;
 
     const select = wrap.querySelector("#catalog-sort");
     select.value = catalogSort;
@@ -437,7 +445,11 @@ function renderCatalog(data, showPage = showCatalogPage) {
     };
     filterSelect("#catalog-store", catalogStore, v => catalogStore = v);
     filterSelect("#catalog-genre", catalogGenre, v => catalogGenre = v);
-    filterSelect("#catalog-tag", catalogTag, v => catalogTag = v);
+    filterSelect("#catalog-tag", "", v => catalogTag = [...chosenTags, v].filter(Boolean).join(","));
+    wrap.querySelectorAll("[data-remove-tag]").forEach(b => b.onclick = async () => {
+        catalogTag = chosenTags.filter(tag => tag !== b.dataset.removeTag).join(",");
+        await showPage(1);
+    });
     filterSelect("#catalog-pegi", catalogPegi, v => catalogPegi = v);
 
     // Games not out yet: "Pré-reserva" on the cover, release date next to the platform
