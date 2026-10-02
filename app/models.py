@@ -1,14 +1,18 @@
 """
-The marketplace's tables as SQLAlchemy models (users, listings and their photos,
-conversations and messages, favourites, ratings), plus the catalogue tables they refer to
-(games, editions, platforms), mapped for reading.
+The tables as SQLAlchemy models:
+- the marketplace (users, listings and their photos, conversations and messages, favourites,
+  ratings, moderation): Alembic manages these tables (migrations/, MARKET_TABLES)
+- the catalogue and prices (platforms, stores, games, editions, store products, price
+  snapshots, merged ids): the pipeline writes them (pipeline/); their tables are made by
+  database/*.sql, which these models follow
 
-The price side (scrapers, price history, the current_offers view) still uses SQL directly:
-its queries are reports (windows, "latest price per product") that read better as SQL.
-Times are UTC, set by the database (SYSUTCDATETIME()) when a row is created.
+The price analysis queries (the current_offers view, windows, "latest price per product")
+stay SQL: they're reports that read better as SQL.
+Times are UTC, set by the database (SYSUTCDATETIME()).
 """
 from sqlalchemy import (
-    Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Unicode, func, text,
+    BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Unicode, UnicodeText, func,
+    text,
 )
 from sqlalchemy.dialects.mssql import DATETIME2, TINYINT
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -32,7 +36,7 @@ def created_at():
     return mapped_column(DATETIME2, server_default=NOW, nullable=False)
 
 
-# --- catalogue (read by the marketplace) --------------------------------------------------
+# --- catalogue and prices (database/schema.sql; written by pipeline/) ----------------------
 
 class Platform(Base):
     __tablename__ = "platforms"
@@ -41,12 +45,38 @@ class Platform(Base):
     name: Mapped[str] = mapped_column(Unicode(100))
 
 
+class Store(Base):
+    __tablename__ = "stores"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(50))
+    name: Mapped[str] = mapped_column(Unicode(200))
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default="1")
+
+
 class Game(Base):
     __tablename__ = "games"
     id: Mapped[int] = mapped_column(primary_key=True)
     platform_id: Mapped[int] = mapped_column(ForeignKey("platforms.id"))
     title: Mapped[str] = mapped_column(Unicode(300))
+    normalized_title: Mapped[str] = mapped_column(Unicode(300))     # the game key (core/editions.py)
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))
+    created_at = created_at()
+    # From IGDB (pipeline/igdb.py, IGDB_COLUMNS)
+    igdb_id: Mapped[int | None] = mapped_column(Integer)
+    igdb_checked_at = mapped_column(DATETIME2)
+    summary: Mapped[str | None] = mapped_column(UnicodeText)
+    genres: Mapped[str | None] = mapped_column(Unicode(500))
+    publishers: Mapped[str | None] = mapped_column(Unicode(500))
+    developers: Mapped[str | None] = mapped_column(Unicode(500))
+    first_release_date = mapped_column(Date)
+    rating: Mapped[int | None] = mapped_column(Integer)
+    pegi: Mapped[str | None] = mapped_column(Unicode(10))
+    cover_image_id: Mapped[str | None] = mapped_column(Unicode(50))
+    screenshot_ids: Mapped[str | None] = mapped_column(UnicodeText)
+    video_ids: Mapped[str | None] = mapped_column(UnicodeText)
+    game_modes: Mapped[str | None] = mapped_column(Unicode(500))
+    themes: Mapped[str | None] = mapped_column(Unicode(500))
+
     platform: Mapped[Platform] = relationship(lazy="joined")
 
 
@@ -56,7 +86,52 @@ class GameEdition(Base):
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
     edition_key: Mapped[str] = mapped_column(Unicode(200))
     name: Mapped[str] = mapped_column(Unicode(200))
+    created_at = created_at()
     game: Mapped[Game] = relationship(lazy="joined")
+
+
+class StoreProduct(Base):
+    """A product page at a store (one per store, URL and condition), linked to a game edition."""
+    __tablename__ = "store_products"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"))
+    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id"))
+    edition_id: Mapped[int | None] = mapped_column(ForeignKey("game_editions.id"))
+    platform_id: Mapped[int | None] = mapped_column(ForeignKey("platforms.id"))
+    external_name: Mapped[str] = mapped_column(Unicode(300))
+    url: Mapped[str] = mapped_column(Unicode(800))
+    image_url: Mapped[str | None] = mapped_column(Unicode(1000))
+    condition: Mapped[str] = mapped_column(String(10), server_default="new")
+    first_seen_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+    last_seen_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default="1")
+    is_preorder: Mapped[bool] = mapped_column(Boolean, server_default="0")
+    release_date = mapped_column(Date)
+    release_date_checked_at = mapped_column(DATETIME2)
+    description: Mapped[str | None] = mapped_column(UnicodeText)
+    details: Mapped[str | None] = mapped_column(UnicodeText)        # JSON
+    image_urls: Mapped[str | None] = mapped_column(UnicodeText)     # JSON list
+    details_checked_at = mapped_column(DATETIME2)
+
+
+class PriceSnapshot(Base):
+    """A product's price and stock, recorded only when one of them changed."""
+    __tablename__ = "price_snapshots"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    store_product_id: Mapped[int] = mapped_column(ForeignKey("store_products.id"))
+    price = mapped_column(Numeric(10, 2), nullable=False)
+    old_price = mapped_column(Numeric(10, 2))
+    in_stock: Mapped[bool] = mapped_column(Boolean)
+    scraped_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+
+
+class MergedId(Base):
+    """A game / edition merged into another (old links and favourites follow it)."""
+    __tablename__ = "merged_ids"
+    kind: Mapped[str] = mapped_column(String(10), primary_key=True)      # game / edition
+    old_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    new_id: Mapped[int] = mapped_column(Integer)
+    merged_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
 
 
 # --- marketplace -------------------------------------------------------------------------

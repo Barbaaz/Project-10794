@@ -1,5 +1,8 @@
 from difflib import SequenceMatcher
 
+from sqlalchemy import select
+
+from app.models import Game, GameEdition, StoreProduct
 from core.close_match import KeyIndex, expand
 from core.editions import EDITION_WORDS, parse_title, learn_phrase, edition_key_of, cut_display
 
@@ -20,8 +23,8 @@ class GameMatcher:
     - an edition differing by a typo from one the game has is that edition ("delixe" → "deluxe").
     """
 
-    def __init__(self, cursor, platform_ids):
-        self.cursor = cursor
+    def __init__(self, session, platform_ids):
+        self.session = session                 # a db.session(): new games / editions are added to it
         self.platform_ids = platform_ids   # {"PS5": 1, ...}
         self.games = {}                    # {(game_key, platform_id): game_id}
         self.editions = {}                 # {(game_id, edition_key): edition_id}
@@ -29,13 +32,12 @@ class GameMatcher:
 
         # Edition phrases from stores that write "Title - X Edition", to split
         # names from stores that don't ("TITLE X EDITION")
-        names = cursor.execute("SELECT external_name FROM store_products WHERE external_name LIKE '% - %'").fetchall()
         self.known_phrases = set()
-        self.learn(row[0] for row in names)
+        self.learn(session.scalars(select(StoreProduct.external_name).where(StoreProduct.external_name.like("% - %"))))
 
         # Known game keys per platform, for the fuller-name and mended-title rules
         self.keys = {}
-        for key, platform_id in cursor.execute("SELECT normalized_title, platform_id FROM games").fetchall():
+        for key, platform_id in session.execute(select(Game.normalized_title, Game.platform_id)):
             self.keys.setdefault(platform_id, KeyIndex()).add(key)
 
     def learn(self, names):
@@ -102,34 +104,27 @@ class GameMatcher:
         return parsed.game_key, parsed.edition_key, parsed.edition_name
 
     def get_or_create_game(self, game_key, title, platform_id, image):
-        row = self.cursor.execute(
-            "SELECT id, title FROM games WHERE normalized_title = ? AND platform_id = ?",
-            game_key, platform_id,
-        ).fetchone()
+        game = self.session.scalars(
+            select(Game).where(Game.normalized_title == game_key, Game.platform_id == platform_id)).first()
 
-        if row:
-            game_id, current = row
+        if game:
             # Prefer "Silent Hill: Townfall" over Mega Mania's "SILENT HILL TOWNFALL"
             # (title is None for a shortened or mended name: not this game's own title)
-            if title and current.isupper() and not title.isupper():
-                self.cursor.execute("UPDATE games SET title = ? WHERE id = ?", title[:300], game_id)
-            return game_id
+            if title and game.title.isupper() and not title.isupper():
+                game.title = title[:300]
+            return game.id
 
         # A new game comes from its own name (resolve() and mend_split() only go to known games)
-        return self.cursor.execute(
-            """
-            INSERT INTO games (platform_id, title, normalized_title, image_url)
-            OUTPUT INSERTED.id
-            VALUES (?, ?, ?, ?)
-            """,
-            platform_id, (title or game_key)[:300], game_key, image,
-        ).fetchone()[0]
+        game = Game(platform_id=platform_id, title=(title or game_key)[:300], normalized_title=game_key, image_url=image)
+        self.session.add(game)
+        self.session.flush()        # its id
+        return game.id
 
     def get_or_create_edition(self, game_id, edition_key, name):
         known = self.game_editions.get(game_id)
         if known is None:
-            known = dict(self.cursor.execute(
-                "SELECT edition_key, id FROM game_editions WHERE game_id = ?", game_id).fetchall())
+            known = dict(self.session.execute(
+                select(GameEdition.edition_key, GameEdition.id).where(GameEdition.game_id == game_id)).all())
             self.game_editions[game_id] = known
 
         if edition_key in known:
@@ -138,16 +133,11 @@ class GameMatcher:
         if typo is not None:
             return known[typo]
 
-        edition_id = self.cursor.execute(
-            """
-            INSERT INTO game_editions (game_id, edition_key, name)
-            OUTPUT INSERTED.id
-            VALUES (?, ?, ?)
-            """,
-            game_id, edition_key, name[:200],
-        ).fetchone()[0]
-        known[edition_key] = edition_id
-        return edition_id
+        edition = GameEdition(game_id=game_id, edition_key=edition_key, name=name[:200])
+        self.session.add(edition)
+        self.session.flush()
+        known[edition_key] = edition.id
+        return edition.id
 
 
 def same_with_typos(a, b):

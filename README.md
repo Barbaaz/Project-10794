@@ -213,9 +213,12 @@ only stored when a price or stock status changes.
   models in `app/models.py`, used by `app/services/{auth,listing,chat,rating,favorite}_service.py`
   through `db.session()` — no SQL text there. Their tables are made and changed by **Alembic**
   migrations (`migrations/versions/`).
-- **Price side** (stores, products, price history, games and editions, the `current_offers`
-  discount view): SQL in `database/*.sql` and the services' queries (`db.fetch_all`), being
-  reports (latest price per product, 30-day windows) that read better as SQL.
+- **Pipeline** (`pipeline/process_scraped_data.py`, `matcher.py`, `rematch.py`): writes games,
+  editions, store products, price snapshots and merges through the same models and `db.session()`.
+  Their tables are made by `database/schema.sql` (not Alembic), which the models follow.
+- **Price analysis** (the `current_offers` discount view, the catalogue / discount / history
+  queries in `app/services/`): SQL in `database/*.sql` and `db.fetch_all`, being reports (latest
+  price per product, 30-day windows) that read better as SQL.
 
 `python -m database.setup` runs both. To change a marketplace table:
 

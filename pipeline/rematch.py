@@ -15,45 +15,45 @@ import argparse
 import logging
 from collections import Counter, defaultdict
 
+from sqlalchemy import delete, exists, insert, literal, select, update
+from sqlalchemy.orm import aliased
+
+from app.models import Favorite, Game, GameEdition, Listing, MergedId, Platform, StoreProduct
 from core.editions import edition_key_of, is_excluded
-from db import connection
+from db import session
 from pipeline.igdb import IGDB_COLUMNS
 from pipeline.matcher import GameMatcher
 from scheduler.jobs import setup_logging
 
 log = logging.getLogger(__name__)
 
+# A merged game / edition: its model, and the column store products and listings point to it with
+KINDS = {"game": (Game, "game_id"), "edition": (GameEdition, "edition_id")}
 
 
 def rematch_all(dry_run=False):
-    with connection() as conn:
-        cursor = conn.cursor()
-        platform_ids = dict(cursor.execute("SELECT code, id FROM platforms").fetchall())
+    with session() as s:
+        platform_ids = dict(s.execute(select(Platform.code, Platform.id)).all())
         codes = {v: k for k, v in platform_ids.items()}
+        products = s.scalars(select(StoreProduct).order_by(StoreProduct.id)).all()
 
-        rows = cursor.execute(
-            "SELECT id, external_name, platform_id, image_url, game_id, edition_id, is_active FROM store_products"
-        ).fetchall()
-
-        rekeyed = rekey_editions(cursor)
-        matcher = GameMatcher(cursor, platform_ids)
+        rekeyed = rekey_editions(s)
+        matcher = GameMatcher(s, platform_ids)
         changed = 0
         game_titles = defaultdict(Counter)      # {game_id: Counter of titles from its products}
         edition_names = defaultdict(Counter)
         moves = {"game": defaultdict(Counter), "edition": defaultdict(Counter)}   # {old id: Counter(new ids)}
 
-        for sp_id, name, platform_id, image, old_game, old_edition, is_active in rows:
-            if is_excluded(name):
-                if (old_game, old_edition, is_active) == (None, None, False):
+        for sp in products:
+            old_game, old_edition = sp.game_id, sp.edition_id
+            if is_excluded(sp.external_name):
+                if (old_game, old_edition, sp.is_active) == (None, None, False):
                     continue
-                cursor.execute(
-                    "UPDATE store_products SET game_id = NULL, edition_id = NULL, is_active = 0 WHERE id = ?",
-                    sp_id,
-                )
+                sp.game_id, sp.edition_id, sp.is_active = None, None, False
                 changed += 1
                 continue
 
-            product = {"external_name": name, "console": codes.get(platform_id), "image": image}
+            product = {"external_name": sp.external_name, "console": codes.get(sp.platform_id), "image": sp.image_url}
             game_id, edition_id, title, edition_name = matcher.match_details(product)
 
             if game_id:
@@ -62,141 +62,143 @@ def rematch_all(dry_run=False):
                 edition_names[edition_id][edition_name] += 1
 
             if (game_id, edition_id) != (old_game, old_edition):
-                cursor.execute(
-                    "UPDATE store_products SET game_id = ?, edition_id = ? WHERE id = ?",
-                    game_id, edition_id, sp_id,
-                )
+                sp.game_id, sp.edition_id = game_id, edition_id
                 changed += 1
                 if old_game and game_id and old_game != game_id:
                     moves["game"][old_game][game_id] += 1
                 if old_edition and edition_id and old_edition != edition_id:
                     moves["edition"][old_edition][edition_id] += 1
 
-        renamed = refresh_names(cursor, "games", "title", 300, game_titles)
-        renamed += refresh_names(cursor, "game_editions", "name", 200, edition_names)
-        merged = record_merges(cursor, moves)
+        renamed = refresh_names(s, Game, "title", 300, game_titles)
+        renamed += refresh_names(s, GameEdition, "name", 200, edition_names)
+        merged = record_merges(s, moves)
         if dry_run:
-            report(cursor, merged)      # before the merged rows are deleted: it shows their names
-        removed = delete_orphans(cursor)
+            report(s, merged)      # before the merged rows are deleted: it shows their names
+        removed = delete_orphans(s)
 
         log.info("Rematched %d products, %d changed, %d edition keys updated in place, %d names refreshed, "
-                 "merged %s, removed %s", len(rows), changed, rekeyed, renamed,
+                 "merged %s, removed %s", len(products), changed, rekeyed, renamed,
                  {k: len(v) for k, v in merged.items()}, removed)
         if dry_run:
-            conn.rollback()     # connection() commits what's left at the end: nothing
+            s.rollback()     # session() commits what's left at the end: nothing
             log.info("Dry run: nothing was changed")
     return changed, merged, removed
 
 
-def rekey_editions(cursor):
+def rekey_editions(s):
     """
     Bring stored edition keys to the current key rules in place ("limited collectors" →
     "collectors limited", "game of the year" → "goty"), so an edition keeps its id when only
     its key's spelling changed. Where the new key is already taken in that game, the
     rematch merges the two (and records it).
     """
-    rows = cursor.execute("SELECT id, game_id, edition_key FROM game_editions").fetchall()
-    taken = {(game_id, key) for _, game_id, key in rows}
+    editions = s.scalars(select(GameEdition).order_by(GameEdition.id)).all()
+    taken = {(e.game_id, e.edition_key) for e in editions}
     updated = 0
-    for edition_id, game_id, key in rows:
-        words, *tags = key.split("|")
+    for e in editions:
+        words, *tags = e.edition_key.split("|")
         new = "|".join([edition_key_of(words)] + tags)
-        if new != key and (game_id, new) not in taken:
-            cursor.execute("UPDATE game_editions SET edition_key = ? WHERE id = ?", new, edition_id)
-            taken.discard((game_id, key))
-            taken.add((game_id, new))
+        if new != e.edition_key and (e.game_id, new) not in taken:
+            taken.discard((e.game_id, e.edition_key))
+            taken.add((e.game_id, new))
+            e.edition_key = new
             updated += 1
+    s.flush()
     return updated
 
 
-def record_merges(cursor, moves):
+def no_store_product(model, column):
+    """Condition: no store product points to this row of `model` (by store_products.`column`)."""
+    return ~exists().where(getattr(StoreProduct, column) == model.id)
+
+
+def record_merges(s, moves):
     """
     {kind: {old_id: new_id}} for games / editions left with no product, whose products went
     to another one. Saved in merged_ids (older redirects to them follow along); a merged game's
     IGDB information goes to the game that replaced it if that one has none.
     """
+    s.flush()
     merged = {}
-    for kind, table in (("game", "games"), ("edition", "game_editions")):
+    for kind, (model, column) in KINDS.items():
         # left without store products: merged, whatever users point to (that moves along below)
-        orphans = {r[0] for r in cursor.execute(f"""
-            SELECT t.id FROM {table} t
-            WHERE NOT EXISTS (SELECT 1 FROM store_products sp WHERE sp.{kind}_id = t.id)""").fetchall()}
+        orphans = set(s.scalars(select(model.id).where(no_store_product(model, column))))
         merged[kind] = {old: targets.most_common(1)[0][0] for old, targets in moves[kind].items() if old in orphans}
 
         for old, new in merged[kind].items():
-            cursor.execute("UPDATE merged_ids SET new_id = ? WHERE kind = ? AND new_id = ?", new, kind, old)
-            cursor.execute("DELETE FROM merged_ids WHERE kind = ? AND old_id = ?", kind, old)
-            cursor.execute("INSERT INTO merged_ids (kind, old_id, new_id) VALUES (?, ?, ?)", kind, old, new)
+            s.execute(update(MergedId).where(MergedId.kind == kind, MergedId.new_id == old).values(new_id=new))
+            s.execute(delete(MergedId).where(MergedId.kind == kind, MergedId.old_id == old))
+            s.execute(insert(MergedId).values(kind=kind, old_id=old, new_id=new))
             # what users point to moves to the one that replaced it: listings, favourites
-            cursor.execute(f"UPDATE user_listings SET {kind}_id = ? WHERE {kind}_id = ?", new, old)
+            s.execute(update(Listing).where(getattr(Listing, column) == old).values({column: new}))
             if kind == "edition":
-                cursor.execute(
-                    "INSERT INTO user_favorites (user_id, edition_id) SELECT f.user_id, ? FROM user_favorites f "
-                    "WHERE f.edition_id = ? AND NOT EXISTS (SELECT 1 FROM user_favorites x "
-                    "WHERE x.user_id = f.user_id AND x.edition_id = ?)", new, old, new)
-                cursor.execute("DELETE FROM user_favorites WHERE edition_id = ?", old)
+                other = aliased(Favorite)
+                s.execute(insert(Favorite).from_select(
+                    ["user_id", "edition_id"],
+                    select(Favorite.user_id, literal(new)).where(
+                        Favorite.edition_id == old,
+                        ~exists().where(other.user_id == Favorite.user_id, other.edition_id == new))))
+                s.execute(delete(Favorite).where(Favorite.edition_id == old))
 
-    columns = ", ".join(f"{c} = old.{c}" for c in (*IGDB_COLUMNS, "igdb_checked_at"))
     for old, new in merged["game"].items():
-        cursor.execute(f"""
-            UPDATE g SET {columns}
-            FROM games g JOIN games old ON old.id = ?
-            WHERE g.id = ? AND g.igdb_id IS NULL AND old.igdb_id IS NOT NULL""", old, new)
+        replaced, replacement = s.get(Game, old), s.get(Game, new)
+        if replacement.igdb_id is None and replaced.igdb_id is not None:
+            for c in (*IGDB_COLUMNS, "igdb_checked_at"):
+                setattr(replacement, c, getattr(replaced, c))
+    s.flush()
     return merged
 
 
-def report(cursor, merged):
+def report(s, merged):
     """Print the merges of a dry run, for a person to check."""
-    titles = dict(cursor.execute("SELECT id, title FROM games").fetchall())
+    titles = dict(s.execute(select(Game.id, Game.title)).all())
     for old, new in sorted(merged["game"].items(), key=lambda m: titles.get(m[1], "")):
-        old_title = cursor.execute("SELECT title FROM games WHERE id = ?", old).fetchone()
-        print(f"GAME     {old_title[0] if old_title else old!s:55} → {titles.get(new)}")
-    names = {r[0]: (r[1], r[2]) for r in cursor.execute(
-        "SELECT e.id, g.title, e.name FROM game_editions e JOIN games g ON g.id = e.game_id").fetchall()}
-    old_names = {}
-    for old in merged["edition"]:
-        row = cursor.execute("SELECT name FROM game_editions WHERE id = ?", old).fetchone()
-        old_names[old] = row[0] if row else old
+        print(f"GAME     {titles.get(old, old)!s:55} → {titles.get(new)}")
+    names = {r.id: (r.title, r.name) for r in s.execute(
+        select(GameEdition.id, Game.title, GameEdition.name).join(Game, Game.id == GameEdition.game_id))}
     for old, new in sorted(merged["edition"].items(), key=lambda m: names.get(m[1], ("", ""))):
         game, name = names.get(new, ("?", "?"))
-        print(f"EDITION  {game[:40]:40} {old_names[old]!s:35} → {name}")
+        print(f"EDITION  {game[:40]:40} {names.get(old, (None, old))[1]!s:35} → {name}")
 
 
-def refresh_names(cursor, table, column, max_len, candidates):
+def refresh_names(s, model, column, max_len, candidates):
     """
     Set each row's display name to the most common one among its products,
     preferring mixed case ("Silent Hill: Townfall" over "SILENT HILL TOWNFALL").
     """
-    current = dict(cursor.execute(f"SELECT id, {column} FROM {table}").fetchall())
+    rows = {row.id: row for row in s.scalars(select(model))}
     renamed = 0
 
     for row_id, names in candidates.items():
         best = max(names, key=lambda n: (not n.isupper(), names[n], n))[:max_len]
-        if current.get(row_id) != best:
-            cursor.execute(f"UPDATE {table} SET {column} = ? WHERE id = ?", best, row_id)
+        row = rows.get(row_id)
+        if row is not None and getattr(row, column) != best:
+            setattr(row, column, best)
             renamed += 1
 
     return renamed
 
 
-def delete_orphans(cursor):
+def delete_orphans(s):
     """Editions and games that no store product or user listing uses."""
-    cursor.execute("""
-        DELETE e FROM game_editions e
-        WHERE NOT EXISTS (SELECT 1 FROM store_products sp WHERE sp.edition_id = e.id)
-          AND NOT EXISTS (SELECT 1 FROM user_listings ul WHERE ul.edition_id = e.id)
-          AND NOT EXISTS (SELECT 1 FROM user_favorites f WHERE f.edition_id = e.id)
-    """)
-    editions = cursor.rowcount
+    s.flush()
+    editions = s.execute(
+        delete(GameEdition).where(
+            no_store_product(GameEdition, "edition_id"),
+            ~exists().where(Listing.edition_id == GameEdition.id),
+            ~exists().where(Favorite.edition_id == GameEdition.id),
+        ).execution_options(synchronize_session=False)
+    ).rowcount
 
-    cursor.execute("""
-        DELETE g FROM games g
-        WHERE NOT EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id)
-          AND NOT EXISTS (SELECT 1 FROM user_listings ul WHERE ul.game_id = g.id)
-          AND NOT EXISTS (SELECT 1 FROM game_editions e WHERE e.game_id = g.id)
-    """)
+    games = s.execute(
+        delete(Game).where(
+            no_store_product(Game, "game_id"),
+            ~exists().where(Listing.game_id == Game.id),
+            ~exists().where(GameEdition.game_id == Game.id),
+        ).execution_options(synchronize_session=False)
+    ).rowcount
 
-    return {"editions": editions, "games": cursor.rowcount}
+    return {"editions": editions, "games": games}
 
 
 if __name__ == "__main__":

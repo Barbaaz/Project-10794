@@ -1,60 +1,23 @@
 import logging
+from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 
+from sqlalchemy import func, select, update
+
+from app.models import NOW, Platform, PriceSnapshot, Store, StoreProduct
 from core.editions import is_excluded
-from db import connection, json_or_none
+from db import json_or_none, session
 from pipeline.deduplicator import deduplicate
 from pipeline.matcher import GameMatcher
 
 log = logging.getLogger(__name__)
 
-UPSERT_STORE_PRODUCT = """
-MERGE store_products WITH (HOLDLOCK) AS t
-USING (SELECT ? AS store_id, ? AS url, ? AS condition) AS s
-    ON t.store_id = s.store_id AND t.url = s.url AND t.condition = s.condition
-WHEN MATCHED THEN UPDATE SET
-    game_id = ?, edition_id = ?, platform_id = ?, external_name = ?, image_url = ?,
-    is_preorder = ?,
-    -- keep the known date when this run didn't read one (e.g. the game came out and the store hid it)
-    release_date = COALESCE(?, t.release_date),
-    release_date_checked_at = CASE WHEN ? = 1 THEN SYSUTCDATETIME() ELSE t.release_date_checked_at END,
-    -- descriptions are only sent when the product page was read: keep the stored one otherwise
-    description = CASE WHEN ? = 1 THEN ? ELSE t.description END,
-    details = CASE WHEN ? = 1 THEN ? ELSE t.details END,
-    image_urls = CASE WHEN ? = 1 THEN ? ELSE t.image_urls END,
-    details_checked_at = CASE WHEN ? = 1 THEN SYSUTCDATETIME() ELSE t.details_checked_at END,
-    last_seen_at = SYSUTCDATETIME(), is_active = 1
-WHEN NOT MATCHED THEN
-    INSERT (store_id, url, condition, game_id, edition_id, platform_id, external_name, image_url,
-            is_preorder, release_date, release_date_checked_at, description, details, image_urls, details_checked_at)
-    VALUES (s.store_id, s.url, s.condition, ?, ?, ?, ?, ?,
-            ?, ?, CASE WHEN ? = 1 THEN SYSUTCDATETIME() END,
-            ?, ?, ?, CASE WHEN ? = 1 THEN SYSUTCDATETIME() END)
-OUTPUT $action, INSERTED.id;
-"""
-
-# Only adds a row when price or stock changed since the last snapshot,
-# so the table holds the price history without a copy per scrape.
-# The CASTs matter: pyodbc sends None as VARCHAR(1), so ISNULL(?, -1) would become text.
-INSERT_PRICE_IF_CHANGED = """
-DECLARE @id INT = ?, @price DECIMAL(10,2) = ?, @old_price DECIMAL(10,2) = ?, @in_stock BIT = ?;
-
-INSERT INTO price_snapshots (store_product_id, price, old_price, in_stock)
-SELECT @id, @price, @old_price, @in_stock
-WHERE NOT EXISTS (
-    SELECT 1 FROM (
-        SELECT TOP 1 price, old_price, in_stock
-        FROM price_snapshots
-        WHERE store_product_id = @id
-        ORDER BY scraped_at DESC, id DESC
-    ) last
-    WHERE last.price = @price AND ISNULL(last.old_price, -1) = ISNULL(@old_price, -1) AND last.in_stock = @in_stock
-);
-"""
+CENT = Decimal("0.01")
 
 
 def process_products(store_slug, products, full_catalog=True):
     """
-    Save one store's scraped products: link each to a game, upsert it in
+    Save one store's scraped products: link each to a game, add or update it in
     store_products and record its price. Everything is one transaction.
 
     full_catalog=True means `products` is the store's whole catalogue, so
@@ -68,18 +31,20 @@ def process_products(store_slug, products, full_catalog=True):
         "new_products": 0, "price_changes": 0, "deactivated": 0,
     }
 
-    with connection() as conn:
-        cursor = conn.cursor()
-
-        row = cursor.execute("SELECT id FROM stores WHERE slug = ?", store_slug).fetchone()
-        if not row:
+    with session() as s:
+        store = s.scalars(select(Store).where(Store.slug == store_slug)).first()
+        if not store:
             raise ValueError(f"Store '{store_slug}' is not in the stores table (see database/seed_stores.sql)")
-        store_id = row[0]
 
-        run_started_at = cursor.execute("SELECT SYSUTCDATETIME()").fetchone()[0]
-        platform_ids = dict(cursor.execute("SELECT code, id FROM platforms").fetchall())
-        matcher = GameMatcher(cursor, platform_ids)
+        run_started_at = s.scalar(select(NOW))
+        platform_ids = dict(s.execute(select(Platform.code, Platform.id)).all())
+        matcher = GameMatcher(s, platform_ids)
         matcher.learn(p["external_name"] for p in products)
+
+        # The store's products and their latest prices, loaded once
+        known = {product_key(sp.url, sp.condition): sp
+                 for sp in s.scalars(select(StoreProduct).where(StoreProduct.store_id == store.id))}
+        latest = latest_prices(s, store.id)
 
         for p in products:
             if len(p["url"]) > 800:
@@ -87,38 +52,82 @@ def process_products(store_slug, products, full_catalog=True):
                 continue
 
             game_id, edition_id = matcher.match(p)
-            platform_id = platform_ids.get(p["console"])
-            name = p["external_name"][:300]
-            image = (p.get("image") or "")[:1000] or None
-
-            release = (p.get("is_preorder", False), p.get("release_date"), p.get("release_date_checked", False))
-            checked = p.get("details_checked", False)
-            description = p.get("description")
-            details, images = json_or_none(p.get("details")), json_or_none(p.get("images"))
-            action, store_product_id = cursor.execute(
-                UPSERT_STORE_PRODUCT,
-                store_id, p["url"], p["condition"],
-                game_id, edition_id, platform_id, name, image, *release,
-                checked, description, checked, details, checked, images, checked,
-                game_id, edition_id, platform_id, name, image, *release,
-                description, details, images, checked,
-            ).fetchone()
-
-            if action == "INSERT":
+            sp = known.get(product_key(p["url"], p["condition"]))
+            if sp is None:
+                sp = StoreProduct(store_id=store.id, url=p["url"], condition=p["condition"])
+                s.add(sp)
+                known[product_key(p["url"], p["condition"])] = sp
                 stats["new_products"] += 1
+            update_product(sp, p, game_id, edition_id, platform_ids.get(p["console"]))
+            if sp.id is None:
+                s.flush()       # its id, for the price snapshot
 
-            cursor.execute(
-                INSERT_PRICE_IF_CHANGED,
-                store_product_id, p["price"], p["old_price"], p["in_stock"],
-            )
-            stats["price_changes"] += cursor.rowcount
+            # Only a row when price or stock changed since the last snapshot, so the table holds
+            # the price history without a copy per scrape
+            price = (to_cents(p["price"]), to_cents(p["old_price"]), bool(p["in_stock"]))
+            if latest.get(sp.id) != price:
+                s.add(PriceSnapshot(store_product_id=sp.id, price=price[0], old_price=price[1], in_stock=price[2]))
+                latest[sp.id] = price
+                stats["price_changes"] += 1
 
         if full_catalog and products:
-            cursor.execute(
-                "UPDATE store_products SET is_active = 0 "
-                "WHERE store_id = ? AND is_active = 1 AND last_seen_at < ?",
-                store_id, run_started_at,
-            )
-            stats["deactivated"] = cursor.rowcount
+            s.flush()
+            stats["deactivated"] = s.execute(
+                update(StoreProduct)
+                .where(StoreProduct.store_id == store.id, StoreProduct.is_active, StoreProduct.last_seen_at < run_started_at)
+                .values(is_active=False)
+                .execution_options(synchronize_session=False)
+            ).rowcount
 
     return stats
+
+
+def update_product(sp, p, game_id, edition_id, platform_id):
+    """Set a store product from what the scraper read now (`p`)."""
+    sp.game_id, sp.edition_id, sp.platform_id = game_id, edition_id, platform_id
+    sp.external_name = p["external_name"][:300]
+    sp.image_url = (p.get("image") or "")[:1000] or None
+    sp.is_preorder = bool(p.get("is_preorder", False))
+    # keep the known date when this run didn't read one (e.g. the game came out and the store hid it)
+    release_date = as_date(p.get("release_date"))
+    if release_date is not None or sp.id is None:
+        sp.release_date = release_date
+    if p.get("release_date_checked", False):
+        sp.release_date_checked_at = NOW
+    # descriptions are only sent when the product page was read: keep the stored one otherwise
+    checked = p.get("details_checked", False)
+    if checked or sp.id is None:
+        sp.description = p.get("description")
+        sp.details = json_or_none(p.get("details"))
+        sp.image_urls = json_or_none(p.get("images"))
+    if checked:
+        sp.details_checked_at = NOW
+    sp.last_seen_at = NOW
+    sp.is_active = True
+
+
+def latest_prices(s, store_id):
+    """{store_product_id: (price, old_price, in_stock)}: the latest snapshot of each of the store's products."""
+    ranked = (select(PriceSnapshot.store_product_id, PriceSnapshot.price, PriceSnapshot.old_price, PriceSnapshot.in_stock,
+                     func.row_number().over(partition_by=PriceSnapshot.store_product_id,
+                                            order_by=(PriceSnapshot.scraped_at.desc(), PriceSnapshot.id.desc())).label("n"))
+              .join(StoreProduct, StoreProduct.id == PriceSnapshot.store_product_id)
+              .where(StoreProduct.store_id == store_id).subquery())
+    return {r.store_product_id: (r.price, r.old_price, bool(r.in_stock))
+            for r in s.execute(select(ranked).where(ranked.c.n == 1))}
+
+
+def product_key(url, condition):
+    """How the database tells store products apart: URL and condition, ignoring case and trailing spaces."""
+    return url.rstrip(" ").lower(), condition.rstrip(" ").lower()
+
+
+def to_cents(price):
+    """A price as the DECIMAL(10,2) column keeps it: the exact value rounded half up, as SQL Server does
+    (1.005 as a float is 1.00499…, so 1.00)."""
+    return None if price is None else Decimal(price).quantize(CENT, ROUND_HALF_UP)
+
+
+def as_date(value):
+    """A release date from a scraper ("2026-11-12" or a date), or None."""
+    return date.fromisoformat(value[:10]) if isinstance(value, str) and value else value or None

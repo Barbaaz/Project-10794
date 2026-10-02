@@ -5,8 +5,8 @@ from pipeline.matcher import GameMatcher, same_with_typos
 
 
 @pytest.fixture
-def cursor(test_db):
-    c = test_db.conn.cursor()
+def cursor(app_on_test_db):
+    c = app_on_test_db.conn.cursor()
     for table in ("merged_ids", "moderation_log", "reports", "user_ratings", "messages", "conversations", "listing_photos", "user_listings", "user_favorites",
                   "users", "price_snapshots", "store_products", "game_editions", "games"):
         c.execute(f"DELETE FROM {table}")
@@ -14,11 +14,16 @@ def cursor(test_db):
 
 
 def matcher(cursor):
-    return GameMatcher(cursor, dict(cursor.execute("SELECT code, id FROM platforms").fetchall()))
+    """A matcher on its own session (as a pipeline run has); what it adds is committed per match."""
+    from sqlalchemy.orm import Session
+    from db import get_engine
+    return GameMatcher(Session(get_engine()), dict(cursor.execute("SELECT code, id FROM platforms").fetchall()))
 
 
 def match(m, name, console="PS5"):
-    return m.match({"external_name": name, "console": console})
+    result = m.match({"external_name": name, "console": console})
+    m.session.commit()          # the test reads it through another connection
+    return result
 
 
 def game_title(cursor, game_id):
@@ -70,7 +75,7 @@ def test_same_with_typos():
     assert not same_with_typos("zeno", "zero")
 
 
-def test_rematch_merges_duplicates_and_records_redirects(cursor, app_on_test_db):
+def test_rematch_merges_duplicates_and_records_redirects(cursor):
     from pipeline.rematch import rematch_all
     from app.services.game_service import merged_into
 
