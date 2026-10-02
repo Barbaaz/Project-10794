@@ -37,8 +37,12 @@ EDITION_WORDS = EDITION_END | STRONG_EDITION_WORDS | {
 
 STANDARD_PHRASES = {"", "edition", "standard", "standard edition", "edicao standard"}
 
-# Products we don't track at all: a download code in a box, no disc / cartridge
-EXCLUDED = re.compile(r"c[oó]digo\s+(na\s+caixa|de\s+descarga)|code\s+in\s+(a\s+)?box|[\[\(]\s*cod\s*[\]\)]", re.IGNORECASE)
+# Products we don't track at all: a download code (in a box or digital), no disc / cartridge
+EXCLUDED = re.compile(
+    r"c[oó]digo\s+(na\s+caixa|de\s+descarga|digital)|code\s+in\s+(a\s+)?box|[\[\(]\s*cod\s*[\]\)]"
+    r"|download\s+digital|digital\s+download",
+    re.IGNORECASE,
+)
 
 # Tags in brackets that make it a different product. Other brackets ("OFERTA DLC", "PT") are ignored.
 BRACKET_TAGS = [
@@ -64,7 +68,7 @@ class ParsedTitle:
 
 
 def is_excluded(name):
-    """True for "Código na caixa" / "Code in box" products, which are not stored."""
+    """True for "Código na caixa" / "Code in box" / "Download Digital" products, which are not stored."""
     return bool(EXCLUDED.search(name))
 
 

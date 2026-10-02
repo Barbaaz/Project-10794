@@ -12,8 +12,16 @@
         .game-card img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; transition: transform .3s ease; }
         .game-card:hover img { transform: scale(1.04); }
         .game-card .card-body { padding: .5rem; font-size: .8rem; }
+        /* Every card has the same layout: title always 2 lines tall, platform 1 line,
+           extra line (release date, historical low...) 2 lines; longer text ends in "…" */
         .game-title {
             font-size: .85rem; font-weight: 600; line-height: 1.25; margin-bottom: .15rem;
+            height: 2.5em;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .card-platform { line-height: 1.4; height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .card-extra {
+            line-height: 1.4; height: 2.8em; margin-bottom: .4rem;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
         .fav-btn {
@@ -28,6 +36,9 @@
         .offer-btn .store { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .offer-btn .price { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
         .offer-btn .was { font-weight: 400; text-decoration: line-through; opacity: .75; margin-right: .2rem; }
+        /* Tabs as solid buttons too (Bootstrap pills are plain text until selected) */
+        .nav-pills .nav-link:not(.active) { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); }
+        .nav-pills .nav-link:not(.active):hover { background: var(--bs-tertiary-bg); }
         .discount-badge { position: absolute; top: .4rem; left: .4rem; font-size: .8rem; }
         .release-date { width: 3.2rem; }
         .release-item img { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: #000; }
@@ -43,7 +54,7 @@
         <h1 class="h3 mb-0"><a href="/" onclick="goHome(); return false;" class="link-body-emphasis text-decoration-none">🎮 Game Price Tracker</a></h1>
         <div class="d-flex gap-2">
             <!-- Back to the front page; shown while search results are on screen -->
-            <button id="home-btn" onclick="goHome()" class="btn btn-sm btn-outline-primary d-none">🏠 Início</button>
+            <button id="home-btn" onclick="goHome()" class="btn btn-sm btn-primary d-none">🏠 Início</button>
             <button onclick="toggleDark()" class="btn btn-sm btn-secondary" aria-label="Modo escuro">🌙</button>
         </div>
     </div>
@@ -128,7 +139,8 @@ function render(data) {
 
 // A card: cover, title, platform and up to MAX_OFFERS store prices.
 // group = {name, console, platform_name, game_id, edition_id, offers: [...]}
-function makeCard(group, { coverBadge = "", extraLine = "" } = {}) {
+// extraLine: null = no extra line; "" = keep the space, so cards in the same grid line up
+function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
     // in stock first, then cheapest
     const offers = [...group.offers].sort((a, b) => (b.in_stock - a.in_stock) || (a.price - b.price));
     const best = offers[0];
@@ -137,7 +149,7 @@ function makeCard(group, { coverBadge = "", extraLine = "" } = {}) {
     // Cheapest store in stock in green, the others outlined; each opens the product on the store's site
     const rows = offers.slice(0, MAX_OFFERS).map((o, i) => `
         <a href="${esc(o.url)}" target="_blank" rel="noopener"
-           class="btn offer-btn ${i === 0 && o.in_stock ? "btn-success" : "btn-outline-secondary"} ${o.in_stock ? "" : "opacity-75"}"
+           class="btn offer-btn ${i === 0 && o.in_stock ? "btn-success" : "btn-secondary"} ${o.in_stock ? "" : "opacity-75"}"
            title="Ver na ${esc(storeName(o.store))}">
             <span class="store">${esc(storeName(o.store))}${o.condition === "used" ? " · Usado" : ""}${o.in_stock ? "" : " · Esgotado"}</span>
             <span class="price">
@@ -147,7 +159,7 @@ function makeCard(group, { coverBadge = "", extraLine = "" } = {}) {
         </a>`).join("");
 
     const more = offers.length > MAX_OFFERS
-        ? `<a href="${gameUrl}" class="btn btn-link btn-sm w-100 mt-1 p-0">Ver todas as lojas (+${offers.length - MAX_OFFERS})</a>`
+        ? `<a href="${gameUrl}" class="btn btn-primary offer-btn justify-content-center">Ver todas as lojas (+${offers.length - MAX_OFFERS})</a>`
         : offers.length ? "" : '<div class="small text-body-secondary">Sem ofertas de momento</div>';
 
     const col = document.createElement("div");
@@ -162,8 +174,8 @@ function makeCard(group, { coverBadge = "", extraLine = "" } = {}) {
             </div>
             <div class="card-body d-flex flex-column">
                 <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(group.name)}">${esc(group.name)}</a>
-                <div class="text-body-secondary small ${extraLine ? "" : "mb-2"}">${esc(group.platform_name || group.console)}</div>
-                ${extraLine ? `<div class="small mb-2">${extraLine}</div>` : ""}
+                <div class="text-body-secondary small card-platform">${esc(group.platform_name || group.console)}</div>
+                ${extraLine === null ? '<div class="mb-2"></div>' : `<div class="small card-extra">${extraLine}</div>`}
                 <div class="mt-auto">${rows}${more}</div>
             </div>
         </div>`;
@@ -179,10 +191,14 @@ const FRONT_TABS = {
     discounts: {
         // Real discounts need 30 days of history; until there are some, show the biggest
         // price gaps between stores (clearly labelled as a comparison, not a discount)
-        load: async () => {
-            const discounts = await fetch("/api/discounts/featured").then(r => r.json());
+        // Only the top 12 are loaded, so the platform filter is applied by the server
+        // (filtering 12 games here could leave almost nothing)
+        platformAware: true,
+        load: async platform => {
+            const query = platform ? `?platform=${encodeURIComponent(platform)}` : "";
+            const discounts = await fetch(`/api/discounts/featured${query}`).then(r => r.json());
             if (discounts.length) return discounts;
-            const deals = await fetch("/api/deals").then(r => r.json());
+            const deals = await fetch(`/api/deals${query}`).then(r => r.json());
             return deals.map(d => ({ ...d, isStoreDeal: true }));
         },
         render: renderDiscounts,
@@ -200,6 +216,7 @@ const FRONT_TABS = {
     },
 };
 const frontData = {};      // tab → data, loaded once per visit
+const frontDataPlatform = {};   // tab → platform its data was loaded for (platform-aware tabs)
 // Open tab: /?tab=releases if given (shareable links), else the visitor's last choice
 let frontTab = "discounts";
 try { frontTab = FRONT_TABS[localStorage.getItem("frontTab")] ? localStorage.getItem("frontTab") : "discounts"; } catch (e) {}
@@ -232,15 +249,18 @@ async function selectFrontTab(tab) {
     });
 
     const config = FRONT_TABS[tab];
+    const platform = document.getElementById("consoleFilter").value;
+    const stale = config.platformAware && frontDataPlatform[tab] !== platform;
     if (tab === "favorites" && !favorites.length) {
         frontData[tab] = [];
-    } else if (!frontData[tab] || config.fresh) {
+    } else if (!frontData[tab] || config.fresh || stale) {
         document.getElementById("front-content").innerHTML = "";
         document.getElementById("front-empty").classList.add("d-none");
         document.getElementById("front-loading").classList.remove("d-none");
         try {
             if (config.load) {
-                frontData[tab] = await config.load();
+                frontData[tab] = await config.load(platform);
+                frontDataPlatform[tab] = platform;
             } else {
                 const url = typeof config.url === "function" ? config.url() : config.url;
                 frontData[tab] = await fetch(url).then(r => r.json());
@@ -371,13 +391,13 @@ function renderDiscounts(offers) {
     const grid = cardGrid();
     offers.forEach(o => {
         const name = o.edition_key === "" ? o.title : `${o.title} — ${o.edition}`;
+        // o.offers: this store's offer plus the other stores' prices, each shown as a button
         const group = { name, console: o.platform, platform_name: o.platform_name, game_id: o.game_id,
-                        edition_id: o.edition_id, offers: [o] };
-        grid.appendChild(makeCard(group, storeDeals ? {
-            coverBadge: `<span class="badge text-bg-success discount-badge">-${o.savings_percent}% vs outras lojas</span>`,
-            extraLine: `<span class="text-body-secondary">Na loja seguinte: ${eur.format(o.next_price)} (${esc(storeName(o.next_store))})</span>`,
-        } : {
-            coverBadge: `<span class="badge text-bg-danger discount-badge">-${o.discount_percent}%</span>`,
+                        edition_id: o.edition_id, offers: o.offers || [o] };
+        grid.appendChild(makeCard(group, {
+            coverBadge: storeDeals
+                ? `<span class="badge text-bg-success discount-badge">-${o.savings_percent}% vs outras lojas</span>`
+                : `<span class="badge text-bg-danger discount-badge">-${o.discount_percent}%</span>`,
         }));
     });
     wrap.appendChild(grid);
@@ -452,7 +472,7 @@ function releaseItem(g, note = "") {
                 <div class="small text-body-secondary">${esc(g.platform_name)}${editions}${note ? ` · ${esc(note)}` : ""}</div>
             </div>
             ${g.best_price != null ? `<a href="${esc(g.url)}" target="_blank" rel="noopener"
-                class="btn btn-sm btn-outline-success flex-shrink-0" title="Ver na ${esc(storeName(g.store))}">
+                class="btn btn-sm btn-success flex-shrink-0" title="Ver na ${esc(storeName(g.store))}">
                 ${eur.format(g.best_price)}<span class="d-none d-sm-inline"> · ${esc(storeName(g.store))}</span></a>` : ""}
         </div>`;
     return col;
@@ -511,7 +531,11 @@ async function search() {
     isSearching = false;
 }
 
-document.getElementById("consoleFilter").addEventListener("change", () => hasSearched ? render(currentData) : renderFront());
+document.getElementById("consoleFilter").addEventListener("change", () => {
+    if (hasSearched) return render(currentData);
+    // Platform-aware tabs ask the server again; the others filter what they already have
+    FRONT_TABS[frontTab].platformAware ? selectFrontTab(frontTab) : renderFront();
+});
 
 // Platforms and store names come from the API, so new ones appear without editing this page
 async function loadFilters() {

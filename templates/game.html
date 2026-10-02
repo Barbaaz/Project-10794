@@ -56,8 +56,8 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div class="d-flex gap-2">
             <a href="/" onclick="if (document.referrer.includes(location.host)) { history.back(); return false; }"
-               class="btn btn-sm btn-outline-secondary">← Pesquisa</a>
-            <a href="/" class="btn btn-sm btn-outline-primary">🏠 Início</a>
+               class="btn btn-sm btn-secondary">← Pesquisa</a>
+            <a href="/" class="btn btn-sm btn-primary">🏠 Início</a>
         </div>
         <button onclick="toggleDark()" class="btn btn-sm btn-secondary" aria-label="Modo escuro">🌙</button>
     </div>
@@ -78,10 +78,10 @@
 
         <!-- Período do gráfico: um filtro para todos os gráficos da página -->
         <div class="btn-group btn-group-sm mb-3" role="group" aria-label="Período">
-            <button class="btn btn-outline-primary" data-days="30">30 dias</button>
-            <button class="btn btn-outline-primary active" data-days="90">90 dias</button>
-            <button class="btn btn-outline-primary" data-days="365">1 ano</button>
-            <button class="btn btn-outline-primary" data-days="0">Tudo</button>
+            <button class="btn btn-secondary" data-days="30">30 dias</button>
+            <button class="btn btn-primary active" data-days="90">90 dias</button>
+            <button class="btn btn-secondary" data-days="365">1 ano</button>
+            <button class="btn btn-secondary" data-days="0">Tudo</button>
         </div>
 
         <div id="editions"></div>
@@ -214,7 +214,7 @@ function offersTable(edition) {
             </td>
             <td>${o.is_preorder ? '<span class="badge text-bg-primary">Pré-reserva</span>' : o.in_stock ? "Em stock" : "Esgotado"}</td>
             <td class="text-end"><a href="${esc(o.url)}" target="_blank" rel="noopener"
-                class="btn btn-sm ${o.in_stock ? "btn-outline-primary" : "btn-outline-secondary"}">Ver na loja</a></td>
+                class="btn btn-sm ${o.in_stock ? "btn-primary" : "btn-secondary"}">Ver na loja</a></td>
         </tr>`).join("");
 
     return `
@@ -371,9 +371,14 @@ function drawCharts() {
     });
 }
 
+// Period buttons: the selected one solid blue, the others solid grey
 document.querySelectorAll("[data-days]").forEach(btn => btn.addEventListener("click", () => {
-    document.querySelectorAll("[data-days]").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
+    document.querySelectorAll("[data-days]").forEach(b => {
+        const selected = b === btn;
+        b.classList.toggle("active", selected);
+        b.classList.toggle("btn-primary", selected);
+        b.classList.toggle("btn-secondary", !selected);
+    });
     rangeDays = Number(btn.dataset.days);
     drawCharts();
 }));

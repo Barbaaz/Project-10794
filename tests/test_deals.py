@@ -58,6 +58,18 @@ def test_small_and_implausible_gaps_are_not_shown(deals):
     assert "only one store" not in deals
 
 
+def test_deal_lists_every_store_in_stock(deals):
+    offers = deals["half price elsewhere"]["offers"]
+    assert [(o["store"], o["price"]) for o in offers] == [("mega-mania", 20.0), ("cstech", 40.0), ("press_start", 45.0)]
+    assert all(o["url"] for o in offers)
+
+
+def test_platform_filter(deals, app_on_test_db):
+    price_service._featured_cache.clear()
+    assert price_service.best_store_deals(platform="PS5")
+    assert price_service.best_store_deals(platform="PC") == []
+
+
 def test_sold_out_offers_are_not_compared(deals):
     # without the sold-out 10 €, it's 40 € vs 41 €: not a deal
     assert "cheapest sold out" not in deals

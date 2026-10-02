@@ -63,6 +63,9 @@ def test_same_game_from_different_stores_normalizes_the_same(a, b):
     ("EA SPORTS FC 26 (CODE IN BOX) PS5", True),
     ("Game [Código de descarga] PS5", True),
     ("Call of Duty Black Ops Cold War (COD) Xbox One", True),
+    ("THE SIMS 4 Expansão GET TOGETHER [Download Digital] PC", True),
+    ("Some Game (Código Digital) PS5", True),
+    ("Digital Deluxe Edition PS5", False),
     ("Call of Duty: Black Ops 7 PS5", False),
     ("Codename Kids Next Door PS5", False),
 ])

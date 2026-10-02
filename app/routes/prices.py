@@ -11,6 +11,7 @@ def featured_discounts():
     return jsonify(price_service.featured_discounts(
         limit=int_arg("limit", 12, minimum=1, maximum=50),
         min_percent=int_arg("min_percent", 10, minimum=0, maximum=100),
+        platform=request.args.get("platform") or None,
     ))
 
 
@@ -20,6 +21,7 @@ def best_store_deals():
     return jsonify(price_service.best_store_deals(
         limit=int_arg("limit", 12, minimum=1, maximum=50),
         min_percent=int_arg("min_percent", 15, minimum=1, maximum=100),
+        platform=request.args.get("platform") or None,
     ))
 
 

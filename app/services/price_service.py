@@ -7,12 +7,46 @@ FEATURED_CACHE_SECONDS = 600   # prices change once a day; no need to recompute 
 _featured_cache = {}
 
 
-def featured_discounts(limit=12, min_percent=10):
+def attach_store_offers(items):
+    """
+    Give each featured item an `offers` list: its own offer plus the other stores' current
+    offers for the same edition (new, in stock), cheapest first, so the card shows them all.
+    """
+    if not items:
+        return items
+
+    edition_ids = list({i["edition_id"] for i in items})
+    placeholders = ",".join("?" * len(edition_ids))
+    others = fetch_all(
+        f"""
+        SELECT sp.id AS offer_id, sp.edition_id, s.slug AS store, s.name AS store_name, sp.condition,
+               last.price, CAST(1 AS BIT) AS in_stock, sp.is_preorder, sp.url, sp.image_url AS image
+        FROM store_products sp
+        JOIN stores s ON s.id = sp.store_id
+        CROSS APPLY (SELECT TOP 1 price, in_stock FROM price_snapshots ps
+                     WHERE ps.store_product_id = sp.id ORDER BY ps.scraped_at DESC, ps.id DESC) last
+        WHERE sp.edition_id IN ({placeholders}) AND sp.is_active = 1 AND sp.condition = 'new' AND last.in_stock = 1
+        ORDER BY last.price
+        """,
+        *edition_ids,
+    )
+
+    for item in items:
+        own = {k: item[k] for k in ("offer_id", "store", "store_name", "condition", "price", "in_stock",
+                                    "is_preorder", "url", "image") if k in item}
+        own.update(was_price=item.get("was_price"), discount_percent=item.get("discount_percent"))
+        item["offers"] = [own] + [o for o in others
+                                  if o["edition_id"] == item["edition_id"] and o["offer_id"] != item["offer_id"]]
+    return items
+
+
+def featured_discounts(limit=12, min_percent=10, platform=None):
     """
     Front page: the biggest real discounts, one offer per game edition (the cheapest),
-    new copies in stock only. Cached for a few minutes.
+    new copies in stock only, optionally for one platform (so a filtered list still has
+    `limit` games). Cached for a few minutes.
     """
-    key = (limit, min_percent)
+    key = (limit, min_percent, platform)
     cached = _featured_cache.get(key)
     if cached and time.monotonic() - cached[0] < FEATURED_CACHE_SECONDS:
         return cached[1]
@@ -32,17 +66,18 @@ def featured_discounts(limit=12, min_percent=10):
         JOIN games g ON g.id = o.game_id
         JOIN platforms p ON p.id = g.platform_id
         JOIN game_editions e ON e.id = o.edition_id
-        WHERE o.rn = 1
+        WHERE o.rn = 1 AND (? IS NULL OR p.code = ?)
         ORDER BY o.discount_percent DESC, o.price
         """,
-        min_percent,
+        min_percent, platform, platform,
     )
+    attach_store_offers(offers)
 
     _featured_cache[key] = (time.monotonic(), offers)
     return offers
 
 
-def best_store_deals(limit=12, min_percent=15, max_percent=60):
+def best_store_deals(limit=12, min_percent=15, max_percent=60, platform=None):
     """
     Front page while there are no real discounts yet: editions where the cheapest store is
     clearly cheaper than the next cheapest store, same day, new copies in stock.
@@ -50,7 +85,7 @@ def best_store_deals(limit=12, min_percent=15, max_percent=60):
     Gaps above max_percent are left out: they're more often two different products matched
     together than a real bargain.
     """
-    key = ("deals", limit, min_percent, max_percent)
+    key = ("deals", limit, min_percent, max_percent, platform)
     cached = _featured_cache.get(key)
     if cached and time.monotonic() - cached[0] < FEATURED_CACHE_SECONDS:
         return cached[1]
@@ -92,11 +127,12 @@ def best_store_deals(limit=12, min_percent=15, max_percent=60):
         JOIN games g ON g.id = sp.game_id
         JOIN platforms p ON p.id = g.platform_id
         JOIN game_editions e ON e.id = sp.edition_id
-        WHERE gap.savings_percent BETWEEN ? AND ?
+        WHERE gap.savings_percent BETWEEN ? AND ? AND (? IS NULL OR p.code = ?)
         ORDER BY gap.savings_percent DESC, gap.price
         """,
-        min_percent, max_percent,
+        min_percent, max_percent, platform, platform,
     )
+    attach_store_offers(deals)
 
     _featured_cache[key] = (time.monotonic(), deals)
     return deals
