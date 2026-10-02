@@ -265,6 +265,37 @@ def test_cstech_photos():
     assert product["images"] == ["https://cdn.shopify.com/box.jpg", "https://cdn.shopify.com/statue.png"]
 
 
+def test_darty(fixture_json):
+    from core.editions import is_excluded
+    from scrapers.darty.scraper import DartyScraper
+
+    collections = fixture_json("darty_collections.json")
+    scraper = DartyScraper()
+    asked = []
+    scraper.fetch_items = lambda path: asked.append(path) or collections[path.split("/")[2]]
+    products = scraper.scrape_catalog()
+
+    # pre-orders first (to know them), then the games collection; never the whole store
+    assert asked == ["/collections/pre-vendas-gaming/products.json", "/collections/videojogos/products.json"]
+    assert all(KEYS <= set(p) for p in products)
+
+    names = sorted(p["external_name"] for p in products)
+    assert len(names) == len(set(names)) == 5        # the headset bundle is skipped; GTA VI is in both, once
+    assert not any("Headset" in n for n in names)
+
+    wonder = by_name(products, "Super Mario Bros. Wonder")
+    assert (wonder["console"], wonder["price"], wonder["in_stock"], wonder["is_preorder"]) == ("Switch", 59.99, True, False)
+    assert wonder["details"] is None                  # Darty's "vendor" is the platform, not the publisher
+    assert by_name(products, "Donkey Kong")["console"] == "Switch2"
+    assert by_name(products, "EA Sports FC 25")["in_stock"] is False
+
+    # pre-orders: only in the pre-orders collection, or in both
+    assert by_name(products, "Cities: Skylines II")["is_preorder"] is True
+    gta = by_name(products, "GTA VI")
+    assert gta["is_preorder"] is True
+    assert is_excluded(gta["external_name"])          # "Código de download": not tracked (dropped when saved)
+
+
 def test_cstech_ignores_compare_at_price_not_above_price():
     item = {
         "title": "Some Game PS5", "handle": "some-game", "product_type": "Jogos PS5", "tags": [], "images": [],

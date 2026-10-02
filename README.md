@@ -146,7 +146,8 @@ All scraper requests go through `scrapers/base/http_client.py`:
 - a store isn't scraped again within 12 hours of a successful run:
   `python -m scheduler.run_single_store <store> --force` overrides it
 
-A daily run makes about 150 requests to Press Start, 60 to Mega Mania and 16 to CSTech.
+A daily run makes about 150 requests to Press Start, 60 to Mega Mania, 16 to CSTech and 24 to Darty.
+Shopify stores (CSTech, Darty) answer 429 after many requests in a short time: avoid extra manual runs.
 
 ## Safeguard against a half-broken scraper
 
@@ -165,11 +166,17 @@ python -m scheduler.run_single_store <store> --accept-drop
 | Press Start | HTML, game category pages                |
 | Mega Mania  | HTML, game category pages                |
 | CSTech      | Shopify JSON feed (`/products.json`)     |
+| Darty       | Shopify JSON feed, games collection only (`/collections/videojogos/products.json`); pre-orders = the `pre-vendas-gaming` collection |
+
+Checked and not added (2026-10-02): Fnac and Worten block plain requests (captcha / Cloudflare
+challenge), Amazon's Conditions of Use forbid scraping, El Corte Inglés only has prices on product
+pages (one request per game), Rádio Popular loads its listings by script. Details in the project plan.
 
 ### Adding a store
 
 1. Create `scrapers/<store>/scraper.py` with a class extending `BaseScraper`
    (HTML stores: set `catalog_urls`, implement `build_page_url` and `parse_listing`)
-   or `ShopifyScraper` (Shopify stores: only `store_slug` and `base_url`).
+   or `ShopifyScraper` (Shopify stores: only `store_slug` and `base_url`; stores selling more
+   than games also set `collections`, see `scrapers/darty/scraper.py`).
 2. Register it in `SCRAPERS` in `scheduler/jobs.py`.
 3. Add a row to `database/seed_stores.sql` with the same slug and re-run it.

@@ -39,7 +39,7 @@ STANDARD_PHRASES = {"", "edition", "standard", "standard edition", "edicao stand
 
 # Products we don't track at all: a download code (in a box or digital), no disc / cartridge
 EXCLUDED = re.compile(
-    r"c[oó]digo\s+(na\s+caixa|de\s+descarga|digital)|code\s+in\s+(a\s+)?box|[\[\(]\s*cod\s*[\]\)]"
+    r"c[oó]digo\s+(na\s+caixa|de\s+descarga|de\s+download|digital)|code\s+in\s+(a\s+)?box|[\[\(]\s*cod\s*[\]\)]"
     r"|download\s+digital|digital\s+download",
     re.IGNORECASE,
 )

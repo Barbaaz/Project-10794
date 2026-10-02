@@ -9,30 +9,49 @@ log = logging.getLogger(__name__)
 
 class ShopifyScraper(BaseScraper):
     """
-    Shopify stores publish their whole catalogue as JSON at /products.json,
-    so there is no HTML to parse. Subclasses only set store_slug and base_url.
+    Shopify stores publish their whole catalogue as JSON at /products.json (and each
+    collection at /collections/<handle>/products.json), so there is no HTML to parse.
+    Subclasses set store_slug and base_url, and optionally:
+        collections          read only these collections (stores that sell more than games)
+        preorder_collection  products in this collection are pre-orders (also read)
+        vendor_is_publisher  whether Shopify's "vendor" is the game's publisher
     """
 
     page_size = 250  # Shopify's maximum
+    collections = ()
+    preorder_collection = None
+    vendor_is_publisher = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.preorder_handles = set()
 
     def scrape_catalog(self):
-        products = []
+        items = {}   # by handle: a product can be in more than one collection
 
-        for page in range(1, self.max_pages + 1):
-            url = f"{self.base_url}/products.json"
-            log.info("[%s] %s page %d", self.store_slug, url, page)
+        if self.preorder_collection:
+            preorders = self.fetch_items(f"/collections/{self.preorder_collection}/products.json")
+            self.preorder_handles = {i["handle"] for i in preorders}
+            items.update((i["handle"], i) for i in preorders)
 
-            items = self.http.get_json(url, params={"limit": self.page_size, "page": page})["products"]
-            if not items:
-                break
+        for path in [f"/collections/{c}/products.json" for c in self.collections] or ["/products.json"]:
+            items.update((i["handle"], i) for i in self.fetch_items(path))
 
-            for item in items:
-                product = self.parse_item(item)
-                if product:
-                    products.append(product)
-
+        products = [p for p in map(self.parse_item, items.values()) if p]
         log.info("[%s] %d products", self.store_slug, len(products))
         return products
+
+    def fetch_items(self, path):
+        """Every product of one listing, 250 per request."""
+        items = []
+        for page in range(1, self.max_pages + 1):
+            url = f"{self.base_url}{path}"
+            log.info("[%s] %s page %d", self.store_slug, url, page)
+            batch = self.http.get_json(url, params={"limit": self.page_size, "page": page})["products"]
+            if not batch:
+                break
+            items.extend(batch)
+        return items
 
     def search(self, query):
         raise NotImplementedError(f"{self.store_slug}: only scrape_catalog() is supported")
@@ -79,7 +98,7 @@ class ShopifyScraper(BaseScraper):
             "release_date_checked": False,
             # The description comes with the catalogue, no extra request
             "description": html_to_text(item.get("body_html")),
-            "details": {"Editora": item["vendor"]} if item.get("vendor") else None,
+            "details": {"Editora": item["vendor"]} if item.get("vendor") and self.vendor_is_publisher else None,
             "images": photo_list([i["src"] for i in images[1:]] + html_images(item.get("body_html"), self.base_url),
                                  exclude=[images[0]["src"]] if images else ()),
             "details_checked": True,
@@ -88,7 +107,7 @@ class ShopifyScraper(BaseScraper):
         }
 
     def is_preorder(self, item):
-        return False
+        return item["handle"] in self.preorder_handles
 
 
 class CSTechScraper(ShopifyScraper):

@@ -1,0 +1,191 @@
+{
+ "videojogos": [
+  {
+   "id": 8161867694220,
+   "title": "EA Sports FC 25 - PS5",
+   "handle": "ea-sports-fc-25-ps5",
+   "body_html": "",
+   "vendor": "Ps5",
+   "product_type": "Jogos PS5",
+   "tags": [],
+   "variants": [
+    {
+     "id": 44126428299404,
+     "title": "Default Title",
+     "price": "19.97",
+     "compare_at_price": "19.97",
+     "available": false
+    }
+   ],
+   "images": [
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1505-1_07100d4b-5fc3-4ebb-97b6-2ff7bc5d0314.jpg?v=1750321871"
+    },
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1530-1_a675c228-eccf-4eb2-af64-167204542810.jpg?v=1750321871"
+    },
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1530-2_e6e10880-bc67-4999-bc9e-2bd991c5bcc3.jpg?v=1750321871"
+    }
+   ]
+  },
+  {
+   "id": 8161052950668,
+   "title": "Super Mario Bros. Wonder - Nintendo Switch",
+   "handle": "jogo-switch-super-mario-bros-wonder",
+   "body_html": "",
+   "vendor": "Nintendo",
+   "product_type": "Jogos Switch",
+   "tags": [],
+   "variants": [
+    {
+     "id": 44125554278540,
+     "title": "Default Title",
+     "price": "59.99",
+     "compare_at_price": "59.99",
+     "available": true
+    }
+   ],
+   "images": [
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1507-1_9943b2e2-b1ed-4cc4-863c-7d05894c842a.jpg?v=1760702684"
+    }
+   ]
+  },
+  {
+   "id": 8162150350988,
+   "title": "Donkey Kong Bananza - Nintendo Switch 2",
+   "handle": "donkey-kong-bananza-nintendo-switch-2",
+   "body_html": "",
+   "vendor": "Switch2",
+   "product_type": "Jogos Switch 2",
+   "tags": [],
+   "variants": [
+    {
+     "id": 44126734876812,
+     "title": "Default Title",
+     "price": "79.99",
+     "compare_at_price": "79.99",
+     "available": true
+    }
+   ],
+   "images": [
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1505-1_e08483ba-b31c-4380-9a65-09f480f0c085.jpg?v=1750442587"
+    },
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1520-1_cb39225e-e4c2-4096-bde3-745ef8962bec.jpg?v=1750442587"
+    },
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1530-2_44cde680-1eba-49bb-a48d-61a3f98c3157.jpg?v=1750442587"
+    }
+   ]
+  },
+  {
+   "id": 9508577083532,
+   "title": "GTA VI - Standard Edition - (Código de download) - PS5",
+   "handle": "gta-vi-standard-edition-codigo-de-download-ps5-2200028093833",
+   "body_html": "",
+   "vendor": "Ps5",
+   "product_type": "Jogos PS5",
+   "tags": [],
+   "variants": [
+    {
+     "id": 50828933136524,
+     "title": "Default Title",
+     "price": "79.99",
+     "compare_at_price": "79.99",
+     "available": true
+    }
+   ],
+   "images": [
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1507-1_e9e9ae8e-e8fb-4da1-b267-6191578ee01a.jpg?v=1782343668"
+    },
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1530-1_b0b3b809-98df-47b0-893c-9a08ec2bf68d.jpg?v=1782343668"
+    },
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1530-2_d0714a0c-b490-473a-9eb1-c75e4b5b9e8c.jpg?v=1782343667"
+    }
+   ]
+  },
+  {
+   "id": 8160754532492,
+   "title": "Efootball PES 2021 + Headset PS4",
+   "handle": "efootball-pes-2021-headset-ps4",
+   "body_html": "",
+   "vendor": "PS4",
+   "product_type": "Headsets Playstation",
+   "tags": [],
+   "variants": [
+    {
+     "id": 44125233447052,
+     "title": "Default Title",
+     "price": "29.99",
+     "compare_at_price": "29.99",
+     "available": false
+    }
+   ],
+   "images": [
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/EFOOTBALLPES2021_AUSCULTADORES5603625385115_620pxA.jpg?v=1747681500"
+    }
+   ]
+  }
+ ],
+ "pre-vendas-gaming": [
+  {
+   "id": 9508577083532,
+   "title": "GTA VI - Standard Edition - (Código de download) - PS5",
+   "handle": "gta-vi-standard-edition-codigo-de-download-ps5-2200028093833",
+   "body_html": "",
+   "vendor": "Ps5",
+   "product_type": "Jogos PS5",
+   "tags": [],
+   "variants": [
+    {
+     "id": 50828933136524,
+     "title": "Default Title",
+     "price": "79.99",
+     "compare_at_price": "79.99",
+     "available": true
+    }
+   ],
+   "images": [
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1507-1_e9e9ae8e-e8fb-4da1-b267-6191578ee01a.jpg?v=1782343668"
+    },
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1530-1_b0b3b809-98df-47b0-893c-9a08ec2bf68d.jpg?v=1782343668"
+    },
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1530-2_d0714a0c-b490-473a-9eb1-c75e4b5b9e8c.jpg?v=1782343667"
+    }
+   ]
+  },
+  {
+   "id": 8161066483852,
+   "title": "Cities: Skylines II - PS5",
+   "handle": "jogo-ps5-cities-skylines-ii",
+   "body_html": "",
+   "vendor": "Jogos ps5",
+   "product_type": "Jogos PS5",
+   "tags": [],
+   "variants": [
+    {
+     "id": 44125568106636,
+     "title": "Default Title",
+     "price": "40.41",
+     "compare_at_price": "40.41",
+     "available": true
+    }
+   ],
+   "images": [
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0703/2684/5580/files/1507-1_80edd320-8854-4c65-bb64-c529d7f5e0ea.jpg?v=1750158034"
+    }
+   ]
+  }
+ ]
+}

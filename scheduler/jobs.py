@@ -6,6 +6,7 @@ from pathlib import Path
 from db import get_connection
 from pipeline.process_scraped_data import process_products
 from scrapers.cstech.scraper import CSTechScraper
+from scrapers.darty.scraper import DartyScraper
 from scrapers.mega_mania.scraper import MegaManiaScraper
 from scrapers.press_start.scraper import PressStartScraper
 
@@ -28,6 +29,7 @@ SCRAPERS = {
     "press_start": PressStartScraper,
     "mega-mania": MegaManiaScraper,
     "cstech": CSTechScraper,
+    "darty": DartyScraper,
 }
 
 

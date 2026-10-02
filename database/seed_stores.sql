@@ -35,6 +35,7 @@ USING (VALUES
     ('press_start',   N'Press Start',   N'https://www.pressstart.pt',    1),
     ('mega-mania',    N'Mega Mania',    N'https://mega-mania.com.pt',    1),
     ('cstech',        N'CSTech',        N'https://cstech.store',         1),
+    ('darty',         N'Darty',         N'https://darty.pt',             1),
     ('gaming_replay', N'Gaming Replay', N'https://www.gamingreplay.com/pt/', 0)  -- scraper not written yet
 ) AS s (slug, name, base_url, is_active)
 ON t.slug = s.slug
