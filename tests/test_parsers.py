@@ -6,7 +6,12 @@ from scrapers.cstech.scraper import CSTechScraper
 from scrapers.mega_mania.parser import parse_products as parse_mega_mania
 from scrapers.press_start.parser import parse_products as parse_press_start
 
-KEYS = {"store", "external_name", "console", "condition", "price", "old_price", "in_stock", "url", "image"}
+from datetime import date
+
+from scrapers.press_start.parser import parse_release_date_page
+
+KEYS = {"store", "external_name", "console", "condition", "price", "old_price", "in_stock", "url", "image",
+        "is_preorder", "release_date", "release_date_checked"}
 
 
 def by_name(products, text):
@@ -77,6 +82,41 @@ def test_mega_mania_pre_order_is_in_stock(fixture_text):
     assert by_name(products, "ACE COMBAT 8")["in_stock"] is True
 
 
+def test_mega_mania_pre_order_and_release_date(fixture_text):
+    products = parse_mega_mania(fixture_text("mega_mania_listing.html"), "PS5")
+    pre_order = by_name(products, "ACE COMBAT 8")
+    assert pre_order["is_preorder"] is True
+    assert pre_order["release_date"] == date(2026, 10, 2)    # "Lançamento: 2 Outubro 2026"
+    assert by_name(products, "007 FIRST LIGHT")["is_preorder"] is False
+
+
+def test_press_start_release_date_from_product_page():
+    html = "<div>Data prevista de lançamento: 2026-12-31 Ficha técnica Etiqueta PRÉ-RESERVA</div>"
+    assert parse_release_date_page(html) == date(2026, 12, 31)
+    assert parse_release_date_page("<div>Data prevista de lançamento: 06/10/2026</div>") == date(2026, 10, 6)
+    assert parse_release_date_page("<div>Sem data</div>") is None
+
+
+def test_press_start_release_dates_only_fetched_when_needed():
+    from scrapers.press_start.scraper import PressStartScraper
+
+    fetched = []
+    scraper = PressStartScraper(fresh_release_urls={"https://x/fresh"})
+    scraper.fetch_release_date = lambda url: fetched.append(url) or date(2026, 11, 20)
+
+    products = [
+        {"url": "https://x/new", "is_preorder": True, "release_date": None, "release_date_checked": False},
+        {"url": "https://x/fresh", "is_preorder": True, "release_date": None, "release_date_checked": False},
+        {"url": "https://x/out", "is_preorder": False, "release_date": None, "release_date_checked": False},
+        {"url": "https://x/new", "is_preorder": True, "release_date": None, "release_date_checked": False},
+    ]
+    scraper.add_release_dates(products)
+
+    assert fetched == ["https://x/new"]     # once, even though it's in two categories
+    assert [p["release_date"] for p in products] == [date(2026, 11, 20), None, None, date(2026, 11, 20)]
+    assert products[0]["release_date_checked"] and products[3]["release_date_checked"]
+
+
 # --- CSTech (Shopify JSON) -------------------------------------------------
 
 def test_cstech(fixture_json):
@@ -96,6 +136,17 @@ def test_cstech(fixture_json):
     # one variant per region: in stock if any region is available
     yakuza = by_name(products, "Yakuza")
     assert (yakuza["console"], yakuza["in_stock"], yakuza["price"]) == ("PC", True, 69.99)
+
+
+def test_cstech_pre_order_tag():
+    item = {
+        "title": "Until Dawn 2 PS5", "handle": "until-dawn-2-ps5", "product_type": "Jogos PS5",
+        "tags": ["Jogos PS5", "pre-venda", "pre-venda PS5"], "images": [],
+        "variants": [{"title": "Default Title", "price": "41.99", "compare_at_price": None, "available": True}],
+    }
+    product = CSTechScraper().parse_item(item)
+    assert product["is_preorder"] is True
+    assert product["release_date"] is None
 
 
 def test_cstech_ignores_compare_at_price_not_above_price():

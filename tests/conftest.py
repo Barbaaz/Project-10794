@@ -3,6 +3,7 @@ import re
 import sys
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -33,6 +34,7 @@ def run_sql_script(cursor, path, database):
 def test_db():
     """
     A throwaway database with the real schema, indexes and views; dropped at the end.
+    Yields .conn (autocommit connection) and .url (its connection string).
     Tests using it are skipped when SQL Server isn't reachable.
     """
     pyodbc = pytest.importorskip("pyodbc")
@@ -47,12 +49,21 @@ def test_db():
         pytest.skip(f"SQL Server not available: {e}")
 
     admin.cursor().execute(f"CREATE DATABASE {name}")
-    conn = pyodbc.connect(re.sub(r"DATABASE=[^;]*;", f"DATABASE={name};", DB_CONNECTION_STRING), autocommit=True)
+    url = re.sub(r"DATABASE=[^;]*;", f"DATABASE={name};", DB_CONNECTION_STRING)
+    conn = pyodbc.connect(url, autocommit=True)
     try:
         for script in ("schema.sql", "indexes.sql", "views.sql", "seed_stores.sql"):
             run_sql_script(conn.cursor(), script, name)
-        yield conn
+        yield SimpleNamespace(conn=conn, url=url)
     finally:
         conn.close()
         admin.cursor().execute(f"ALTER DATABASE {name} SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE {name}")
         admin.close()
+
+
+@pytest.fixture
+def app_on_test_db(test_db, monkeypatch):
+    """Point the app's own queries (db.get_connection) at the throwaway database."""
+    import db
+    monkeypatch.setattr(db, "DB_CONNECTION_STRING", test_db.url)
+    return test_db

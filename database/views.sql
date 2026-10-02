@@ -69,6 +69,8 @@ offers AS (
         sp.url,
         sp.image_url,
         sp.is_active,
+        sp.is_preorder,
+        sp.release_date,
         sp.last_seen_at,
         l.price,
         l.in_stock,

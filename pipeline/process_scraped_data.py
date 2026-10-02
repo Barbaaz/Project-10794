@@ -13,10 +13,16 @@ USING (SELECT ? AS store_id, ? AS url, ? AS condition) AS s
     ON t.store_id = s.store_id AND t.url = s.url AND t.condition = s.condition
 WHEN MATCHED THEN UPDATE SET
     game_id = ?, edition_id = ?, platform_id = ?, external_name = ?, image_url = ?,
+    is_preorder = ?,
+    -- keep the known date when this run didn't read one (e.g. the game came out and the store hid it)
+    release_date = COALESCE(?, t.release_date),
+    release_date_checked_at = CASE WHEN ? = 1 THEN SYSUTCDATETIME() ELSE t.release_date_checked_at END,
     last_seen_at = SYSUTCDATETIME(), is_active = 1
 WHEN NOT MATCHED THEN
-    INSERT (store_id, url, condition, game_id, edition_id, platform_id, external_name, image_url)
-    VALUES (s.store_id, s.url, s.condition, ?, ?, ?, ?, ?)
+    INSERT (store_id, url, condition, game_id, edition_id, platform_id, external_name, image_url,
+            is_preorder, release_date, release_date_checked_at)
+    VALUES (s.store_id, s.url, s.condition, ?, ?, ?, ?, ?,
+            ?, ?, CASE WHEN ? = 1 THEN SYSUTCDATETIME() END)
 OUTPUT $action, INSERTED.id;
 """
 
@@ -80,11 +86,12 @@ def process_products(store_slug, products, full_catalog=True):
             name = p["external_name"][:300]
             image = (p.get("image") or "")[:1000] or None
 
+            release = (p.get("is_preorder", False), p.get("release_date"), p.get("release_date_checked", False))
             action, store_product_id = cursor.execute(
                 UPSERT_STORE_PRODUCT,
                 store_id, p["url"], p["condition"],
-                game_id, edition_id, platform_id, name, image,
-                game_id, edition_id, platform_id, name, image,
+                game_id, edition_id, platform_id, name, image, *release,
+                game_id, edition_id, platform_id, name, image, *release,
             ).fetchone()
 
             if action == "INSERT":

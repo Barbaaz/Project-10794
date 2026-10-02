@@ -16,6 +16,13 @@ LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 # A run finding less than this share of the last successful run's products is suspicious
 MIN_PRODUCT_RATIO = 0.7
 
+# Release dates that need a product page (Press Start) are re-read after this many days
+RELEASE_DATE_RECHECK_DAYS = 7
+
+# A store isn't scraped again this soon after a successful run (unless forced), so repeated
+# manual runs don't flood it with requests. The daily schedule is well above this.
+MIN_HOURS_BETWEEN_RUNS = 12
+
 # To add a store: write its scraper, register it here and add it to database/seed_stores.sql
 SCRAPERS = {
     "press_start": PressStartScraper,
@@ -51,18 +58,30 @@ def active_store_slugs():
         conn.close()
 
 
-def run_store(slug, accept_drop=False):
+class RanRecently(Exception):
+    """The store was scraped successfully less than MIN_HOURS_BETWEEN_RUNS ago."""
+
+
+def run_store(slug, accept_drop=False, force=False):
     """
     Scrape one store's catalogue into the database, logging the run in scrape_runs.
     accept_drop=True: the store really has fewer products now; deactivate the missing ones.
+    force=True: run even if the store was scraped less than MIN_HOURS_BETWEEN_RUNS ago.
     """
     if slug not in SCRAPERS:
         raise ValueError(f"No scraper registered for '{slug}'. Known: {', '.join(SCRAPERS)}")
 
+    hours = hours_since_last_success(slug)
+    if not force and hours is not None and hours < MIN_HOURS_BETWEEN_RUNS:
+        raise RanRecently(f"[{slug}] last successful run {hours:.1f} h ago (minimum {MIN_HOURS_BETWEEN_RUNS} h); "
+                          f"use --force to run anyway")
+
     run_id = start_run(slug)
 
     try:
-        products = SCRAPERS[slug]().scrape_catalog()
+        scraper = SCRAPERS[slug](fresh_release_urls=fresh_release_urls(slug))
+        products = scraper.scrape_catalog()
+        log.info("[%s] %d requests", slug, scraper.http.request_count)
         if not products:
             raise RuntimeError("Scraper returned 0 products, the site's HTML may have changed")
 
@@ -108,6 +127,34 @@ def previous_product_count(slug):
             slug,
         ).fetchone()
         return row[0] if row else None
+    finally:
+        conn.close()
+
+
+def hours_since_last_success(slug):
+    conn = get_connection()
+    try:
+        row = conn.cursor().execute(
+            "SELECT DATEDIFF(MINUTE, MAX(r.finished_at), SYSUTCDATETIME()) / 60.0 "
+            "FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
+            "WHERE s.slug = ? AND r.status IN ('success', 'warning')",
+            slug,
+        ).fetchone()
+        return float(row[0]) if row and row[0] is not None else None
+    finally:
+        conn.close()
+
+
+def fresh_release_urls(slug):
+    """Pre-orders whose release date was read in the last RELEASE_DATE_RECHECK_DAYS days."""
+    conn = get_connection()
+    try:
+        rows = conn.cursor().execute(
+            "SELECT sp.url FROM store_products sp JOIN stores s ON s.id = sp.store_id "
+            "WHERE s.slug = ? AND sp.release_date_checked_at > DATEADD(DAY, ?, SYSUTCDATETIME())",
+            slug, -RELEASE_DATE_RECHECK_DAYS,
+        ).fetchall()
+        return {r[0] for r in rows}
     finally:
         conn.close()
 

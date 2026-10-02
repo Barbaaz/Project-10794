@@ -1,4 +1,5 @@
 import re
+from datetime import date
 from urllib.parse import urljoin
 
 USED_PATTERN = re.compile(r"\b(usado|usada|semi[\s-]?novo|seminovo|pre[\s-]?owned)\b", re.IGNORECASE)
@@ -44,6 +45,33 @@ def detect_condition(*texts):
         if text and USED_PATTERN.search(text):
             return "used"
     return "new"
+
+
+MONTHS_PT = {
+    "janeiro": 1, "fevereiro": 2, "marco": 3, "março": 3, "abril": 4, "maio": 5, "junho": 6,
+    "julho": 7, "agosto": 8, "setembro": 9, "outubro": 10, "novembro": 11, "dezembro": 12,
+}
+
+
+def parse_release_date(text):
+    """
+    "15 Outubro 2026" / "2026-12-31" / "31/12/2026" → date, or None.
+    """
+    if not text:
+        return None
+
+    try:
+        if m := re.search(r"(\d{4})-(\d{2})-(\d{2})", text):
+            return date(int(m[1]), int(m[2]), int(m[3]))
+        if m := re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", text):
+            return date(int(m[3]), int(m[2]), int(m[1]))
+        if m := re.search(r"(\d{1,2})\s+(?:de\s+)?([a-zç]+)\s+(?:de\s+)?(\d{4})", text.lower()):
+            month = MONTHS_PT.get(m[2])
+            return date(int(m[3]), month, int(m[1])) if month else None
+    except ValueError:   # e.g. 31/02
+        return None
+
+    return None
 
 
 def absolute_url(base_url, url):

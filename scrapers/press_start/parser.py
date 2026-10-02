@@ -1,10 +1,11 @@
 import logging
+import re
 
 from bs4 import BeautifulSoup
 
 from app.utils.utils import detetar_plataforma
-from scrapers.base.parser_utils import parse_price, detect_condition
-from .selectors import PRODUCT_CARD, NAME, IMAGE, PRICE, PRICE_VALUE, OLD_PRICE, LINK, STOCK
+from scrapers.base.parser_utils import parse_price, parse_release_date, detect_condition
+from .selectors import PRODUCT_CARD, NAME, IMAGE, PRICE, PRICE_VALUE, OLD_PRICE, LINK, STOCK, PREORDER_FLAG
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +35,9 @@ def parse_products(html, console=None):
                 "price": parse_card_price(card),
                 "old_price": parse_price(text_of(card.select_one(OLD_PRICE))),
                 "in_stock": parse_stock(card),
+                "is_preorder": card.select_one(PREORDER_FLAG) is not None,
+                "release_date": None,             # filled from the product page, see PressStartScraper
+                "release_date_checked": False,
                 "url": card.select_one(LINK)["href"],
                 "image": image,
             })
@@ -42,6 +46,13 @@ def parse_products(html, console=None):
             log.warning("[PressStart Parser] Erro: %s", e)
 
     return products
+
+
+def parse_release_date_page(html):
+    """Release date from a product page: "Data prevista de lançamento: 2026-12-31"."""
+    text = BeautifulSoup(html, "html.parser").get_text(" ", strip=True)
+    match = re.search(r"Data prevista de lan[çc]amento:\s*([\d/-]+)", text, re.IGNORECASE)
+    return parse_release_date(match.group(1)) if match else None
 
 
 def parse_card_price(card):

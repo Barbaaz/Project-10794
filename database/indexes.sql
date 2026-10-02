@@ -22,6 +22,12 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_store_products_edition
     CREATE INDEX ix_store_products_edition ON dbo.store_products (edition_id) WHERE is_active = 1;
 GO
 
+-- Pre-orders and upcoming releases (front page)
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_store_products_release')
+    CREATE INDEX ix_store_products_release ON dbo.store_products (release_date)
+        INCLUDE (game_id, edition_id, is_preorder) WHERE is_active = 1 AND release_date IS NOT NULL;
+GO
+
 -- Products the matcher still has to link
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'ix_store_products_unmatched')
     CREATE INDEX ix_store_products_unmatched ON dbo.store_products (store_id) WHERE game_id IS NULL;

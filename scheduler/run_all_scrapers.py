@@ -3,13 +3,13 @@ Scrape every active store into the database.
 
     python -m scheduler.run_all_scrapers
 
-Schedule it with Windows Task Scheduler (e.g. every 6 hours), with the
-project folder as "Start in".
+Runs daily via the Windows task set up by scheduler/register_daily_task.ps1.
+A store scraped successfully less than 12 hours ago is skipped (see MIN_HOURS_BETWEEN_RUNS).
 """
 import logging
 import sys
 
-from scheduler.jobs import SCRAPERS, active_store_slugs, run_store, setup_logging
+from scheduler.jobs import SCRAPERS, RanRecently, active_store_slugs, run_store, setup_logging
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +26,8 @@ def main():
         # One store failing must not stop the others
         try:
             run_store(slug)
+        except RanRecently as e:
+            log.info("%s, skipped", e)
         except Exception:
             failed.append(slug)
 

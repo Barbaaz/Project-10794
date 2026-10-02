@@ -1,5 +1,4 @@
 import logging
-import time
 
 from app.utils.utils import detetar_plataforma
 from scrapers.base.base_scraper import BaseScraper
@@ -31,8 +30,6 @@ class ShopifyScraper(BaseScraper):
                 product = self.parse_item(item)
                 if product:
                     products.append(product)
-
-            time.sleep(self.delay)
 
         log.info("[%s] %d products", self.store_slug, len(products))
         return products
@@ -68,17 +65,24 @@ class ShopifyScraper(BaseScraper):
         if not console:
             return None
 
+        tags = item.get("tags") or []
         return {
             "store": self.store_slug,
             "external_name": title,
             "console": console,
-            "condition": detect_condition(title, " ".join(item.get("tags") or [])),
+            "condition": detect_condition(title, " ".join(tags)),
             "price": price,
             "old_price": old_price,
             "in_stock": bool(available),
+            "is_preorder": self.is_preorder(item),
+            "release_date": None,          # Shopify doesn't publish it; taken from other stores
+            "release_date_checked": False,
             "url": f"{self.base_url}/products/{item['handle']}",
             "image": images[0]["src"] if images else None,
         }
+
+    def is_preorder(self, item):
+        return False
 
 
 class CSTechScraper(ShopifyScraper):
@@ -88,3 +92,7 @@ class CSTechScraper(ShopifyScraper):
     def is_game(self, item):
         # product_type is "Jogos PS5", "Jogos Nintendo Switch 2"...; skips consoles, controllers, etc.
         return (item.get("product_type") or "").lower().startswith("jogos")
+
+    def is_preorder(self, item):
+        # tags: "pre-venda", "pre-venda PS5"
+        return any(t.lower().startswith("pre-venda") for t in item.get("tags") or [])

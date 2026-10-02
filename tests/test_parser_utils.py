@@ -1,6 +1,23 @@
+from datetime import date
+
 import pytest
 
-from scrapers.base.parser_utils import absolute_url, detect_condition, parse_price
+from scrapers.base.parser_utils import absolute_url, detect_condition, parse_price, parse_release_date
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("Lançamento: 15 Outubro 2026", date(2026, 10, 15)),
+    ("2 de março de 2027", date(2027, 3, 2)),
+    ("2026-12-31", date(2026, 12, 31)),
+    ("31/12/2026", date(2026, 12, 31)),
+    ("6/1/2027", date(2027, 1, 6)),
+    ("31/02/2026", None),
+    ("15 Brumário 2026", None),
+    ("", None),
+    (None, None),
+])
+def test_parse_release_date(text, expected):
+    assert parse_release_date(text) == expected
 
 
 @pytest.mark.parametrize("text, expected", [

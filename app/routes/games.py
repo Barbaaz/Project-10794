@@ -17,6 +17,18 @@ def list_games():
     ))
 
 
+@bp.get("/editions")
+def editions():
+    """/api/games/editions?ids=12,34: these editions with their offers (the favourites tab)."""
+    try:
+        ids = [int(i) for i in request.args.get("ids", "").split(",") if i.strip()]
+    except ValueError:
+        abort(400, description="'ids' must be a comma-separated list of numbers")
+    if len(ids) > 200:
+        abort(400, description="at most 200 ids")
+    return jsonify(game_service.editions_with_offers(list(dict.fromkeys(ids))))
+
+
 @bp.get("/<int:game_id>")
 def get_game(game_id):
     game = game_service.get_game(game_id)

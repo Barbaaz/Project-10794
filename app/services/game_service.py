@@ -1,12 +1,15 @@
 from core.normalizer import normalize_name
 from db import fetch_all, fetch_one
 
+# A favourite that came back in stock is flagged for this many days
+RESTOCK_ALERT_DAYS = 14
+
 # Offer columns sent to clients. The store's own crossed-out price is deliberately
 # not included: "was_price" is only set when our price history confirms a real discount.
 OFFER_COLUMNS = """
     o.store_product_id AS offer_id, o.game_id, o.edition_id,
     s.slug AS store, s.name AS store_name,
-    o.condition, o.price, o.in_stock, o.url, o.image_url AS image, o.external_name,
+    o.condition, o.price, o.in_stock, o.is_preorder, o.url, o.image_url AS image, o.external_name,
     CASE WHEN o.is_discount = 1 THEN o.reference_price END AS was_price,
     o.discount_percent, o.is_discount, o.last_seen_at
 """
@@ -112,6 +115,11 @@ def get_game(game_id):
 
     # Editions whose products all left the stores have nothing to show
     game["editions"] = [e for e in editions if e["offers"]]
+
+    from app.services.release_service import game_release_date   # avoids a circular import
+    release = game_release_date(game_id) or {}
+    game["release_date"] = release.get("release_date")
+    game["date_is_estimate"] = release.get("date_is_estimate", False)
     return game
 
 
@@ -138,6 +146,92 @@ def lowest_prices(game_id):
         game_id,
     )
     return {r.pop("edition_id"): r for r in rows}
+
+
+def editions_with_offers(edition_ids):
+    """
+    For the favourites tab: each edition as a card group (same shape as /search) with all its
+    current offers (in stock first, cheapest first) and its historical low (new, in stock).
+    Offers that came back in stock in the last RESTOCK_ALERT_DAYS days have `restocked_at`.
+    Editions no store sells anymore are kept, with no offers, so a favourite doesn't vanish.
+    """
+    if not edition_ids:
+        return []
+    placeholders = ",".join("?" * len(edition_ids))
+
+    editions = fetch_all(
+        f"""
+        SELECT e.id AS edition_id, e.name AS edition, e.edition_key, g.id AS game_id, g.title,
+               p.code AS console, p.name AS platform_name, g.image_url AS image
+        FROM game_editions e
+        JOIN games g ON g.id = e.game_id
+        JOIN platforms p ON p.id = g.platform_id
+        WHERE e.id IN ({placeholders})
+        """,
+        *edition_ids,
+    )
+    # Two steps on purpose (see search_offers): filter current_offers by id, not by a join
+    offers = fetch_all(
+        f"""
+        SELECT {OFFER_COLUMNS}
+        FROM current_offers o JOIN stores s ON s.id = o.store_id
+        WHERE o.is_active = 1 AND o.edition_id IN ({placeholders})
+        ORDER BY o.in_stock DESC, o.price
+        """,
+        *edition_ids,
+    )
+    lowest = {r.pop("edition_id"): r for r in fetch_all(
+        f"""
+        SELECT edition_id, price, date, store, tracked_since
+        FROM (
+            SELECT sp.edition_id, ps.price, ps.scraped_at AS date, s.slug AS store,
+                   ROW_NUMBER() OVER (PARTITION BY sp.edition_id ORDER BY ps.price, ps.scraped_at) AS rn,
+                   MIN(ps.scraped_at) OVER (PARTITION BY sp.edition_id) AS tracked_since
+            FROM store_products sp
+            JOIN price_snapshots ps ON ps.store_product_id = sp.id
+            JOIN stores s ON s.id = sp.store_id
+            WHERE sp.edition_id IN ({placeholders}) AND sp.condition = 'new' AND ps.in_stock = 1
+        ) x
+        WHERE rn = 1
+        """,
+        *edition_ids,
+    )}
+
+    # Back in stock: the latest change from sold out to in stock, if recent. Read from the
+    # price history, so it works even if the visitor wasn't here while it was sold out.
+    restocked = dict((r["offer_id"], r["restocked_at"]) for r in fetch_all(
+        f"""
+        SELECT store_product_id AS offer_id, MAX(scraped_at) AS restocked_at
+        FROM (
+            SELECT ps.store_product_id, ps.scraped_at, ps.in_stock,
+                   LAG(ps.in_stock) OVER (PARTITION BY ps.store_product_id ORDER BY ps.scraped_at, ps.id) AS was_in_stock
+            FROM price_snapshots ps
+            JOIN store_products sp ON sp.id = ps.store_product_id
+            WHERE sp.edition_id IN ({placeholders})
+        ) x
+        WHERE in_stock = 1 AND was_in_stock = 0
+        GROUP BY store_product_id
+        HAVING MAX(scraped_at) > DATEADD(DAY, ?, SYSUTCDATETIME())
+        """,
+        *edition_ids, -RESTOCK_ALERT_DAYS,
+    ))
+    for o in offers:
+        o["restocked_at"] = restocked.get(o["offer_id"]) if o["in_stock"] else None
+
+    order = {edition_id: i for i, edition_id in enumerate(edition_ids)}
+    groups = []
+    for e in sorted(editions, key=lambda e: order[e["edition_id"]]):
+        groups.append({
+            "edition_id": e["edition_id"],
+            "game_id": e["game_id"],
+            "name": e["title"] if e["edition_key"] == "" else f"{e['title']} — {e['edition']}",
+            "console": e["console"],
+            "platform_name": e["platform_name"],
+            "image": e["image"],
+            "lowest_price": lowest.get(e["edition_id"]),
+            "offers": [o for o in offers if o["edition_id"] == e["edition_id"]],
+        })
+    return groups
 
 
 def game_exists(game_id):
@@ -217,7 +311,7 @@ def search_offers(q, limit=60):
         name = r["title"] if r["edition_key"] == "" else f"{r['title']} — {r['edition']}"
         group = groups.setdefault(r["edition_id"], {
             "name": name, "console": r["console"], "platform_name": r["platform_name"],
-            "game_id": r["game_id"], "offers": [],
+            "game_id": r["game_id"], "edition_id": r["edition_id"], "offers": [],
         })
         group["offers"].append(r)
 

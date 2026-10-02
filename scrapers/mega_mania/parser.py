@@ -3,8 +3,10 @@ import logging
 from bs4 import BeautifulSoup
 
 from app.utils.utils import detetar_plataforma
-from scrapers.base.parser_utils import parse_price, detect_condition, absolute_url
-from .selectors import PRODUCT_CARD, NAME, IMAGE, LINK, BUY_BUTTON, BUY_LABEL, PRICE, OLD_PRICE, OUT_OF_STOCK
+from scrapers.base.parser_utils import parse_price, parse_release_date, detect_condition, absolute_url
+from .selectors import (
+    PRODUCT_CARD, NAME, IMAGE, LINK, BUY_BUTTON, BUY_LABEL, PRICE, OLD_PRICE, OUT_OF_STOCK, RELEASE_DATE,
+)
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +35,9 @@ def parse_products(html, console=None):
                 "price": price,
                 "old_price": parse_price(text_of(card.select_one(OLD_PRICE))),
                 "in_stock": parse_stock(card),
+                "is_preorder": "ENCOMENDA" in (label or "").upper(),   # "PRÉ-ENCOMENDAR"
+                "release_date": parse_release_date(text_of(card.select_one(RELEASE_DATE))),
+                "release_date_checked": True,
                 "url": absolute_url(BASE_URL, card.select_one(LINK)["href"]),
                 "image": absolute_url(BASE_URL, image_tag.get("src")) if image_tag else None,
             })

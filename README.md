@@ -30,12 +30,22 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/games/<id>/prices?days=90` | Price history per offer |
 | `GET /api/discounts?platform=&min_percent=&page=` | Offers that are really on sale, biggest discount first |
 | `GET /api/discounts/featured?limit=12&min_percent=10` | Front page: biggest real discounts, one per game edition (new, in stock) |
+| `GET /api/preorders?platform=` | Games on pre-order, one group per edition, soonest release first |
+| `GET /api/releases?platform=` | Games coming out from today on, by release date (`date_is_estimate` for "31/12" dates) |
+| `GET /api/games/editions?ids=12,34` | Favourites: these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
 | `GET /api/stores` | Active stores and when each was last updated |
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |
 
 An offer has `price`, `in_stock`, `condition` (`new`/`used`), `url`, and — only when the
 discount is real — `was_price` and `discount_percent`. Errors are `{"error": "..."}`
 with status 400 or 404. `per_page` is at most 100.
+
+## Front page
+
+Tabs, the visitor's choice remembered in the browser (or opened with `/?tab=…`):
+`discounts` (featured real discounts), `preorders`, `releases` (calendar by month / day) and
+`favorites` (starred editions with their offers and historical low). Favourites that came
+back in stock show as a banner. Favourites are stored in the browser for now.
 
 ## Games and editions
 
@@ -99,6 +109,20 @@ python -m pytest
   half-broken-scraper safeguard are plain unit tests.
 - The discount rule runs against a throwaway SQL Server database created and dropped by the
   tests (skipped when SQL Server isn't available).
+
+## Not getting blocked by the stores
+
+All scraper requests go through `scrapers/base/http_client.py`:
+
+- one request at a time, at least 3 s (+ 0–2 s random) between requests to the same store;
+  a larger `Crawl-delay` in the store's robots.txt wins
+- URLs disallowed by robots.txt are never fetched
+- a 403 / 429 answer stops that store's run immediately (no retrying into a block)
+- at most 600 requests per store per run; at most 50 product pages for release dates per run
+- a store isn't scraped again within 12 hours of a successful run:
+  `python -m scheduler.run_single_store <store> --force` overrides it
+
+A daily run makes about 150 requests to Press Start, 60 to Mega Mania and 16 to CSTech.
 
 ## Safeguard against a half-broken scraper
 

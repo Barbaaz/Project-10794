@@ -9,6 +9,10 @@
 USE Project10794;
 GO
 
+-- Required to alter tables that have filtered indexes (sqlcmd defaults this to OFF)
+SET QUOTED_IDENTIFIER ON;
+GO
+
 -- ============================================================
 -- Catalogue
 -- ============================================================
@@ -75,6 +79,9 @@ CREATE TABLE dbo.store_products (
     url            NVARCHAR(800)  NOT NULL,      -- 800 keeps (store_id, url, condition) under SQL Server's 1700-byte key limit
     image_url      NVARCHAR(1000) NULL,
     condition      VARCHAR(10)    NOT NULL DEFAULT 'new',
+    is_preorder    BIT            NOT NULL DEFAULT 0,
+    release_date   DATE           NULL,          -- as the store announces it; 31/12 often means "this year, no date yet"
+    release_date_checked_at DATETIME2 NULL,      -- last time the date was read from the product page (Press Start)
     first_seen_at  DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
     last_seen_at   DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
     is_active      BIT            NOT NULL DEFAULT 1, -- 0 when it disappears from the store
@@ -159,6 +166,13 @@ BEGIN
     ALTER TABLE dbo.scrape_runs ADD CONSTRAINT ck_scrape_runs_status
         CHECK (status IN ('running', 'success', 'warning', 'failed'));
 END
+GO
+
+IF COL_LENGTH('dbo.store_products', 'is_preorder') IS NULL
+    ALTER TABLE dbo.store_products ADD
+        is_preorder BIT NOT NULL DEFAULT 0,
+        release_date DATE NULL,
+        release_date_checked_at DATETIME2 NULL;
 GO
 
 IF COL_LENGTH('dbo.platforms', 'sort_order') IS NULL

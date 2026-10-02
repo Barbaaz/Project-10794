@@ -68,6 +68,7 @@
             <div>
                 <h1 id="title" class="h3 mb-1"></h1>
                 <span id="platform" class="badge text-bg-secondary"></span>
+                <span id="release" class="badge text-bg-primary d-none"></span>
                 <p id="history-note" class="text-body-secondary small mt-2 mb-0"></p>
             </div>
         </div>
@@ -135,6 +136,14 @@ function render() {
     document.getElementById("title").textContent = game.title;
     document.getElementById("platform").textContent = game.platform_name;
 
+    // Upcoming games: announced release date ("31/12" means only the year is known)
+    if (game.release_date && new Date(game.release_date + "T23:59:59") >= new Date()) {
+        const [y, m, d] = game.release_date.split("-");
+        const release = document.getElementById("release");
+        release.textContent = game.date_is_estimate ? `Lançamento: data por anunciar (${y})` : `Lançamento: ${d}/${m}/${y}`;
+        release.classList.remove("d-none");
+    }
+
     const cover = game.image || game.editions.flatMap(e => e.offers).find(o => o.image)?.image;
     if (cover) document.getElementById("cover").src = cover;
     else document.getElementById("cover").classList.add("d-none");
@@ -158,7 +167,10 @@ function renderEdition(edition, i) {
 
     const low = edition.lowest_price;
     const best = edition.offers.find(o => o.in_stock);
-    const isLowNow = low && best && best.condition === "new" && best.price <= low.price;
+    // "Lowest ever" only means something after a while (same 30 days as the discount rule)
+    const firstSeen = editionHistory(edition).flatMap(o => o.history.map(p => p.date)).sort()[0];
+    const trackedDays = firstSeen ? (Date.now() - new Date(firstSeen)) / 86400000 : 0;
+    const isLowNow = low && best && best.condition === "new" && best.price <= low.price && trackedDays >= 30;
 
     card.innerHTML = `
         <div class="card-body">
@@ -197,7 +209,7 @@ function offersTable(edition) {
                     <span class="badge text-bg-danger me-1">-${o.discount_percent}%</span>` : ""}
                 <strong>${eur.format(o.price)}</strong>
             </td>
-            <td>${o.in_stock ? "Em stock" : "Esgotado"}</td>
+            <td>${o.is_preorder ? '<span class="badge text-bg-primary">Pré-reserva</span>' : o.in_stock ? "Em stock" : "Esgotado"}</td>
             <td class="text-end"><a href="${esc(o.url)}" target="_blank" rel="noopener"
                 class="btn btn-sm ${o.in_stock ? "btn-outline-primary" : "btn-outline-secondary"}">Ver na loja</a></td>
         </tr>`).join("");

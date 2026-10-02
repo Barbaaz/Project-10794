@@ -6,3 +6,5 @@ PRICE_VALUE = "[itemprop=price]"                         # same price, as "54.99
 OLD_PRICE = ".product-price-and-shipping .regular-price" # crossed-out price, only when on sale
 LINK = "a.thumbnail.product-thumbnail"
 STOCK = ".circle-semaphore"                              # full-stock / medium-stock / low-stock (= sold out)
+PREORDER_FLAG = ".product-flag.pslabel-pre-reserva"      # "PRÉ-RESERVA"
+# The release date is only on the product page: "Data prevista de lançamento: 2026-12-31"

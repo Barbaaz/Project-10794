@@ -18,6 +18,7 @@ def test_is_suspicious_drop(found, previous, suspicious):
 class FakeScraper:
     def __init__(self, count):
         self.count = count
+        self.http = type("FakeHttp", (), {"request_count": 0})()
 
     def scrape_catalog(self):
         return [{"url": f"u{i}", "condition": "new", "external_name": f"Game {i} PS5"} for i in range(self.count)]
@@ -28,8 +29,10 @@ def run(monkeypatch):
     """run_store with the scraper, database and pipeline replaced by recorders."""
     calls = {}
 
-    def run_store(found, previous, **kwargs):
-        monkeypatch.setitem(jobs.SCRAPERS, "test_store", lambda: FakeScraper(found))
+    def run_store(found, previous, hours_ago=None, **kwargs):
+        monkeypatch.setitem(jobs.SCRAPERS, "test_store", lambda **_: FakeScraper(found))
+        monkeypatch.setattr(jobs, "fresh_release_urls", lambda slug: set())
+        monkeypatch.setattr(jobs, "hours_since_last_success", lambda slug: hours_ago)
         monkeypatch.setattr(jobs, "start_run", lambda slug: 1)
         monkeypatch.setattr(jobs, "previous_product_count", lambda slug: previous)
         monkeypatch.setattr(jobs, "process_products",
@@ -64,3 +67,18 @@ def test_accept_drop_deactivates_as_usual(run):
 def test_zero_products_fails_the_run(run):
     with pytest.raises(RuntimeError):
         run(found=0, previous=3076)
+
+
+def test_store_scraped_recently_is_not_scraped_again(run):
+    with pytest.raises(jobs.RanRecently):
+        run(found=3000, previous=3076, hours_ago=2)
+
+
+def test_force_runs_anyway(run):
+    calls = run(found=3000, previous=3076, hours_ago=2, force=True)
+    assert calls["status"] == "success"
+
+
+def test_daily_schedule_is_allowed(run):
+    calls = run(found=3000, previous=3076, hours_ago=21)
+    assert calls["status"] == "success"

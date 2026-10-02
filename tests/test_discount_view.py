@@ -18,7 +18,7 @@ SCENARIOS = {
 
 @pytest.fixture(scope="module")
 def offers(test_db):
-    cursor = test_db.cursor()
+    cursor = test_db.conn.cursor()
     for name, (history, _) in SCENARIOS.items():
         sp_id = cursor.execute(
             "INSERT INTO store_products (store_id, url, external_name) OUTPUT INSERTED.id "
