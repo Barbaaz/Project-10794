@@ -44,5 +44,8 @@ def normalize_name(name):
     # remover símbolos: "Spider-Man" → "spiderman", "Assassin's" → "assassins"
     name = re.sub(r"[^a-z0-9\s]", "", name)
 
+    # letras e números separados, para "Vol.2", "Vol. 2" e "vol2" darem o mesmo: "vol 2"
+    name = re.sub(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])", " ", name)
+
     # normalizar espaços
     return " ".join(name.split())

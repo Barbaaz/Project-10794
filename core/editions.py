@@ -168,8 +168,8 @@ def cut_display(cleaned, n_tokens):
     for i, chunk in enumerate(chunks):
         if count == n_tokens:
             return " ".join(chunks[:i]).strip(" -–:|/,+"), " ".join(chunks[i:])
-        if normalize_name(chunk):
-            count += 1
+        # one chunk can be several words once normalized ("2K26" → "2 k 26")
+        count += len(normalize_name(chunk).split())
 
     return cleaned, ""
 

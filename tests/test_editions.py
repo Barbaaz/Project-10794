@@ -5,14 +5,14 @@ from core.normalizer import normalize_name
 
 
 @pytest.mark.parametrize("name, game_key, edition_key", [
-    ("NBA 2K26 - Kobe Bryant Edition PS5", "nba 2k26", "kobe bryant"),
+    ("NBA 2K26 - Kobe Bryant Edition PS5", "nba 2 k 26", "kobe bryant"),
     ("Silent Hill: Townfall - Day One Edition PS5", "silent hill townfall", "day one"),
     ("SILENT HILL TOWNFALL DAY ONE EDITION PS5", "silent hill townfall", "day one"),
     ("Silent Hill: Townfall PS5", "silent hill townfall", ""),
     ("CASTLEVANIA Belmonts Curse Midnight Edition PS5", "castlevania belmonts curse", "midnight"),
     ("Assassin's Creed Shadows Game of the Year Edition PS5", "assassins creed shadows", "game of the year"),
     ("BEYOND A STEEL SKY [STEELBOOK EDITION] PS4", "beyond a steel sky", "steelbook"),
-    ("NBA 2K25 Standard Edition PS5", "nba 2k25", ""),
+    ("NBA 2K25 Standard Edition PS5", "nba 2 k 25", ""),
     ("Pokémon Legends: Z-A Nintendo Switch 2 Edition", "pokemon legends za", ""),
     ("Jogo Street Fighter 6 PS5", "street fighter 6", ""),
     # Tags that make it a different product
@@ -37,7 +37,7 @@ def test_deluxe_and_deluxe_edition_are_the_same_edition():
 def test_phrase_learned_from_dash_names_splits_names_without_dash():
     known = {learn_phrase("NBA 2K26 - Kobe Bryant Edition PS5")}
     parsed = parse_title("NBA 2K26 KOBE BRYANT EDITION PS5", known)
-    assert (parsed.game_key, parsed.edition_key) == ("nba 2k26", "kobe bryant")
+    assert (parsed.game_key, parsed.edition_key) == ("nba 2 k 26", "kobe bryant")
     assert parsed.edition_name == "Kobe Bryant Edition"
 
 
@@ -53,6 +53,11 @@ def test_display_names():
     ("Marvel's Spider-Man 2 PS5", "MARVEL'S SPIDER-MAN 2 (PT) PS5"),
     ("EA Sports FC 27 Xbox One / Series X", "EA SPORTS FC 27 XBOX ONE | X|S"),
     ("Far Cry 3 [USADO] PS3", "FAR CRY 3 PS3"),
+    # reported 2026-10-02: same edition listed twice
+    ("Metal Gear Solid: Master Collection Vol.2 - Day One Edition PS5",
+     "Metal Gear Solid: Master Collection Vol. 2 Day One Edition PS5"),
+    ("METAL GEAR SOLID Master Collection Vol.1 PS5", "Metal Gear Solid: Master Collection Vol. 1 PS5"),
+    ("NBA2K25 PS5", "NBA 2K25 PS5"),
 ])
 def test_same_game_from_different_stores_normalizes_the_same(a, b):
     assert normalize_name(a) == normalize_name(b)
