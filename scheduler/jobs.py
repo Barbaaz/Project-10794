@@ -9,6 +9,7 @@ from scrapers.cstech.scraper import CSTechScraper
 from scrapers.darty.scraper import DartyScraper
 from scrapers.mega_mania.scraper import MegaManiaScraper
 from scrapers.press_start.scraper import PressStartScraper
+from scrapers.radio_popular.scraper import RadioPopularScraper
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ SCRAPERS = {
     "mega-mania": MegaManiaScraper,
     "cstech": CSTechScraper,
     "darty": DartyScraper,
+    "radio_popular": RadioPopularScraper,
 }
 
 

@@ -146,8 +146,10 @@ def split_on_words(cleaned, known_phrases):
             cut = len(tokens) - len(words)
             break
     else:
-        # Rule 3: trailing edition words, ending in "edition" or a strong word
-        if tokens and tokens[-1] in EDITION_END | STRONG_EDITION_WORDS:
+        # Rule 3: trailing edition words, ending in "edition" or a strong word,
+        # or Portuguese order "Edição Standard" / "Edição Gold"
+        portuguese = len(tokens) > 2 and tokens[-2] in ("edicao", "versao") and tokens[-1] in EDITION_WORDS
+        if tokens and (tokens[-1] in EDITION_END | STRONG_EDITION_WORDS or portuguese):
             while cut > 0 and tokens[cut - 1] in EDITION_WORDS:
                 cut -= 1
         if cut > 1 and tokens[cut:] and all(t in EDITION_END for t in tokens[cut:]):

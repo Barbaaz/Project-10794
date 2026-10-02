@@ -168,9 +168,15 @@ python -m scheduler.run_single_store <store> --accept-drop
 | CSTech      | Shopify JSON feed (`/products.json`)     |
 | Darty       | Shopify JSON feed, games collection only (`/collections/videojogos/products.json`); pre-orders = the `pre-vendas-gaming` collection |
 
+| Rádio Popular | JSON from its "load more" request (POST `/ajax`, 12 games per page); **switched off** until a first manual run is checked |
+
+Rádio Popular shortens names ("TALES OF ETERNIA REMAS", "FF VII REVELATION"): its products are
+also matched to a known game they're a short form of (`core/close_match.py`: same numbers, same
+first and last word, only linking words may be missing, exactly one candidate).
+
 Checked and not added (2026-10-02): Fnac and Worten block plain requests (captcha / Cloudflare
 challenge), Amazon's Conditions of Use forbid scraping, El Corte Inglés only has prices on product
-pages (one request per game), Rádio Popular loads its listings by script. Details in the project plan.
+pages (one request per game). Details in the project plan.
 
 ### Adding a store
 

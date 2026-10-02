@@ -1,3 +1,4 @@
+from core.close_match import close_match
 from core.editions import parse_title, learn_phrase
 
 
@@ -13,6 +14,7 @@ class GameMatcher:
         self.platform_ids = platform_ids   # {"PS5": 1, ...}
         self.games = {}                    # {(game_key, platform_id): game_id}
         self.editions = {}                 # {(game_id, edition_key): edition_id}
+        self._keys = None                  # {platform_id: {game_key: game_id}}, loaded on first close match
 
         # Edition phrases from stores that write "Title - X Edition", to split
         # names from stores that don't ("TITLE X EDITION")
@@ -36,7 +38,9 @@ class GameMatcher:
 
         game_id = self.games.get((parsed.game_key, platform_id))
         if game_id is None:
-            game_id = self.get_or_create_game(parsed, platform_id, product.get("image"))
+            # Stores that shorten names ("TALES OF ETERNIA REMAS"): a known game it's a short form of
+            known = self.close_game(parsed.game_key, platform_id) if product.get("short_names") else None
+            game_id = known or self.get_or_create_game(parsed, platform_id, product.get("image"))
             self.games[(parsed.game_key, platform_id)] = game_id
 
         edition_id = self.editions.get((game_id, parsed.edition_key))
@@ -45,6 +49,16 @@ class GameMatcher:
             self.editions[(game_id, parsed.edition_key)] = edition_id
 
         return game_id, edition_id
+
+    def close_game(self, game_key, platform_id):
+        """The id of the one known game `game_key` is a shortened form of (core/close_match.py), or None."""
+        if self._keys is None:
+            self._keys = {}
+            for key, pid, gid in self.cursor.execute("SELECT normalized_title, platform_id, id FROM games").fetchall():
+                self._keys.setdefault(pid, {})[key] = gid
+        keys = self._keys.get(platform_id, {})
+        match = close_match(game_key, keys)
+        return keys[match] if match else None
 
     def get_or_create_game(self, parsed, platform_id, image):
         row = self.cursor.execute(

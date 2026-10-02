@@ -30,6 +30,10 @@ class FakeSession:
             return self.robots if isinstance(self.robots, FakeResponse) else FakeResponse(text=self.robots)
         return self.responses.get(url, FakeResponse(text="ok"))
 
+    def request(self, method, url, params=None, data=None, headers=None, timeout=None):
+        self.methods = getattr(self, "methods", []) + [method]
+        return self.get(url, params, timeout)
+
     def mount(self, *args):
         pass
 
@@ -94,6 +98,17 @@ def test_blocked_stops_immediately(clock, status):
     session = FakeSession(responses={"https://shop.test/a": FakeResponse(status=status, headers={"Retry-After": "120"})})
     with pytest.raises(StoreBlocked, match="Retry-After: 120"):
         client(session).get_text("https://shop.test/a")
+
+
+def test_post_follows_the_same_rules(clock):
+    session = FakeSession(robots="User-agent: *\nDisallow: /private",
+                          responses={"https://shop.test/ajax": FakeResponse(status=429)})
+    c = client(session)
+    with pytest.raises(RobotsDisallowed):
+        c.post_json("https://shop.test/private", {"page": 1})
+    with pytest.raises(StoreBlocked):
+        c.post_json("https://shop.test/ajax", {"page": 1})
+    assert session.methods == ["POST"]
 
 
 def test_request_budget(clock):

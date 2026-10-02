@@ -67,6 +67,16 @@ class HttpClient:
         self.session.mount("https://", adapter)
 
     def get(self, url, params=None):
+        return self.request("GET", url, params=params)
+
+    def post_json(self, url, data, headers=None):
+        """
+        A POST that answers JSON, for listings a store loads by script (Rádio Popular's
+        "load more"). Same rules as GET: robots.txt, pause, budget, stop on 403 / 429; not retried.
+        """
+        return self.request("POST", url, data=data, headers=headers).json()
+
+    def request(self, method, url, params=None, data=None, headers=None):
         host = urlsplit(url).netloc
         if not self._allowed(url, host):
             raise RobotsDisallowed(url)
@@ -76,7 +86,7 @@ class HttpClient:
 
         self._wait(host)
         self.request_count += 1
-        response = self.session.get(url, params=params, timeout=self.timeout)
+        response = self.session.request(method, url, params=params, data=data, headers=headers, timeout=self.timeout)
         self._last_request[host] = time.monotonic()
 
         if response.status_code in (403, 429):

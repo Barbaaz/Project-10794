@@ -296,6 +296,59 @@ def test_darty(fixture_json):
     assert is_excluded(gta["external_name"])          # "Código de download": not tracked (dropped when saved)
 
 
+def test_radio_popular(fixture_json):
+    from scrapers.radio_popular.parser import parse_products
+
+    html = fixture_json("radio_popular_page.json")["content"]["products"]
+    products = parse_products(html, "PS5")
+    assert len(products) == 4 and all(KEYS <= set(p) for p in products)
+    assert all(p["short_names"] for p in products)
+
+    control = by_name(products, "CONTROL RESONANT")
+    assert (control["console"], control["price"], control["condition"]) == ("PS5", 50.99, "new")
+    assert (control["is_preorder"], control["in_stock"], control["release_date"]) == (True, True, date(2026, 10, 15))
+    assert control["old_price"] is None                       # "PVPR" is the recommended price, not a previous one
+    assert control["url"] == "https://www.radiopopular.pt/produto/jogo-ps5-control-resonant"
+    assert control["image"].endswith("/140958_0.jpg")         # not the 1x1 placeholder in src
+
+    assert by_name(products, "STAR WAR")["old_price"] == 59.99   # a real crossed-out price
+
+
+def test_radio_popular_stock_and_condition(fixture_json):
+    from scrapers.radio_popular.parser import parse_products
+
+    card = fixture_json("radio_popular_page.json")["content"]["products"].split("</article>")[0] + "</article>"
+    in_stock = parse_products(card.replace("schema.org/PreSale", "schema.org/InStock"))[0]
+    assert (in_stock["in_stock"], in_stock["is_preorder"]) == (True, False)
+    sold_out = parse_products(card.replace("schema.org/PreSale", "schema.org/OutOfStock"))[0]
+    assert sold_out["in_stock"] is False
+    used = parse_products(card.replace("schema.org/NewCondition", "schema.org/UsedCondition"))[0]
+    assert used["condition"] == "used"
+
+
+def test_radio_popular_paging(fixture_json):
+    from scrapers.radio_popular.scraper import RadioPopularScraper
+
+    page = fixture_json("radio_popular_page.json")
+    scraper = RadioPopularScraper()
+    scraper.categories = {"jogos-ps5-1": "PS5", "jogos-ps5-2": "PS5"}
+    asked = []
+
+    def fetch_page(slug, n):
+        asked.append((slug, n))
+        if slug == "jogos-ps5-2":
+            n = 1                                 # a copy of the first category: nothing new
+        # "24 games" = 2 pages of 12; each page here gives the fixture's cards under other URLs
+        html = page["content"]["products"].replace("/produto/", f"/produto/p{n}-")
+        return {"productsTotal": 24, "content": {"products": html}}
+
+    scraper.fetch_page = fetch_page
+    products = scraper.scrape_catalog()
+    assert asked == [("jogos-ps5-1", 1), ("jogos-ps5-1", 2),   # stops at ceil(24 / 12) = 2 pages
+                     ("jogos-ps5-2", 1)]                         # the copy costs one request
+    assert len(products) == 8
+
+
 def test_cstech_ignores_compare_at_price_not_above_price():
     item = {
         "title": "Some Game PS5", "handle": "some-game", "product_type": "Jogos PS5", "tags": [], "images": [],
