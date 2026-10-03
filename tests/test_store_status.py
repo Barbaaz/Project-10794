@@ -46,6 +46,18 @@ def test_store_status(client, app_on_test_db):
     assert stores["cstech"]["is_stale"] is False
 
 
+def test_demo_mode(client, monkeypatch):
+    """A test copy on demo data: never stale (a snapshot), and the banner gets the collection date."""
+    from app.routes import stores as stores_route
+
+    assert client.get("/api/demo").get_json() == {"demo": False}
+    monkeypatch.setattr(stores_route, "DEMO_MODE", True)
+    stores = {s["slug"]: s for s in client.get("/api/stores").get_json()}
+    assert stores["mega-mania"]["is_stale"] is False
+    demo = client.get("/api/demo").get_json()
+    assert demo["demo"] is True and demo["collected_at"]
+
+
 def test_run_summary():
     assert run_summary([], []) is None
     title, message = run_summary(["cstech"], ["mega-mania"])

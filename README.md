@@ -4,6 +4,10 @@ Small project for a Python course
 Price comparison for video games across Portuguese stores. Scrapers fill a SQL Server
 database on a schedule; an API reads from it. Users will also be able to sell used games.
 
+**Testing it?** Follow [GUIA-DE-TESTE.md](GUIA-DE-TESTE.md) (in Portuguese, no technical knowledge
+needed): Docker Desktop, the demo data file and a double-click on `teste/INICIAR.bat` (Windows) or
+`teste/iniciar.command` (Mac).
+
 ```
 scheduler → scrapers → pipeline (normalise / match / dedupe) → SQL Server ← API
 ```
@@ -33,6 +37,13 @@ Express and the site in containers and creates the database by itself.
 
 Stop with `Ctrl+C` (or `docker compose down`); the data is kept for the next start
 (`docker compose down -v` deletes it).
+
+The **test launchers** in `teste/` do the same for people who don't use a terminal: they write
+`.env` with random passwords, check the demo file is there, start Docker in the background with
+`DEMO_MODE=1` and open the site on port 8010 (`WEB_PORT`; macOS keeps 5000 for AirPlay).
+`DEMO_MODE=1` shows a "test version" banner with the date the prices were collected, never flags
+stores as out of date, and the first time adds the demo marketplace users (`demo_eva` as a
+moderator). `PARAR` stops it, `REPOR` deletes what testers did and starts again.
 
 **Without demo data** the site starts empty. Fill it by scraping, one store at a time, gently (each
 store takes a few minutes; please don't repeat runs, the stores rate-limit):

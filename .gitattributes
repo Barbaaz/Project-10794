@@ -1,2 +1,6 @@
 # Shell scripts run inside Linux containers: keep Unix line endings on every checkout
 *.sh text eol=lf
+# The test launchers: Windows batch files need CRLF, the macOS / Linux ones LF
+*.bat text eol=crlf
+*.command text eol=lf
+*.ps1 text eol=crlf

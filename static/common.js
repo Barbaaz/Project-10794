@@ -49,6 +49,22 @@ function toggleDark() {
 
 document.documentElement.setAttribute("data-bs-theme", savedTheme());
 
+// A test copy on demo data (DEMO_MODE, the teste/ launchers): a banner on every page saying the
+// prices are a snapshot and how to log in as a made-up user
+async function showDemoBanner() {
+    let demo = null;
+    try { demo = await fetch("/api/demo").then(r => r.json()); } catch (e) { return; }
+    if (!demo?.demo) return;
+    const date = demo.collected_at ? new Date(demo.collected_at).toLocaleDateString(LOCALE) : "?";
+    const banner = document.createElement("div");
+    banner.className = "alert alert-info rounded-0 border-0 mb-0 py-2 px-3 small text-center";
+    banner.setAttribute("role", "note");
+    banner.innerHTML = t("demo_banner", { date: esc(date) });
+    document.body.prepend(banner);
+}
+
+document.addEventListener("DOMContentLoaded", showDemoBanner);
+
 // Calls to our API that change something: JSON in and out, with the header the server
 // requires on such requests (it can't be added by another site: app/web.py).
 // Resolves to {ok, status, data}; data.error is a code for t("error_" + code).

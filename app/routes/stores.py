@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify
 
+from app.config import DEMO_MODE
 from app.services.genre_service import genre_counts
 from app.services.tag_service import tag_list
 from db import fetch_all
@@ -17,11 +18,12 @@ def list_stores():
     last_updated  last successful run
     last_status   status of the latest finished run (success / warning / failed)
     last_error    its message when it wasn't a success
-    is_stale      no successful run in the last STALE_AFTER_HOURS hours
+    is_stale      no successful run in the last STALE_AFTER_HOURS hours (never in DEMO_MODE:
+                  demo data is a snapshot)
     color_slot    fixed per store (by id, counting inactive ones too), so charts keep each
                   store's color when stores are added or switched off
     """
-    return jsonify(fetch_all(
+    stores = fetch_all(
         """
         SELECT x.slug, x.name, x.base_url, x.color_slot, x.last_updated,
                latest.status AS last_status, latest.finished_at AS last_run_at,
@@ -45,7 +47,20 @@ def list_stores():
         ORDER BY x.name
         """,
         -STALE_AFTER_HOURS,
-    ))
+    )
+    if DEMO_MODE:
+        for s in stores:
+            s["is_stale"] = False
+    return jsonify(stores)
+
+
+@bp.get("/demo")
+def demo_status():
+    """Whether this is a test copy on demo data, and when its prices were collected (the banner on every page)."""
+    if not DEMO_MODE:
+        return jsonify(demo=False)
+    collected = fetch_all("SELECT MAX(finished_at) AS at FROM scrape_runs WHERE status = 'success'")[0]["at"]
+    return jsonify(demo=True, collected_at=collected)
 
 
 @bp.get("/platforms")

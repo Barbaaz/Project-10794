@@ -75,7 +75,9 @@ def import_demo(path, replace=False):
     Load a demo file into this database (created with python -m database.setup). Refuses a
     database that already has games, unless replace=True (which deletes them first).
     """
-    with gzip.open(path, "rt", encoding="utf-8") as f:
+    # A browser may have unpacked the file on download (Safari does): plain .json works too
+    opener = gzip.open if Path(path).suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8") as f:
         data = json.load(f)
 
     with connection() as conn:

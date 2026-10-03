@@ -5,6 +5,7 @@ users go through, so the rules apply. Photos are generated (marked DEMO), nothin
 
     python -m database.demo_market            # add the demo (again: replaces it)
     python -m database.demo_market --remove   # remove it (users, listings, chats, photo files)
+    python -m database.demo_market --if-missing   # add it only if it isn't there (test copies, at each start)
 
 Log in as any of them with the password DEMO_PASSWORD (e.g. demo_ana / demo12345).
 Demo users are recognised by their username prefix "demo_" and @demo.invalid email.
@@ -46,6 +47,11 @@ CONDITION_SHARE = {"new": 0.95, "like_new": 0.80, "good": 0.70, "fair": 0.55, "p
 def _demo_users(s):
     """The demo users (recognised by their username prefix and @demo.invalid email: never a real user)."""
     return s.scalars(select(User).where(User.username.like("demo[_]%"), User.email.like("%@demo.invalid"))).all()
+
+
+def has_demo():
+    with session() as s:
+        return bool(_demo_users(s))
 
 
 def remove():
@@ -169,6 +175,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--remove", action="store_true", help="remove the demo marketplace")
+    parser.add_argument("--if-missing", action="store_true",
+                        help="add it only if there are no demo users (keeps what testers did with them)")
     args = parser.parse_args()
     setup_logging()
-    remove() if args.remove else add()
+    if args.remove:
+        remove()
+    elif args.if_missing and has_demo():
+        log.info("Demo marketplace already there")
+    else:
+        add()

@@ -22,8 +22,11 @@ services:
       # Optional: only needed to look up new games on IGDB (pipeline/igdb.py)
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}
+      # 1 = a test copy on demo data (set by the teste/ launchers): banner on every page, demo users
+      DEMO_MODE: ${DEMO_MODE:-}
     ports:
-      - "5000:5000"
+      # WEB_PORT: the port on this computer (the teste/ launchers use 8010: macOS keeps 5000 for AirPlay)
+      - "${WEB_PORT:-5000}:5000"
     volumes:
       # The demo data file, if you were given one (not in the repository)
       - ./database/demo:/app/database/demo:ro
