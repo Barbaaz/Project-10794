@@ -217,6 +217,12 @@ IF COL_LENGTH('dbo.games', 'title_en') IS NULL
     ALTER TABLE dbo.games ADD title_en NVARCHAR(300) NULL;
 GO
 
+-- A game no store sells, created from IGDB by a user selling a copy (app/services/igdb_game_service.py):
+-- who created it (users.id; no foreign key, the users table is made later by Alembic)
+IF COL_LENGTH('dbo.games', 'created_by') IS NULL
+    ALTER TABLE dbo.games ADD created_by INT NULL;
+GO
+
 -- The store's photos of a product besides the cover (special editions: what's in the box),
 -- JSON list of URLs, read with the description
 IF COL_LENGTH('dbo.store_products', 'image_urls') IS NULL

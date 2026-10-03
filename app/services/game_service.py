@@ -133,8 +133,9 @@ def get_game(game_id):
         for key, value in (d["details"] or {}).items():
             game["store_details"].setdefault(key, value)
 
-    # Editions whose products all left the stores have nothing to show
-    game["editions"] = mark_historical_lows([e for e in editions if e["offers"]], key="id")
+    # Editions whose products all left the stores have nothing to show; a game no store sells
+    # (created from IGDB for a used copy) keeps its editions, to be sold / collected
+    game["editions"] = mark_historical_lows([e for e in editions if e["offers"]] or editions, key="id")
 
     release = game_release_date(game_id) or {}
     game["release_date"] = release.get("release_date")

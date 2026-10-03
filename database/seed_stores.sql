@@ -15,7 +15,29 @@ USING (VALUES
     ('XboxSeries', N'Xbox Series X|S',    50),
     ('XboxOne',    N'Xbox One',           60),
     ('PC',         N'PC',                 70),
-    ('PS3',        N'PlayStation 3',      80)
+    -- older platforms (2026-10-03): mostly used copies people sell, created from IGDB (app/services/igdb_game_service.py)
+    ('PS3',        N'PlayStation 3',      80),
+    ('Xbox360',    N'Xbox 360',           81),
+    ('WiiU',       N'Wii U',              82),
+    ('Wii',        N'Wii',                83),
+    ('3DS',        N'Nintendo 3DS',       84),
+    ('DS',         N'Nintendo DS',        85),
+    ('PSVita',     N'PlayStation Vita',   86),
+    ('PSP',        N'PlayStation Portable', 87),
+    ('PS2',        N'PlayStation 2',      90),
+    ('PS1',        N'PlayStation',        91),
+    ('Xbox',       N'Xbox (original)',    92),
+    ('GameCube',   N'Nintendo GameCube',  93),
+    ('N64',        N'Nintendo 64',        94),
+    ('GBA',        N'Game Boy Advance',   95),
+    ('GBC',        N'Game Boy Color',     96),
+    ('GB',         N'Game Boy',           97),
+    ('SNES',       N'Super Nintendo',     98),
+    ('NES',        N'NES',                99),
+    ('Dreamcast',  N'Sega Dreamcast',    100),
+    ('Saturn',     N'Sega Saturn',       101),
+    ('MegaDrive',  N'Sega Mega Drive',   102),
+    ('MasterSystem', N'Sega Master System', 103)
 ) AS s (code, name, sort_order)
 ON t.code = s.code
 WHEN MATCHED THEN UPDATE SET name = s.name, sort_order = s.sort_order

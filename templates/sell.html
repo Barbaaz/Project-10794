@@ -16,7 +16,8 @@
         .photo-previews img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: .375rem; }
         .photo-previews button { position: absolute; top: .25rem; right: .25rem; }
         .photo-previews .first { position: absolute; left: .25rem; bottom: .25rem; }
-        .game-option img { width: 32px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .2rem; background: #000; }
+        .game-option img { width: 32px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .2rem; background: #000; flex-shrink: 0; }
+        .min-w-0 { min-width: 0; }
     </style>
 </head>
 <body class="bg-body-tertiary">
@@ -43,6 +44,9 @@
                 <div id="game-picker">
                     <input id="game-search" class="form-control" autocomplete="off" data-i18n-placeholder="sell_game_search">
                     <div id="game-results" class="list-group mt-1"></div>
+                    <!-- Not in the catalogue (older platforms, games no store sells): search IGDB -->
+                    <button type="button" id="igdb-search" class="btn btn-sm btn-secondary mt-2 d-none" data-i18n="sell_search_igdb"></button>
+                    <div id="igdb-results" class="list-group mt-1"></div>
                 </div>
             </div>
 
@@ -108,6 +112,8 @@ document.getElementById("game-search").addEventListener("input", e => {
 
 async function searchGames(q) {
     const list = document.getElementById("game-results");
+    document.getElementById("igdb-results").innerHTML = "";
+    document.getElementById("igdb-search").classList.toggle("d-none", q.length < 2);
     if (q.length < 2) { list.innerHTML = ""; return; }
     const { games } = await fetch(`/api/games?q=${encodeURIComponent(q)}&per_page=8`).then(r => r.json());
     list.innerHTML = games.map(g => `
@@ -117,6 +123,38 @@ async function searchGames(q) {
         </button>`).join("") || `<div class="list-group-item small text-body-secondary">${t("no_results")}</div>`;
     list.querySelectorAll("[data-id]").forEach(b => b.onclick = () => chooseGame(Number(b.dataset.id)));
 }
+
+// Games the catalogue doesn't have: IGDB's, each with a button per platform; picking one creates
+// the game on that platform (app/services/igdb_game_service.py)
+document.getElementById("igdb-search").onclick = async () => {
+    const list = document.getElementById("igdb-results");
+    list.innerHTML = `<div class="list-group-item small text-body-secondary">${t("sell_igdb_searching")}</div>`;
+    const q = document.getElementById("game-search").value.trim();
+    const response = await fetch(`/api/igdb/games?q=${encodeURIComponent(q)}`);
+    const games = response.ok ? await response.json() : null;
+    if (!games) {
+        list.innerHTML = `<div class="list-group-item small text-danger">${t("error_igdb_unavailable")}</div>`;
+        return;
+    }
+    list.innerHTML = games.map(g => `
+        <div class="list-group-item d-flex align-items-center gap-2 game-option">
+            <img src="${esc(g.cover || "")}" alt="">
+            <div class="min-w-0">
+                <div>${esc(g.name)}${g.year ? ` <span class="text-body-secondary small">(${g.year})</span>` : ""}</div>
+                <div class="d-flex flex-wrap gap-1 mt-1">${g.platforms.map(p => `
+                    <button type="button" class="btn btn-sm btn-primary py-0" data-igdb="${g.igdb_id}" data-platform="${esc(p.code)}">
+                        ${esc(p.name)}</button>`).join("")}</div>
+            </div>
+        </div>`).join("") || `<div class="list-group-item small text-body-secondary">${t("sell_igdb_empty")}</div>`;
+    list.querySelectorAll("[data-igdb]").forEach(b => b.onclick = async () => {
+        b.disabled = true;
+        const { ok, data } = await api("/api/igdb/games", { body: { igdb_id: Number(b.dataset.igdb), platform: b.dataset.platform } });
+        b.disabled = false;
+        if (!ok) return showError(data?.error || "unknown");
+        list.innerHTML = "";
+        chooseGame(data.game_id, data.edition_id);
+    });
+};
 
 async function chooseGame(id, editionId = null) {
     const data = await fetch(`/api/games/${id}`).then(r => r.ok ? r.json() : null);

@@ -63,6 +63,7 @@ class Game(Base):
     title_en: Mapped[str | None] = mapped_column(Unicode(300))      # English name (IGDB / moderators)
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))
     created_at = created_at()
+    created_by: Mapped[int | None] = mapped_column(Integer)   # a user who created it from IGDB (no store sells it)
     # From IGDB (pipeline/igdb.py, IGDB_COLUMNS)
     igdb_id: Mapped[int | None] = mapped_column(Integer)
     igdb_checked_at = mapped_column(DATETIME2)

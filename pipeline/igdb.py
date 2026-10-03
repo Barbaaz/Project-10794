@@ -35,7 +35,11 @@ RETRY_UNMATCHED_DAYS = 30   # games IGDB didn't have may be added later (also: t
 
 # Our platform codes → IGDB platform ids
 IGDB_PLATFORMS = {"PS5": 167, "PS4": 48, "PS3": 9, "Switch": 130, "Switch2": 508,
-                  "XboxSeries": 169, "XboxOne": 49, "PC": 6}
+                  "XboxSeries": 169, "XboxOne": 49, "PC": 6,
+                  # older platforms (checked against IGDB's platforms, 2026-10-03)
+                  "Xbox360": 12, "WiiU": 41, "Wii": 5, "3DS": 37, "DS": 20, "PSVita": 46, "PSP": 38, "PS2": 8,
+                  "PS1": 7, "Xbox": 11, "GameCube": 21, "N64": 4, "GBA": 24, "GBC": 22, "GB": 33, "SNES": 19,
+                  "NES": 18, "Dreamcast": 23, "Saturn": 32, "MegaDrive": 29, "MasterSystem": 64}
 
 # IGDB game_type: 1 DLC, 2 expansion, 5 mod, 13 pack, 14 update — not the game itself
 NOT_A_GAME = {1, 5, 13, 14}
