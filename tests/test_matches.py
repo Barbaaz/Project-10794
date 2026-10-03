@@ -121,6 +121,35 @@ def test_edition_names_in_english():
     assert edition_en("Deluxe Edition") == "Deluxe Edition"
 
 
+def test_possible_duplicates_merged_or_dismissed(mod):
+    client, c = mod["client"], mod["db"]
+    # the same game under another name (another store, another language), linked to the same IGDB entry
+    process_products("press_start", [product("Sombra Quest - Deluxe Edition PS5", 4), product("Sombra Quest PS5", 5)],
+                     full_catalog=False)
+    shadow = c.execute("SELECT game_id FROM store_products WHERE url = 'https://match.test/1'").fetchone()[0]
+    sombra = c.execute("SELECT game_id FROM store_products WHERE url = 'https://match.test/4'").fetchone()[0]
+    c.execute("UPDATE games SET igdb_id = 777001 WHERE id IN (?, ?)", shadow, sombra)
+    try:
+        [pair] = [p for p in client.get("/api/mod/duplicates").get_json() if p["a"]["id"] in (shadow, sombra)]
+        assert {pair["a"]["id"], pair["b"]["id"]} == {shadow, sombra} and pair["platform"] == "PlayStation 5"
+
+        # "not the same": the pair leaves the list
+        assert client.post("/api/mod/duplicates/dismiss", headers=HEADERS, json={"a": sombra, "b": shadow}).status_code == 200
+        assert not [p for p in client.get("/api/mod/duplicates").get_json() if p["a"]["id"] in (shadow, sombra)]
+        c.execute("DELETE FROM duplicate_dismissals")
+
+        # merged: each product to the edition with the same key, pinned; the other game is gone
+        merged = client.post("/api/mod/duplicates/merge", headers=HEADERS, json={"from_id": sombra, "into_id": shadow})
+        assert merged.get_json() == {"game_id": shadow}
+        _, by_name = editions(client)
+        assert len(by_name["Deluxe Edition"]["products"]) == 2 and len(by_name["Standard"]["products"]) == 2
+        assert c.execute("SELECT COUNT(*) FROM games WHERE id = ?", sombra).fetchone()[0] == 0
+        assert c.execute("SELECT new_id FROM merged_ids WHERE kind = 'game' AND old_id = ?", sombra).fetchone()[0] == shadow
+        assert client.get("/api/mod/log").get_json()[0]["action"] == "merge_game"
+    finally:
+        c.execute("DELETE FROM duplicate_dismissals")
+
+
 def test_move_errors_and_access(mod):
     client = mod["client"]
     post = lambda data: client.post("/api/mod/matches", headers=HEADERS, json=data)

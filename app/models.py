@@ -23,7 +23,7 @@ NOW = func.sysutcdatetime()      # the database's clock, in UTC
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages",
                  "user_ratings", "reports", "moderation_log", "match_overrides",
-                 "collection_items", "game_reviews"}
+                 "collection_items", "game_reviews", "duplicate_dismissals"}
 
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
 ROLES = ("user", "moderator", "admin")
@@ -305,6 +305,15 @@ class MatchOverride(Base):
     store_product_id: Mapped[int] = mapped_column(ForeignKey("store_products.id", ondelete="CASCADE"),
                                                   primary_key=True, autoincrement=False)
     edition_id: Mapped[int] = mapped_column(ForeignKey("game_editions.id"))
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at = created_at()
+
+
+class DuplicateDismissal(Base):
+    """Two games sharing an IGDB entry that a moderator said are not the same (app/services/match_service.py)."""
+    __tablename__ = "duplicate_dismissals"
+    game_a: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)    # the smaller id
+    game_b: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at = created_at()
 

@@ -7,9 +7,10 @@ Unpinning lets the next rematch decide again.
 """
 from collections import Counter, defaultdict
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.orm import aliased
 
-from app.models import Game, GameEdition, MatchOverride, ModerationLog, Store, StoreProduct
+from app.models import DuplicateDismissal, Game, GameEdition, MatchOverride, ModerationLog, Store, StoreProduct
 from app.services.common import clear_cache
 from app.services.moderation_service import ModerationError
 from core.editions import edition_key_of
@@ -118,6 +119,77 @@ def set_title_en(moderator_id, game_id, title):
                             note=f"{game.title} → {title or '(store title)'}"[:500]))
     clear_cache()
     return {"title_en": title}
+
+
+MAX_DUPLICATES = 50
+
+
+def duplicates():
+    """
+    Possible duplicate games: two games on the same platform matched to the same IGDB entry
+    ("CRISIS CORE: FINAL FANTASY VII - REUNION" / "Final Fantasy VII - Crisis Core Reunion"),
+    for a moderator to merge or dismiss. Not merged automatically: about one in five is a
+    different product (a bundle with extras, or one of them matched to the wrong IGDB entry).
+    """
+    with session() as s:
+        a, b = aliased(Game), aliased(Game)
+        dismissed = select(DuplicateDismissal).where(DuplicateDismissal.game_a == a.id,
+                                                     DuplicateDismissal.game_b == b.id).exists()
+        pairs = s.execute(select(a, b).join(b, (b.platform_id == a.platform_id) & (b.igdb_id == a.igdb_id) & (b.id > a.id))
+                          .where(a.igdb_id.is_not(None), ~dismissed).order_by(a.title).limit(MAX_DUPLICATES)).all()
+        ids = {g.id for pair in pairs for g in pair}
+        counts = dict(s.execute(select(StoreProduct.game_id, func.count()).where(
+            StoreProduct.game_id.in_(ids), StoreProduct.is_active).group_by(StoreProduct.game_id)).all()) if ids else {}
+
+        def game(g):
+            return {"id": g.id, "title": g.title, "products": counts.get(g.id, 0)}
+        return [{"platform": x.platform.name, "a": game(x), "b": game(y)} for x, y in pairs]
+
+
+def merge_games(moderator_id, from_id, into_id):
+    """
+    Move every store product of game `from_id` to game `into_id`, each to the edition with the same
+    key there (made if missing: "Standard", "Deluxe", "· PlayStation Hits"), pinned like any moved
+    product; the emptied game is merged (merged_ids: old links, listings and collection items
+    follow). Returns {"game_id": into_id}.
+    """
+    with session() as s:
+        source, target = s.get(Game, int(from_id)), s.get(Game, int(into_id))
+        if not source or not target or source.id == target.id:
+            raise ModerationError("not_found", 404)
+        if source.platform_id != target.platform_id:
+            raise ModerationError("platform_invalid")
+        groups = defaultdict(list)            # target edition id → product ids
+        for product_id, key, name in s.execute(
+                select(StoreProduct.id, GameEdition.edition_key, GameEdition.name)
+                .join(GameEdition, GameEdition.id == StoreProduct.edition_id).where(StoreProduct.game_id == source.id)):
+            edition = s.scalars(select(GameEdition).where(GameEdition.game_id == target.id,
+                                                          GameEdition.edition_key == key)).first()
+            if edition is None:
+                edition = GameEdition(game_id=target.id, edition_key=key, name=name)
+                s.add(edition)
+                s.flush()
+            groups[edition.id].append(product_id)
+        title = source.title
+    if not groups:
+        raise ModerationError("products_invalid")
+    for edition_id, product_ids in groups.items():
+        for start in range(0, len(product_ids), MAX_PRODUCTS):
+            move(moderator_id, product_ids[start:start + MAX_PRODUCTS], edition_id=edition_id)
+    with session() as s:
+        s.add(ModerationLog(moderator_id=moderator_id, action="merge_game", kind="game", target_id=int(into_id),
+                            note=f"#{from_id} {title} → #{into_id}"[:500]))
+    return {"game_id": int(into_id)}
+
+
+def dismiss_duplicate(moderator_id, game_a, game_b):
+    """Two games that only look like duplicates: they leave the list."""
+    a, b = sorted((int(game_a), int(game_b)))
+    with session() as s:
+        if not s.get(Game, a) or not s.get(Game, b):
+            raise ModerationError("not_found", 404)
+        s.merge(DuplicateDismissal(game_a=a, game_b=b, created_by=moderator_id))
+    return {"ok": True}
 
 
 def unpin(moderator_id, product_id):

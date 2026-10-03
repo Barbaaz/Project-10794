@@ -96,6 +96,29 @@ def move_products():
     return jsonify(edition_id=edition_id)
 
 
+@bp.get("/mod/duplicates")
+@moderator_required
+def duplicates():
+    """Possible duplicate games (same platform, same IGDB entry): [{platform, a, b}]"""
+    return jsonify(match_service.duplicates())
+
+
+@bp.post("/mod/duplicates/merge")
+@moderator_required
+def merge_games():
+    """{from_id, into_id}: every product of one game moved to the other (pinned); the first is merged."""
+    data = body()
+    return jsonify(match_service.merge_games(current_user()["id"], data.get("from_id"), data.get("into_id")))
+
+
+@bp.post("/mod/duplicates/dismiss")
+@moderator_required
+def dismiss_duplicate():
+    """{a, b}: not the same game; the pair leaves the list."""
+    data = body()
+    return jsonify(match_service.dismiss_duplicate(current_user()["id"], data.get("a"), data.get("b")))
+
+
 @bp.put("/mod/games/<int:game_id>/title-en")
 @moderator_required
 def set_title_en(game_id):

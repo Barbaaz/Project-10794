@@ -69,6 +69,10 @@
                 <button class="btn btn-primary" data-i18n="search"></button>
             </form>
             <div id="match-results" class="d-flex flex-column gap-3 mb-4"></div>
+            <!-- Two games on one platform matched to the same IGDB entry: merge them or say they differ -->
+            <h2 class="h6" data-i18n="dup_title"></h2>
+            <p class="small text-body-secondary" data-i18n="dup_intro"></p>
+            <ul id="duplicates" class="list-group list-group-flush small mb-4"></ul>
             <h2 class="h6" data-i18n="match_pins"></h2>
             <ul id="pins" class="list-group list-group-flush small"></ul>
         </section>
@@ -327,6 +331,36 @@ async function loadPins() {
     });
 }
 
+// --- possible duplicates (same platform, same IGDB entry) --------------------------------------
+async function loadDuplicates() {
+    const pairs = await getJSON("/api/mod/duplicates");
+    const list = document.getElementById("duplicates");
+    const side = g => `<a href="/game/${g.id}">${esc(g.title)}</a>
+        <span class="text-body-secondary">#${g.id} · ${esc(t("dup_products", { count: g.products }))}</span>`;
+    list.innerHTML = pairs.length ? pairs.map(p => `
+        <li class="list-group-item px-0">
+            <div class="text-body-secondary">${esc(p.platform)}</div>
+            <div>${side(p.a)}</div><div>${side(p.b)}</div>
+            <div class="d-flex flex-wrap gap-2 mt-1">
+                <button type="button" class="btn btn-sm btn-primary" data-from="${p.b.id}" data-into="${p.a.id}">${esc(t("dup_merge_into", { id: p.a.id }))}</button>
+                <button type="button" class="btn btn-sm btn-primary" data-from="${p.a.id}" data-into="${p.b.id}">${esc(t("dup_merge_into", { id: p.b.id }))}</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-a="${p.a.id}" data-b="${p.b.id}">${esc(t("dup_not_same"))}</button>
+            </div>
+        </li>`).join("") : `<li class="list-group-item px-0 text-body-secondary">${esc(t("dup_none"))}</li>`;
+    list.querySelectorAll("[data-from]").forEach(b => b.onclick = async () => {
+        b.disabled = true;
+        const { ok, data } = await api("/api/mod/duplicates/merge", { body: { from_id: Number(b.dataset.from), into_id: Number(b.dataset.into) } });
+        showMessage(ok, ok ? t("dup_merged") : t(`error_${data?.error || "unknown"}`));
+        loadDuplicates();
+        loadPins();
+    });
+    list.querySelectorAll("[data-a]").forEach(b => b.onclick = async () => {
+        const { ok, data } = await api("/api/mod/duplicates/dismiss", { body: { a: Number(b.dataset.a), b: Number(b.dataset.b) } });
+        showMessage(ok, ok ? t("dup_dismissed") : t(`error_${data?.error || "unknown"}`));
+        loadDuplicates();
+    });
+}
+
 document.getElementById("match-search").onsubmit = e => {
     e.preventDefault();
     searchMatches(e.target.querySelector("[name=q]").value.trim());
@@ -356,7 +390,8 @@ document.getElementById("staff-form").onsubmit = e => {
 };
 
 // --- tabs -------------------------------------------------------------------------------------
-const LOADERS = { reports: loadReports, problems: loadProblems, log: loadLog, matches: loadPins,
+const LOADERS = { reports: loadReports, problems: loadProblems, log: loadLog,
+                  matches: () => { loadPins(); loadDuplicates(); },
                   staff: async () => renderStaff(await getJSON("/api/mod/staff")) };
 
 function showTab(name) {
