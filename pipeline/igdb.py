@@ -14,6 +14,7 @@ IGDB_CLIENT_SECRET (never in the code). IGDB allows 4 requests per second; we st
 """
 import argparse
 import json
+from collections import Counter
 import logging
 import os
 import re
@@ -41,10 +42,28 @@ IGDB_PLATFORMS = {"PS5": 167, "PS4": 48, "PS3": 9, "Switch": 130, "Switch2": 508
                   "PS1": 7, "Xbox": 11, "GameCube": 21, "N64": 4, "GBA": 24, "GBC": 22, "GB": 33, "SNES": 19,
                   "NES": 18, "Dreamcast": 23, "Saturn": 32, "MegaDrive": 29, "MasterSystem": 64}
 
-# IGDB game_type: 1 DLC, 2 expansion, 5 mod, 13 pack, 14 update — not the game itself
+# IGDB game_type: 1 DLC, 5 mod, 13 pack, 14 update — not the game itself
 NOT_A_GAME = {1, 5, 13, 14}
-# ... nor are 3 bundle, 6 episode, 7 season: no English name from those (a wrong match shows a wrong name)
-NOT_THE_GAMES_NAME = NOT_A_GAME | {2, 3, 6, 7}
+# 2 expansion, 6 episode, 7 season, and a bundle joining games ("The Witcher 3: Wild Hunt + Dark Souls III"):
+# stores do sell these on a disc ("The Elder Scrolls Online: Elsweyr", "Dragon Quest I & II HD-2D
+# Remake"), but they're only our game when every word of their name is in our title — not "Dark Souls
+# III" → that bundle, "The Division 2" → "The Division 2: Mutiny", "Syberia 2" → "Syberia 1 & 2".
+# (IGDB also files compilations like "Rayman: 30th Anniversary Edition" as bundles: scored as usual.)
+PARTS = {2, 6, 7}
+BUNDLE = 3
+JOINED_GAMES = re.compile(r"[+&/]|\bvs\b", re.IGNORECASE)
+NOT_THE_GAMES_NAME = NOT_A_GAME | PARTS | {BUNDLE}
+# Words about the packaging, not another game: allowed in such a name besides ours ("Class of Heroes
+# 1 & 2 Complete Edition", "Far Cry 4 + Far Cry: Primal Bundle", "Kingdom Hearts HD 1.5 + 2.5 Remix")
+PACKAGING_WORDS = {"edition", "complete", "deluxe", "digital", "bundle", "pack", "double", "twin", "collection",
+                   "legacy", "hd", "the", "remastered"}
+
+
+def is_all_ours(game_key, igdb_name):
+    """Every word of IGDB's name is in our title (as often as it is there), besides packaging words:
+    "Blasphemous + Blasphemous 2 Bundle" isn't "blasphemous 2" (one Blasphemous too many)."""
+    extra = Counter(normalize_name(igdb_name).split()) - Counter(game_key.split())
+    return all(word in PACKAGING_WORDS for word in extra)
 # A store title in Portuguese: letters / words English titles don't have (after normalize_name)
 PORTUGUESE = re.compile(r"[ãõç]", re.IGNORECASE)
 PORTUGUESE_WORDS = {"parte", "edicao", "versao", "colecao", "fim", "ladrao", "remasterizado", "remasterizada", "um",
@@ -146,6 +165,9 @@ def best_match(game_key, results):
     best, best_score = None, 0.0
     for g in results:
         if g.get("game_type") in NOT_A_GAME:
+            continue
+        part = g.get("game_type") in PARTS or (g.get("game_type") == BUNDLE and JOINED_GAMES.search(g["name"]))
+        if part and not is_all_ours(game_key, g["name"]):
             continue
         score = name_score(game_key, g["name"])
         if g.get("version_parent"):

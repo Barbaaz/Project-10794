@@ -31,6 +31,25 @@ def test_prefers_the_main_game_over_editions_and_dlc():
     assert best_match("hogwarts legacy", results)["id"] == 1
 
 
+def test_never_a_bundle_or_expansion_for_a_single_game():
+    results = [
+        {"id": 7, "name": "The Witcher 3: Wild Hunt + Dark Souls III", "game_type": 3},
+        {"id": 8, "name": "Mario Kart 8 Deluxe: Booster Course Pass", "game_type": 2},
+    ]
+    assert best_match("dark souls 3", results) is None
+    assert best_match("mario kart 8 deluxe", results) is None
+    assert best_match("the division 2", [{"id": 10, "name": "The Division 2: Mutiny", "game_type": 7}]) is None
+    # a bundle or expansion stores sell on its own disc is matched when its whole name is ours
+    pack = [{"id": 9, "name": "Far Cry 4 + Far Cry 5 Double Pack", "game_type": 3}]
+    assert best_match("far cry 4 far cry 5 double pack", pack)["id"] == 9
+    elsweyr = [{"id": 11, "name": "The Elder Scrolls Online: Elsweyr", "game_type": 2}]
+    assert best_match("the elder scrolls online elsweyr", elsweyr)["id"] == 11
+    heroes = [{"id": 12, "name": "Class of Heroes 1 & 2 Complete Edition", "game_type": 3}]
+    assert best_match("class of heroes 1 2", heroes)["id"] == 12                # packaging words only
+    both = [{"id": 13, "name": "Blasphemous + Blasphemous 2 Bundle", "game_type": 3}]
+    assert best_match("blasphemous 2", both) is None                              # one Blasphemous too many
+
+
 def test_no_match_when_names_differ():
     assert best_match("halloween the game", [{"id": 9, "name": "Halloween Party Games", "game_type": 0}]) is None
     assert best_match("anything", []) is None
