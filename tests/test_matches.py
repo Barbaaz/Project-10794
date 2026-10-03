@@ -71,6 +71,19 @@ def test_merge_an_edition_by_moving_its_product(mod):
     assert client.get("/api/mod/log").get_json()[0]["action"] == "unpin_product"
 
 
+def test_a_pinned_product_stays_on_its_games_platform(mod):
+    """A PS4 disc the store lists on its PS5 page: the game moved to PS4, the product pinned to it."""
+    client, c = mod["client"], mod["db"]
+    game, by_name = editions(client)
+    standard = by_name["Standard"]
+    ps4 = c.execute("SELECT id FROM platforms WHERE code = 'PS4'").fetchone()[0]
+    c.execute("UPDATE games SET platform_id = ? WHERE id = ?", ps4, game["id"])
+    client.post("/api/mod/matches", headers=HEADERS, json={"product_ids": [standard["products"][0]["id"]],
+                                                           "edition_id": standard["id"]})
+    process_products("press_start", PRODUCTS, full_catalog=False)       # the store still says PS5
+    assert c.execute("SELECT platform_id FROM store_products WHERE url = ?", "https://match.test/3").fetchone()[0] == ps4
+
+
 def test_move_to_a_new_edition(mod):
     client = mod["client"]
     game, by_name = editions(client)
