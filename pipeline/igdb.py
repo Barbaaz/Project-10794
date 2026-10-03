@@ -1,11 +1,12 @@
 """
 Game information from IGDB (summary, genres, publisher, developer, PEGI, rating, cover,
-screenshots, YouTube trailers, game modes, themes) for the game page and the filters. Each game is looked up once; new games each day.
+screenshots, YouTube trailers, game modes, themes, time to beat) for the game page and the filters. Each game is looked up once; new games each day.
 
     python -m pipeline.igdb                  # games not looked up yet (up to 300)
     python -m pipeline.igdb --limit 5000     # first fill
     python -m pipeline.igdb --videos         # trailers for games matched before videos were kept
     python -m pipeline.igdb --tags           # game modes / themes for games matched before they were kept
+    python -m pipeline.igdb --time-to-beat   # time to beat (rushed / normal / 100%) of matched games
 
 Credentials: a Twitch developer app, in the environment variables IGDB_CLIENT_ID and
 IGDB_CLIENT_SECRET (never in the code). IGDB allows 4 requests per second; we stay under it.
@@ -25,10 +26,10 @@ from db import connection
 log = logging.getLogger(__name__)
 
 TOKEN_URL = "https://id.twitch.tv/oauth2/token"
-GAMES_URL = "https://api.igdb.com/v4/games"
+API_URL = "https://api.igdb.com/v4/"
 MIN_INTERVAL = 0.3          # seconds between requests (IGDB limit: 4 per second)
 MIN_SCORE = 0.75            # how similar the names must be to accept a match
-RETRY_UNMATCHED_DAYS = 30   # games IGDB didn't have may be added later
+RETRY_UNMATCHED_DAYS = 30   # games IGDB didn't have may be added later (also: time to beat not known yet)
 
 # Our platform codes → IGDB platform ids
 IGDB_PLATFORMS = {"PS5": 167, "PS4": 48, "PS3": 9, "Switch": 130, "Switch2": 508,
@@ -72,13 +73,13 @@ class IGDBClient:
         self.session.headers.update({"Client-ID": self.client_id, "Authorization": f"Bearer {self.token}"})
         self._last = 0.0
 
-    def query(self, body):
+    def query(self, body, endpoint="games"):
         for attempt in range(3):
             wait = MIN_INTERVAL - (time.monotonic() - self._last)
             if wait > 0:
                 time.sleep(wait)
             self._last = time.monotonic()
-            response = self.session.post(GAMES_URL, data=body.encode("utf-8"), timeout=30)
+            response = self.session.post(API_URL + endpoint, data=body.encode("utf-8"), timeout=30)
             if response.status_code == 429:      # too fast: back off and try again
                 time.sleep(2 ** attempt)
                 continue
@@ -263,6 +264,39 @@ def fill_tags(client=None):
     return fill_missing("game_modes", "game_modes.name,themes.name", tag_lists, client)
 
 
+def fill_time_to_beat(client=None):
+    """
+    Time to beat from IGDB's players (seconds to finish rushing / normally / 100%) for matched
+    games not looked up yet, or looked up 30+ days ago without times. 500 games per request;
+    a game IGDB has no times for is marked checked (ttb_checked_at) with empty times.
+    """
+    with connection() as conn:
+        cursor = conn.cursor()
+        ids = [r[0] for r in cursor.execute(
+            "SELECT DISTINCT igdb_id FROM games WHERE igdb_id IS NOT NULL AND (ttb_checked_at IS NULL "
+            "OR (ttb_normally IS NULL AND ttb_checked_at < DATEADD(DAY, ?, SYSUTCDATETIME())))",
+            -RETRY_UNMATCHED_DAYS).fetchall()]
+        if not ids:
+            return 0
+        client = client or IGDBClient()
+        found = 0
+        for start in range(0, len(ids), BATCH):
+            batch = ids[start:start + BATCH]
+            times = {t["game_id"]: t for t in client.query(
+                f"fields game_id,hastily,normally,completely,count; where game_id = ({','.join(map(str, batch))}); "
+                f"limit {BATCH};", endpoint="game_time_to_beats")}
+            for igdb_id in batch:
+                t = times.get(igdb_id, {})
+                found += bool(t)
+                cursor.execute(
+                    "UPDATE games SET ttb_hastily = ?, ttb_normally = ?, ttb_completely = ?, ttb_count = ?, "
+                    "ttb_checked_at = SYSUTCDATETIME() WHERE igdb_id = ?",
+                    t.get("hastily"), t.get("normally"), t.get("completely"), t.get("count"), igdb_id)
+            conn.commit()
+    log.info("IGDB: time to beat looked up for %d games, %d have times", len(ids), found)
+    return len(ids)
+
+
 if __name__ == "__main__":
     from scheduler.jobs import setup_logging
 
@@ -270,11 +304,14 @@ if __name__ == "__main__":
     parser.add_argument("--limit", type=int, default=300)
     parser.add_argument("--videos", action="store_true", help="only fill videos of games already matched")
     parser.add_argument("--tags", action="store_true", help="only fill game modes / themes of games already matched")
+    parser.add_argument("--time-to-beat", action="store_true", help="only fill the time to beat of matched games")
     args = parser.parse_args()
     setup_logging()
     if args.videos:
         fill_videos()
     elif args.tags:
         fill_tags()
+    elif args.time_to_beat:
+        fill_time_to_beat()
     else:
         enrich_games(args.limit)

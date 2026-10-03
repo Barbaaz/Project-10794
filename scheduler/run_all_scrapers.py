@@ -11,7 +11,7 @@ import sys
 
 from scheduler.jobs import SCRAPERS, RanRecently, active_store_slugs, run_store, setup_logging
 from scheduler.notify import notify, run_summary
-from pipeline.igdb import enrich_games, fill_tags, fill_videos
+from pipeline.igdb import enrich_games, fill_tags, fill_time_to_beat, fill_videos
 from app.services.chat_service import complete_overdue
 
 log = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ def main():
         enrich_games(limit=300)
         fill_videos()
         fill_tags()
+        fill_time_to_beat()
     except Exception as e:
         log.warning("IGDB lookup skipped: %s", e)
 

@@ -77,6 +77,12 @@ class Game(Base):
     video_ids: Mapped[str | None] = mapped_column(UnicodeText)
     game_modes: Mapped[str | None] = mapped_column(Unicode(500))
     themes: Mapped[str | None] = mapped_column(Unicode(500))
+    # IGDB time to beat, in seconds (rushed / normal / 100%), and how many players gave times
+    ttb_hastily: Mapped[int | None] = mapped_column(Integer)
+    ttb_normally: Mapped[int | None] = mapped_column(Integer)
+    ttb_completely: Mapped[int | None] = mapped_column(Integer)
+    ttb_count: Mapped[int | None] = mapped_column(Integer)
+    ttb_checked_at = mapped_column(DATETIME2)
 
     platform: Mapped[Platform] = relationship(lazy="joined")
 

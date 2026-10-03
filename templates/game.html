@@ -236,9 +236,18 @@ function renderFacts() {
         [t("developer"), game.developers || sd["Produtora"]],
         [t("released"), released && new Date(released + "T12:00:00") <= new Date() ? fmtDate(released + "T12:00:00") : null],
         [t("rating"), game.rating ? `${game.rating}/100 (IGDB)` : null],
+        [t("time_to_beat"), timeToBeat()],
     ].filter(([, value]) => value);
     document.getElementById("facts").innerHTML =
         facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+}
+
+// "História ~25 h · Com extras ~40 h · 100% ~60 h (IGDB, 31 jogadores)": IGDB players' times
+function timeToBeat() {
+    const hours = seconds => seconds ? `~${fmtNumber(Math.max(1, Math.round(seconds / 3600)))} h` : null;
+    const parts = [["ttb_hastily", game.ttb_hastily], ["ttb_normally", game.ttb_normally], ["ttb_completely", game.ttb_completely]]
+        .filter(([, s]) => s).map(([key, s]) => `${t(key)} ${hours(s)}`);
+    return parts.length ? `${parts.join(" · ")} (${t("ttb_source", { count: game.ttb_count || 0 })})` : null;
 }
 
 // The store's Portuguese description of the standard edition if there is one; otherwise

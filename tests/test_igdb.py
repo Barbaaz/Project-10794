@@ -109,3 +109,43 @@ def test_fill_videos_asks_by_igdb_id_in_batches(monkeypatch):
     updates = dict((igdb_id, json.loads(v)) for v, igdb_id in conn.c.updates)
     assert updates[1] == [{"id": "yt1", "name": "Trailer"}]
     assert updates[502] == []                        # not returned by IGDB: "[]", not asked again
+
+
+def test_fill_time_to_beat_asks_the_endpoint_and_marks_games_checked(monkeypatch):
+    import pipeline.igdb as igdb
+
+    class FakeCursor:
+        def __init__(self):
+            self.updates = []
+        def execute(self, sql, *params):
+            if sql.startswith("SELECT"):
+                self.rows = [(1,), (2,)]
+            else:
+                self.updates.append(params)
+            return self
+        def fetchall(self):
+            return self.rows
+
+    class FakeConn:
+        def __init__(self):
+            self.c = FakeCursor()
+        def cursor(self):
+            return self.c
+        def commit(self): pass
+        def rollback(self): pass
+        def close(self): pass
+
+    class FakeClient:
+        asked = []
+        def query(self, body, endpoint="games"):
+            self.asked.append(endpoint)
+            return [{"game_id": 1, "hastily": 3600, "normally": 7200, "completely": 10800, "count": 4}]
+
+    conn = FakeConn()
+    import db
+    monkeypatch.setattr(db, "get_connection", lambda: conn)
+    assert igdb.fill_time_to_beat(FakeClient()) == 2
+    assert FakeClient.asked == ["game_time_to_beats"]
+    updates = {params[-1]: params[:-1] for params in conn.c.updates}
+    assert updates[1] == (3600, 7200, 10800, 4)
+    assert updates[2] == (None, None, None, None)          # no times: checked, asked again in 30 days

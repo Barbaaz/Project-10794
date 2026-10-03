@@ -204,6 +204,13 @@ IF COL_LENGTH('dbo.games', 'game_modes') IS NULL
     ALTER TABLE dbo.games ADD game_modes NVARCHAR(500) NULL, themes NVARCHAR(500) NULL;
 GO
 
+-- IGDB time to beat (pipeline/igdb.py, fill_time_to_beat): seconds to finish rushing / normally /
+-- 100%, and how many players gave times; ttb_checked_at set even when IGDB has none
+IF COL_LENGTH('dbo.games', 'ttb_normally') IS NULL
+    ALTER TABLE dbo.games ADD ttb_hastily INT NULL, ttb_normally INT NULL, ttb_completely INT NULL,
+        ttb_count INT NULL, ttb_checked_at DATETIME2 NULL;
+GO
+
 -- The store's photos of a product besides the cover (special editions: what's in the box),
 -- JSON list of URLs, read with the description
 IF COL_LENGTH('dbo.store_products', 'image_urls') IS NULL
