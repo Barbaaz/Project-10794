@@ -24,11 +24,16 @@ def client(app_on_test_db, web_client):
     cursor.execute("DELETE FROM scrape_runs")
 
 
-def test_store_status(client):
-    stores = {s["slug"]: s for s in client.get("/api/stores").get_json()}
+def test_store_status(client, app_on_test_db):
+    cursor = app_on_test_db.conn.cursor()
+    cursor.execute("UPDATE stores SET is_active = 0 WHERE slug = 'gaming_replay'")
+    try:
+        stores = {s["slug"]: s for s in client.get("/api/stores").get_json()}
+    finally:
+        cursor.execute("UPDATE stores SET is_active = 1 WHERE slug = 'gaming_replay'")
 
-    assert "radio_popular" not in stores     # switched off
-    assert "gaming_replay" in stores
+    assert "gaming_replay" not in stores     # switched off
+    assert "radio_popular" in stores
     assert stores["press_start"]["last_status"] == "success"
     assert stores["press_start"]["is_stale"] is False
     assert stores["press_start"]["last_error"] is None

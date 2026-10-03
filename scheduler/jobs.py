@@ -6,7 +6,6 @@ from pathlib import Path
 from db import connection
 from pipeline.process_scraped_data import process_products
 from scrapers.cstech.scraper import CSTechScraper
-from scrapers.darty.scraper import DartyScraper
 from scrapers.gaming_replay.scraper import GamingReplayScraper
 from scrapers.mega_mania.scraper import MegaManiaScraper
 from scrapers.press_start.scraper import PressStartScraper
@@ -27,8 +26,8 @@ RELEASE_DATE_RECHECK_DAYS = 7
 MIN_HOURS_BETWEEN_RUNS = 8
 
 # The evening run (run_all_scrapers --light): these stores again, listing pages only (prices and
-# stock; no product pages), so prices are at most ~12 h old. Darty and CSTech stay once a day:
-# both have answered "too many requests" before.
+# stock; no product pages), so prices are at most ~12 h old. CSTech stays once a day: it has
+# answered "too many requests" before; Rádio Popular too (match-only, few of its products link).
 LIGHT_STORES = ("press_start", "mega-mania", "gaming_replay")
 
 # To add a store: write its scraper, register it here and add it to database/seed_stores.sql
@@ -36,7 +35,6 @@ SCRAPERS = {
     "press_start": PressStartScraper,
     "mega-mania": MegaManiaScraper,
     "cstech": CSTechScraper,
-    "darty": DartyScraper,
     "radio_popular": RadioPopularScraper,
     "gaming_replay": GamingReplayScraper,
 }
