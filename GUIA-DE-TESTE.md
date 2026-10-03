@@ -10,6 +10,11 @@ vender os seus jogos usados uns aos outros.
 **A versão de teste:** o site funciona só no seu computador, com os preços que já foram recolhidos
 das lojas (não vai buscar preços novos). Nada do que fizer é visto por outras pessoas nem chega às lojas.
 
+> **Recebeu um link para o site?** Então não precisa de instalar nada: abra o link, escreva o
+> utilizador e a palavra-passe que recebeu e passe diretamente ao
+> [Passo 5 — O que testar](#passo-5--o-que-testar). Nesse caso, o site é partilhado pelo grupo de
+> teste: os outros testadores veem os anúncios e contas que criar.
+
 ---
 
 ## Antes de começar

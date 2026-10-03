@@ -1,0 +1,38 @@
+# A test copy online, on a rented server (HOSTING.md): docker-compose.yml plus Caddy in front,
+# which gets the HTTPS certificate by itself and asks for one shared password before any page.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.hosting.yml up -d --build
+#
+# Needs in .env, besides DB_PASSWORD and SECRET_KEY: DOMAIN, TEST_USER, TEST_PASSWORD_HASH.
+services:
+  db:
+    restart: unless-stopped
+
+  web:
+    restart: unless-stopped
+    # Only Caddy reaches the site: no port on the server itself
+    ports: !reset []
+    environment:
+      DEMO_MODE: "1"
+      COOKIE_SECURE: "1"
+      BEHIND_PROXY: "1"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env (see HOSTING.md)}
+      TEST_USER: ${TEST_USER:?Set TEST_USER in .env (see HOSTING.md)}
+      TEST_PASSWORD_HASH: ${TEST_PASSWORD_HASH:?Set TEST_PASSWORD_HASH in .env (see HOSTING.md)}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The HTTPS certificate, kept so it isn't requested again at every start
+      - caddydata:/data
+
+volumes:
+  caddydata:

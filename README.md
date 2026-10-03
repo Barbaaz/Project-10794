@@ -7,6 +7,7 @@ database on a schedule; an API reads from it. Users will also be able to sell us
 **Testing it?** Follow [GUIA-DE-TESTE.md](GUIA-DE-TESTE.md) (in Portuguese, no technical knowledge
 needed): Docker Desktop, the demo data file and a double-click on `teste/INICIAR.bat` (Windows) or
 `teste/iniciar.command` (Mac).
+To put a test copy online instead (testers only need a link and a password): [HOSTING.md](HOSTING.md).
 
 ```
 scheduler → scrapers → pipeline (normalise / match / dedupe) → SQL Server ← API

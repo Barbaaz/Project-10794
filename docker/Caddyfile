@@ -1,0 +1,9 @@
+# The test copy online (docker-compose.hosting.yml): HTTPS for DOMAIN (certificate from Let's
+# Encrypt, renewed by Caddy), one shared password for everything, then the site.
+{$DOMAIN} {
+	basic_auth {
+		{$TEST_USER} {$TEST_PASSWORD_HASH}
+	}
+	encode gzip
+	reverse_proxy web:5000
+}

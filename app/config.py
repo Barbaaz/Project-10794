@@ -32,6 +32,10 @@ def _secret_key():
 SECRET_KEY = _secret_key()
 # Only send the login cookie over HTTPS: set COOKIE_SECURE=1 once the site is served with HTTPS
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE") == "1"
+# Served through one reverse proxy (Caddy, docker-compose.hosting.yml): trust its X-Forwarded-For /
+# -Proto, so the login lockout counts each visitor's address, not the proxy's. Never set it when
+# the site is reachable without the proxy: anyone could then pick the address they appear from.
+BEHIND_PROXY = os.environ.get("BEHIND_PROXY") == "1"
 # A test copy on demo data (the teste/ launchers): its prices are a snapshot, never scraped
 # again, so the pages say so and stores aren't flagged as out of date
 DEMO_MODE = os.environ.get("DEMO_MODE") == "1"
