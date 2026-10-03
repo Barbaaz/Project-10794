@@ -35,7 +35,8 @@ USING (VALUES
     ('press_start',   N'Press Start',   N'https://www.pressstart.pt',    1),
     ('mega-mania',    N'Mega Mania',    N'https://mega-mania.com.pt',    1),
     ('cstech',        N'CSTech',        N'https://cstech.store',         1),
-    ('darty',         N'Darty',         N'https://darty.pt',             1),
+    -- off since 2026-10-03: its products.json answered 429 on all three runs (it limits automated access)
+    ('darty',         N'Darty',         N'https://darty.pt',             0),
     -- off until a match-only run is checked (pipeline/matcher.py MATCH_ONLY_STORES): python -m scheduler.run_single_store radio_popular --force
     ('radio_popular', N'Rádio Popular', N'https://www.radiopopular.pt',  0),
     ('gaming_replay', N'Gaming Replay', N'https://www.gamingreplay.com/pt/', 1)  -- since 2026-10-03
