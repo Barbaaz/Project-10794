@@ -37,8 +37,8 @@ USING (VALUES
     ('cstech',        N'CSTech',        N'https://cstech.store',         1),
     -- off since 2026-10-03: its products.json answered 429 on all three runs (it limits automated access)
     ('darty',         N'Darty',         N'https://darty.pt',             0),
-    -- off until a match-only run is checked (pipeline/matcher.py MATCH_ONLY_STORES): python -m scheduler.run_single_store radio_popular --force
-    ('radio_popular', N'Rádio Popular', N'https://www.radiopopular.pt',  0),
+    -- match-only (pipeline/matcher.py MATCH_ONLY_STORES): links to games other stores made; on since 2026-10-03
+    ('radio_popular', N'Rádio Popular', N'https://www.radiopopular.pt',  1),
     ('gaming_replay', N'Gaming Replay', N'https://www.gamingreplay.com/pt/', 1)  -- since 2026-10-03
 ) AS s (slug, name, base_url, is_active)
 ON t.slug = s.slug
