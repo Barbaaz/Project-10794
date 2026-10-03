@@ -158,7 +158,8 @@ function itemRow(item) {
                     ${owned ? ownedControls(item) : ""}
                     <div class="d-flex flex-wrap gap-2 mt-2">
                         ${owned
-                            ? `<a class="btn btn-sm btn-success" href="/sell?game_id=${item.game_id}&edition_id=${item.edition_id}">${t("collection_sell")}</a>`
+                            // only physical copies can be sold (a digital game can't be handed over)
+                            ? (item.format === "digital" ? "" : `<a class="btn btn-sm btn-success" href="/sell?game_id=${item.game_id}&edition_id=${item.edition_id}">${t("collection_sell")}</a>`)
                             : `<button type="button" class="btn btn-sm btn-success" data-action="bought">${t("collection_bought")}</button>`}
                         <button type="button" class="btn btn-sm btn-danger" data-action="remove">${t("collection_remove")}</button>
                     </div>
