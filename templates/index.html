@@ -15,6 +15,9 @@
     <style>
         .game-card .cover-link { display: block; overflow: hidden; background: #000; }
         .game-card img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; transition: transform .3s ease; }
+        /* A store's photo (square, a 3D box shot...) is shown whole on white, not cropped to the card;
+           the game's IGDB cover already has the card's shape */
+        .game-card img.store-photo { object-fit: contain; background: #fff; }
         .game-card:hover img { transform: scale(1.04); }
         .game-card .card-body { padding: .5rem; font-size: .8rem; }
         /* Every card has the same layout: title always 2 lines tall, platform 1 line,
@@ -163,7 +166,8 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
     col.innerHTML = `
         <div class="card h-100 shadow-sm overflow-hidden game-card">
             <div class="position-relative">
-                <a href="${gameUrl}" class="cover-link"><img src="${esc(best?.image || group.image || "")}" alt="" loading="lazy"></a>
+                <a href="${gameUrl}" class="cover-link"><img src="${esc(group.cover || best?.image || group.image || "")}"
+                    class="${group.cover ? "" : "store-photo"}" alt="" loading="lazy"></a>
                 ${coverBadge}
                 ${group.at_historical_low ? `<span class="badge text-bg-success low-price-badge"
                     title="${esc(t("low_badge_hint"))}">${t("low_badge")}</span>` : ""}
@@ -713,7 +717,7 @@ function renderDiscounts(offers) {
     const grid = cardGrid();
     offers.forEach(o => {
         // o.offers: this store's offer plus the other stores' prices, each shown as a button
-        const group = { name: o.name, name_en: o.name_en, console: o.platform, platform_name: o.platform_name, game_id: o.game_id,
+        const group = { name: o.name, name_en: o.name_en, cover: o.cover, console: o.platform, platform_name: o.platform_name, game_id: o.game_id,
                         edition_id: o.edition_id, offers: o.offers || [o] };
         grid.appendChild(makeCard(group, {
             coverBadge: storeDeals

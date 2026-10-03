@@ -1,5 +1,5 @@
 from app.services.common import (
-    LATEST_PRICE, OFFER_COLUMNS, better_title, cached, card_name, edition_en, page_result, title_en,
+    LATEST_PRICE, OFFER_COLUMNS, better_title, cached, card_cover, card_name, edition_en, page_result, title_en,
 )
 from app.services.review_service import mark_review_scores
 from app.services.tag_service import mark_historical_lows
@@ -32,6 +32,7 @@ def attach_store_offers(items):
         # the card's name in both languages ("Title — Edition")
         item["name"] = card_name(better_title(item), item["edition_key"], item["edition"])
         item["name_en"] = card_name(title_en(item), item["edition_key"], edition_en(item["edition"]))
+        item["cover"] = card_cover(item)
         own = {k: item[k] for k in ("offer_id", "store", "store_name", "condition", "price", "in_stock",
                                     "is_preorder", "url", "image") if k in item}
         own.update(was_price=item.get("was_price"), discount_percent=item.get("discount_percent"))
@@ -59,7 +60,7 @@ def _featured_discounts(limit, min_percent, platform):
             WHERE o.is_discount = 1 AND o.is_active = 1 AND o.in_stock = 1
               AND o.condition = 'new' AND o.discount_percent >= ?
         )
-        SELECT TOP ({int(limit)}) g.title, g.title_en, p.code AS platform, p.name AS platform_name,
+        SELECT TOP ({int(limit)}) g.title, g.title_en, g.cover_image_id, p.code AS platform, p.name AS platform_name,
                e.name AS edition, e.edition_key, {OFFER_COLUMNS}
         FROM ranked o
         JOIN stores s ON s.id = o.store_id
@@ -109,7 +110,7 @@ def _best_store_deals(limit, min_percent, max_percent, platform):
             WHERE a.rn = 1
         )
         SELECT TOP ({int(limit)})
-               g.title, g.title_en, p.code AS platform, p.name AS platform_name, e.name AS edition, e.edition_key,
+               g.title, g.title_en, g.cover_image_id, p.code AS platform, p.name AS platform_name, e.name AS edition, e.edition_key,
                sp.id AS offer_id, sp.game_id, sp.edition_id, s.slug AS store, s.name AS store_name,
                sp.condition, gap.price, CAST(1 AS BIT) AS in_stock, sp.is_preorder, sp.url,
                sp.image_url AS image, sp.external_name,

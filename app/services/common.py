@@ -31,9 +31,23 @@ LATEST_PRICE = """
 
 # What card_group() needs, from game_editions e JOIN games g JOIN platforms p
 EDITION_CARD_COLUMNS = """
-    e.id AS edition_id, e.name AS edition, e.edition_key, g.id AS game_id, g.title, g.title_en,
+    e.id AS edition_id, e.name AS edition, e.edition_key, g.id AS game_id, g.title, g.title_en, g.cover_image_id,
     p.code AS console, p.name AS platform_name
 """
+
+# The game's IGDB cover, double size (528 × 748) so cards stay sharp on phone screens
+IGDB_COVER = "https://images.igdb.com/igdb/image/upload/t_cover_big_2x/{}.jpg"
+
+
+def card_cover(row):
+    """
+    The card's picture when it should be the game's IGDB cover: flat box art in the card's own 3:4
+    shape (the stores' photos are square, 3D box shots or small). Only for the standard edition
+    (also "· PlayStation Hits"): a special edition shows its own box, from the store.
+    """
+    if row.get("cover_image_id") and row["edition_key"].split("|")[0] == "":
+        return IGDB_COVER.format(row["cover_image_id"])
+    return None
 
 # Portuguese edition words in English, for the English page ("Edição Especial" → "Special Edition")
 EDITION_WORDS_EN = [(re.compile(rf"\b{pt}\b", re.IGNORECASE), en) for pt, en in [
@@ -107,6 +121,7 @@ def card_group(row, offers, **extra):
         "game_id": row["game_id"],
         "name": card_name(better_title(row), row["edition_key"], row["edition"]),
         "name_en": card_name(title_en(row), row["edition_key"], edition_en(row["edition"])),
+        "cover": card_cover(row),
         "console": row["console"],
         "platform_name": row["platform_name"],
         **extra,
