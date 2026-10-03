@@ -1,5 +1,6 @@
 """Pre-orders and upcoming releases for the front page."""
 from app.services.common import EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, cached, card_group
+from app.services.review_service import mark_review_scores
 from app.services.tag_service import mark_historical_lows
 from db import fetch_all, placeholders
 
@@ -74,7 +75,7 @@ def preorders():
             group = groups.setdefault(r["edition_id"], card_group(
                 r, [], release_date=r["game_release_date"], date_is_estimate=r["date_is_estimate"]))
             group["offers"].append(r)
-        return mark_historical_lows(list(groups.values()))
+        return mark_review_scores(mark_historical_lows(list(groups.values())))
 
     return cached("preorders", compute)
 

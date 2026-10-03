@@ -167,7 +167,8 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
             </div>
             <div class="card-body d-flex flex-column">
                 <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(group.name)}">${esc(group.name)}</a>
-                <div class="text-body-secondary small card-platform">${esc(group.platform_name || group.console)}</div>
+                <div class="text-body-secondary small card-platform">${esc(group.platform_name || group.console)}${group.review_count
+                    ? ` · <span title="${esc(t("review_score_hint", { count: group.review_count }))}">${fmtNumber(group.review_score)}/10 (${group.review_count})</span>` : ""}</div>
                 ${extraLine === null ? '<div class="mb-2"></div>' : `<div class="small card-extra">${extraLine}</div>`}
                 <div class="mt-auto">${rows}${more}</div>
             </div>

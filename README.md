@@ -105,11 +105,11 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/ratings/pending` | Completed purchases the user still has to rate (`overdue` after 14 days: buying and selling blocked until rated) |
 | `POST /api/conversations/<id>/rating` `{stars, comment?}` | Rate the other side of a completed purchase (changeable for 14 days) |
 | `POST /api/ratings/<id>/reply` `{reply}` | The rated user answers a rating |
-| `GET /api/users/<username>` | Public profile: average rating, ratings received, listings (never the email) |
+| `GET /api/users/<username>` | Public profile: average rating, ratings received, listings, game reviews (never the email) |
 | `GET /api/collection` · `GET /api/collection/editions` | The user's collection and wishlist with current prices and statistics (per platform / status, hours, worth new / used) · which editions they have (for the game page's Tenho / Quero) |
 | `POST /api/collection` `{edition_id, kind: owned\|wishlist, format?, status?, hours?, notes?}` · `PATCH` / `DELETE /api/collection/<id>` | Add (owning one takes it off the wishlist) · edit (`kind: owned` = bought it) / remove |
 | `PUT /api/collection/settings` `{public}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown) · a public collection |
-| `GET /api/games/<id>/reviews?page=` | Players' reviews of a game on that platform: average, count and how many gave each score 1–10, the user's own review, 20 shown reviews per page (newest first; hidden ones and blocked users' left out; `owner` = has the game in their collection) |
+| `GET /api/games/<id>/reviews?page=` | Players' reviews of a game on that platform: average, count and how many gave each score 1–10, the user's own review, 20 shown reviews per page (newest first; hidden ones and blocked users' left out; `owner` = has the game in their collection). Catalogue / deals / favourites cards carry `review_score` and `review_count` |
 | `PUT /api/games/<id>/reviews/mine` `{score: 1–10, title?, body?}` · `DELETE` | Write or change one's review (one per user and game) · delete it (not once a moderator hid it) |
 | `POST /api/reports` `{kind: listing\|user\|rating\|review, target_id, reason, details?}` | Report something to the moderators (not your own; once while open; 20 a day) |
 | `GET /api/mod/reports` · `GET /api/mod/problems` · `GET /api/mod/log` | Moderators: open reports grouped by what was reported · purchases with a problem · past actions |

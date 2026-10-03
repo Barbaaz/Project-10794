@@ -96,3 +96,17 @@ def test_own_review_cant_be_reported(market):
     response = client.post("/api/reports", json={"kind": "review", "target_id": review_id, "reason": "other"},
                            headers=HEADERS)
     assert response.get_json()["error"] == "report_own"
+
+
+def test_profile_and_cards_show_reviews(market):
+    client, game = market["client"], market["game"]
+    sign_up(client, "ana")
+    save(client, game, 9, "Ótimo")
+    sign_up(client, "rui")
+    save(client, game, 6)
+    assert [(r["game"], r["score"], r["title"]) for r in client.get("/api/users/ana").get_json()["game_reviews"]] \
+        == [("Market Test Game", 9, "Ótimo")]
+    card = client.get(f"/api/games/editions?ids={market['edition']}").get_json()[0]
+    assert (card["review_score"], card["review_count"]) == (7.5, 2)
+    other = client.get(f"/api/games/editions?ids={market['other_edition']}").get_json()[0]
+    assert (other["review_score"], other["review_count"]) == (None, 0)

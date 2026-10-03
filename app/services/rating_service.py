@@ -134,8 +134,9 @@ def summaries(user_ids):
 
 
 def profile(username):
-    """A user's public page: name, member since, rating, the ratings they got, their active listings."""
+    """A user's public page: name, member since, rating, the ratings they got, their active listings, their game reviews."""
     from app.services.listing_service import listings_of_user   # listing_service imports this module
+    from app.services.review_service import reviews_of_user
     with session() as s:
         user = s.scalars(select(User).where(User.username == username, User.is_active)).first()
         if not user:
@@ -151,6 +152,7 @@ def profile(username):
             for r in ratings
         ]
     rating, count = summaries([result["id"]]).get(result["id"], (None, 0))
-    result.update(rating=rating, rating_count=count, listings=listings_of_user(result["id"]))
+    result.update(rating=rating, rating_count=count, listings=listings_of_user(result["id"]),
+                  game_reviews=reviews_of_user(result["id"]))
     return result
 

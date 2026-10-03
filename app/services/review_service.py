@@ -24,9 +24,9 @@ class ReviewError(Exception):
 
 
 def _visible(game_id):
-    """Shown and counted: this game's reviews, not hidden, by users who aren't blocked."""
-    return select(GameReview).join(User, User.id == GameReview.user_id).where(
-        GameReview.game_id == game_id, ~GameReview.hidden, User.is_active)
+    """Shown and counted: this game's reviews (any game's with None), not hidden, by users who aren't blocked."""
+    query = select(GameReview).join(User, User.id == GameReview.user_id).where(~GameReview.hidden, User.is_active)
+    return query if game_id is None else query.where(GameReview.game_id == game_id)
 
 
 def reviews(game_id, user_id=None, page=1):
@@ -65,6 +65,31 @@ def _review(review, owner, **extra):
     return fields(review, "id", "score", "title", "body", "created_at", "updated_at",
                   username=review.user.username, display_name=review.user.display_name, owner=owner,
                   edited=review.updated_at > review.created_at, **extra)
+
+
+def mark_review_scores(groups):
+    """Set `review_score` (average to one decimal) and `review_count` on catalogue cards (dicts with game_id), in one query."""
+    ids = list({g["game_id"] for g in groups if g.get("game_id")})
+    scores = {}
+    if ids:
+        visible = _visible(None).where(GameReview.game_id.in_(ids)).subquery()
+        average = cast(func.avg(cast(visible.c.score, Numeric(4, 2))), Numeric(3, 1))
+        with session() as s:
+            scores = {game_id: (float(avg), count) for game_id, avg, count in s.execute(
+                select(visible.c.game_id, average, func.count()).group_by(visible.c.game_id))}
+    for g in groups:
+        g["review_score"], g["review_count"] = scores.get(g.get("game_id"), (None, 0))
+    return groups
+
+
+def reviews_of_user(user_id, limit=50):
+    """A user's shown reviews, newest first, with the game they're about (their public profile)."""
+    with session() as s:
+        rows = s.scalars(select(GameReview).where(GameReview.user_id == user_id, ~GameReview.hidden)
+                         .order_by(GameReview.created_at.desc(), GameReview.id.desc()).limit(limit)).all()
+        return [fields(r, "id", "game_id", "score", "title", "body", "created_at",
+                       game=r.game.title, platform=r.game.platform.code, platform_name=r.game.platform.name,
+                       edited=r.updated_at > r.created_at) for r in rows]
 
 
 def save(user_id, game_id, score, title=None, body=None):
