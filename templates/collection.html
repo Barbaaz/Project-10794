@@ -160,7 +160,7 @@ function itemRow(item) {
                         ${owned
                             ? `<a class="btn btn-sm btn-success" href="/sell?game_id=${item.game_id}&edition_id=${item.edition_id}">${t("collection_sell")}</a>`
                             : `<button type="button" class="btn btn-sm btn-success" data-action="bought">${t("collection_bought")}</button>`}
-                        <button type="button" class="btn btn-sm btn-outline-danger" data-action="remove">${t("collection_remove")}</button>
+                        <button type="button" class="btn btn-sm btn-danger" data-action="remove">${t("collection_remove")}</button>
                     </div>
                 </div>
             </div>

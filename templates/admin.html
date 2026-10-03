@@ -157,7 +157,7 @@ function reportCard(group) {
                     ${group.reports.map(r => `<li class="list-group-item px-0 d-flex justify-content-between gap-2">
                         <span><strong>${esc(t(`reason_${r.reason}`))}</strong> · ${userLink(r.reporter)} · ${date(r.created_at)}
                             ${r.details ? `<div>${esc(r.details)}</div>` : ""}</span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary align-self-start" data-dismiss="${r.id}">${esc(t("mod_dismiss"))}</button>
+                        <button type="button" class="btn btn-sm btn-secondary align-self-start" data-dismiss="${r.id}">${esc(t("mod_dismiss"))}</button>
                     </li>`).join("")}
                 </ul>
                 ${group.target ? `<form class="d-flex flex-wrap gap-2 act-form">
@@ -304,7 +304,7 @@ async function loadPins() {
     list.innerHTML = pins.length ? pins.map(p => `
         <li class="list-group-item px-0 d-flex justify-content-between gap-2">
             <span>${esc(p.store)}: ${esc(p.name)} → <a href="/game/${p.game_id}">${esc(p.game)}</a> · ${esc(p.edition)}</span>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-unpin="${p.product_id}">${esc(t("match_unpin"))}</button>
+            <button type="button" class="btn btn-sm btn-secondary" data-unpin="${p.product_id}">${esc(t("match_unpin"))}</button>
         </li>`).join("") : `<li class="list-group-item px-0 text-body-secondary">${esc(t("match_no_pins"))}</li>`;
     list.querySelectorAll("[data-unpin]").forEach(b => b.onclick = async () => {
         const { ok, data } = await api(`/api/mod/pins/${b.dataset.unpin}`, { method: "DELETE" });
@@ -325,7 +325,7 @@ function renderStaff(staff) {
     list.innerHTML = staff.map(u => `
         <li class="list-group-item d-flex justify-content-between align-items-center">
             <span>${userLink(u.username)} <span class="badge text-bg-secondary">${esc(t(`role_${u.role}`))}</span></span>
-            ${u.role === "moderator" ? `<button type="button" class="btn btn-sm btn-outline-danger" data-remove="${esc(u.username)}">${esc(t("mod_remove_moderator"))}</button>` : ""}
+            ${u.role === "moderator" ? `<button type="button" class="btn btn-sm btn-danger" data-remove="${esc(u.username)}">${esc(t("mod_remove_moderator"))}</button>` : ""}
         </li>`).join("");
     list.querySelectorAll("[data-remove]").forEach(b => b.onclick = () => setRole(b.dataset.remove, "user"));
 }

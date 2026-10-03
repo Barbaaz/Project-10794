@@ -68,6 +68,8 @@
         .video-thumb:hover .play, .video-thumb:focus-visible .play { background: #c00; }
         .review-scores { display: grid; grid-template-columns: repeat(10, 1fr); gap: .25rem; max-width: 26rem; }
         .review-scores .btn { padding-left: 0; padding-right: 0; }
+        /* solid grey buttons; the picked score in the primary colour */
+        .review-scores .btn { --bs-btn-active-bg: var(--bs-primary); --bs-btn-active-border-color: var(--bs-primary); --bs-btn-active-color: #fff; }
         .review-bars { min-width: 12rem; max-width: 26rem; }
         .video-thumb .name { display: block; font-size: .8rem; margin-top: .2rem; color: var(--bs-body-color);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -149,7 +151,7 @@
                 <div id="reviews-summary" class="d-flex flex-wrap align-items-center gap-4 mb-3"></div>
                 <div id="review-mine" class="mb-3"></div>
                 <div id="reviews-list" class="d-flex flex-column gap-3"></div>
-                <button id="reviews-more" type="button" class="btn btn-sm btn-outline-secondary mt-3 d-none"
+                <button id="reviews-more" type="button" class="btn btn-sm btn-secondary mt-3 d-none"
                         data-i18n="reviews_more"></button>
             </div>
         </section>
@@ -673,7 +675,7 @@ async function fillCollectionButtons() {
     document.querySelectorAll("[data-collection]").forEach(box => {
         const mine = (collectionIds || {})[box.dataset.collection] || {};
         box.innerHTML = ["owned", "wishlist"].map(kind => `
-            <button type="button" class="btn btn-sm ${mine[kind] ? "btn-primary" : "btn-outline-primary"}" data-kind="${kind}"
+            <button type="button" class="btn btn-sm ${mine[kind] ? "btn-primary" : "btn-secondary"}" data-kind="${kind}"
                     aria-pressed="${!!mine[kind]}">${t(mine[kind] ? `collection_in_${kind}` : `collection_add_${kind}`)}</button>`).join("")
             + (mine.owned || mine.wishlist ? `<a href="/collection${mine.owned ? "" : "?tab=wishlist"}" class="btn btn-sm btn-link">${t("collection_open")}</a>` : "");
         box.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => toggleCollection(Number(box.dataset.collection), b.dataset.kind));
@@ -773,8 +775,8 @@ function renderMyReview() {
             ${mine.hidden ? `<div class="alert alert-warning py-1 px-2 small mb-2">${esc(t("review_hidden"))}</div>` : ""}
             ${reviewItem({ ...mine, mine: true })}
             ${mine.hidden ? "" : `<div class="d-flex gap-2 mt-2">
-                <button type="button" class="btn btn-sm btn-outline-primary" data-review="edit">${esc(t("review_edit"))}</button>
-                <button type="button" class="btn btn-sm btn-outline-danger" data-review="delete">${esc(t("review_delete"))}</button>
+                <button type="button" class="btn btn-sm btn-primary" data-review="edit">${esc(t("review_edit"))}</button>
+                <button type="button" class="btn btn-sm btn-danger" data-review="delete">${esc(t("review_delete"))}</button>
             </div>`}`;
         bindClampToggles(box);
         box.querySelector("[data-review=edit]")?.addEventListener("click", () => { editingReview = true; renderMyReview(); });
@@ -788,7 +790,7 @@ function renderMyReview() {
 function reviewForm(mine) {
     const scores = Array.from({ length: 10 }, (_, i) => i + 1).map(n => `
         <input type="radio" class="btn-check" name="score" id="score-${n}" value="${n}" required ${mine?.score === n ? "checked" : ""}>
-        <label class="btn btn-sm btn-outline-primary" for="score-${n}">${n}</label>`).join("");
+        <label class="btn btn-sm btn-secondary" for="score-${n}">${n}</label>`).join("");
     return `<form class="border rounded p-2 p-sm-3">
         <fieldset class="mb-2">
             <legend class="form-label small mb-1">${esc(t("review_score"))}</legend>

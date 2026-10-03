@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime, timezone
 
 from app.services.common import (
     EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, card_group, lowest_prices, page_result, title_word_filters,
@@ -336,7 +337,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
         # Two steps on purpose (see TWO_STEPS): filter current_offers by id, not by a join
         offers = fetch_all(
             f"""
-            SELECT {OFFER_COLUMNS}
+            SELECT {OFFER_COLUMNS}, o.release_date AS own_release_date
             FROM current_offers o JOIN stores s ON s.id = o.store_id
             WHERE o.is_active = 1 AND o.in_stock = 1 AND o.edition_id IN ({placeholders(ids)})
             ORDER BY o.price
@@ -348,10 +349,21 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
                              image=e["image"], used=used.get(e["edition_id"]))
                   for e in page_editions]
 
-        # Games not out yet: their release date, so the card can say so
-        pre_order_games = {g["game_id"] for g in groups if g["offers"] and all(o["is_preorder"] for o in g["offers"])}
-        dates = game_release_dates(list(pre_order_games))
+        # Games not out yet: their release date, so the card can say so. Some stores keep the
+        # pre-order label after the release, so a labelled offer whose date (its own, else the
+        # game's) has passed is out already: the pre-orders tab's rule
+        labelled = {g["game_id"] for g in groups if g["offers"] and all(o["is_preorder"] for o in g["offers"])}
+        dates = game_release_dates(list({o["game_id"] for g in groups for o in g["offers"] if o["is_preorder"]}))
+        today = datetime.now(timezone.utc).date().isoformat()
+
+        def not_out(o):
+            return (o["own_release_date"] or dates.get(o["game_id"], {}).get("release_date") or "9999-12-31") >= today
+
+        pre_order_games = {g["game_id"] for g in groups if g["game_id"] in labelled and all(not_out(o) for o in g["offers"])}
         for g in groups:
+            for o in g["offers"]:
+                o["is_preorder"] = o["is_preorder"] and not_out(o)
+                del o["own_release_date"]
             g["is_preorder"] = g["game_id"] in pre_order_games
             release = dates.get(g["game_id"]) or {}
             g["release_date"] = release.get("release_date")
