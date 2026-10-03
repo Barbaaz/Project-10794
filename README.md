@@ -166,6 +166,21 @@ stock show as a banner. Each card's ☆ opens a menu: ⭐ Quero (wishlist; ★ o
 📚 Tenho (collection; a small 📚 on the card). Favourites were folded into the wishlist
 (migration 0007).
 
+## The app on a phone
+
+The site can be installed on a phone's home screen (and on a computer, from Chrome / Edge):
+`static/manifest.webmanifest` (name, icons in `static/icons/`, colours) and a service worker,
+`static/sw.js`, served as `/sw.js`. Android / desktop show a "📲 Instalar app" button in the header
+when the browser offers it; on an iPhone it's Safari's Share → Add to Home Screen. Installing
+needs HTTPS, except on `localhost`.
+
+Without a connection (or one too slow to answer in 6 s), pages visited before open from what was
+saved on the last visit; a page never visited shows `static/offline.html`. Only public reads are
+saved (catalogue, game pages and price history, discounts, pre-orders, releases, lists, used
+copies): whenever a page shows saved prices, a notice says so, with when they were saved.
+Anything personal (account, messages, collection, moderation, reviews) or that changes something
+always goes to the network. After changing what `sw.js` saves, raise its `VERSION`.
+
 ## Games and editions
 
 Products are grouped as **game → edition → store offers**: "Silent Hill: Townfall" (PS5)

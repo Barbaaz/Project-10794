@@ -111,6 +111,15 @@ const STRINGS = {
         all_ages: "Todas",
         pegi_up_to: "Até PEGI {age}",
 
+        // the app on a phone (static/sw.js)
+        install_app: "Instalar app",
+        install_app_title: "Instalar no ecrã principal",
+        offline_notice: "Sem ligação: a mostrar os dados guardados em {time}. Os preços podem ter mudado.",
+        offline_title: "Sem ligação",
+        offline_text: "Esta página ainda não está guardada neste dispositivo. Ligue-se à internet e tente de novo.",
+        offline_retry: "Tentar de novo",
+        offline_home: "Início",
+
         // accounts
         log_in: "Entrar",
         log_out: "Sair",
@@ -677,6 +686,15 @@ const STRINGS = {
         pegi_filter: "Age:",
         all_ages: "All",
         pegi_up_to: "Up to PEGI {age}",
+
+        // the app on a phone (static/sw.js)
+        install_app: "Install app",
+        install_app_title: "Install on the home screen",
+        offline_notice: "No connection: showing the data saved on {time}. Prices may have changed.",
+        offline_title: "No connection",
+        offline_text: "This page isn't saved on this device yet. Connect to the internet and try again.",
+        offline_retry: "Try again",
+        offline_home: "Home",
 
         // accounts
         log_in: "Log in",

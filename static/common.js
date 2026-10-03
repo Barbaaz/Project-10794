@@ -1,6 +1,7 @@
 /*
- * Shared by both pages (loaded first, in <head>): browser storage that never throws,
- * HTML escaping, store names and the light / dark theme.
+ * Shared by every page (loaded first, in <head>): browser storage that never throws,
+ * HTML escaping, store names, the light / dark theme, the header's account area and the
+ * app on a phone (service worker, install button).
  */
 
 // Browser storage can be missing or refuse access (private windows, blocked site data):
@@ -116,6 +117,70 @@ async function showWishlistDeals() {
     link.insertAdjacentHTML("beforeend", `<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-success">${count}</span>`);
     link.title = t("wishlist_deals", { count });
     link.setAttribute("aria-label", `${t("collection_title")} (${t("wishlist_deals", { count })})`);
+}
+
+// --- The app on a phone (static/sw.js, static/manifest.webmanifest) ---------------------------
+
+// The service worker: pages open on a weak connection or none, from what was saved on the last visit
+if ("serviceWorker" in navigator) {
+    addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+    navigator.serviceWorker.addEventListener("message", event => {
+        if (event.data?.type === "saved-answer") whenReady(() => showSavedNotice(event.data.savedAt));
+    });
+}
+
+function whenReady(run) {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+    else run();
+}
+
+// No connection, so the page shows saved prices: say so, with when they were saved (the oldest)
+function showSavedNotice(savedAt) {
+    const existing = document.getElementById("saved-notice");
+    if (existing && existing.dataset.savedAt <= (savedAt || "")) return;
+    existing?.remove();
+    const when = savedAt ? new Date(savedAt).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) : "?";
+    const notice = document.createElement("div");
+    notice.id = "saved-notice";
+    notice.dataset.savedAt = savedAt || "";
+    notice.className = "alert alert-warning py-2 small d-flex flex-wrap align-items-center gap-2";
+    notice.setAttribute("role", "status");
+    notice.innerHTML = `<span>📡 ${esc(t("offline_notice", { time: when }))}</span>
+        <button type="button" class="btn btn-sm btn-warning ms-auto">${esc(t("offline_retry"))}</button>`;
+    notice.querySelector("button").onclick = () => location.reload();
+    const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl");
+    if (container) container.querySelector(":scope > div")?.after(notice);
+    else document.body.prepend(notice);
+}
+
+// "Install app" in the header, where the browser offers it (Android / desktop Chrome and Edge;
+// on an iPhone: Share → Add to Home Screen, which needs nothing from the page)
+let installPrompt = null;
+addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    installPrompt = event;
+    whenReady(showInstallButton);
+});
+addEventListener("appinstalled", () => document.getElementById("install-btn")?.remove());
+
+function showInstallButton() {
+    const box = document.getElementById("account-area");
+    if (!box || !installPrompt || document.getElementById("install-btn")) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.id = "install-btn";
+    button.className = "btn btn-sm btn-success";
+    // only the icon on a phone's narrow header
+    button.innerHTML = `📲<span class="d-none d-md-inline"> ${esc(t("install_app"))}</span>`;
+    button.title = t("install_app_title");
+    button.setAttribute("aria-label", t("install_app_title"));
+    button.onclick = async () => {
+        installPrompt.prompt();
+        await installPrompt.userChoice;
+        installPrompt = null;
+        button.remove();
+    };
+    box.before(button);
 }
 
 function forget(key, storage = "localStorage") {
