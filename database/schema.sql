@@ -124,7 +124,7 @@ CREATE TABLE dbo.scrape_runs (
 GO
 
 -- ============================================================
--- Marketplace (users, listings, photos, conversations, messages, favourites, ratings):
+-- Marketplace (users, listings, photos, conversations, messages, ratings, collection, reviews):
 -- made by Alembic from app/models.py (migrations/); python -m database.setup runs both
 -- ============================================================
 
@@ -181,7 +181,7 @@ GO
 
 
 -- Games / editions merged into another by pipeline/rematch.py: old links (/game/<id>) and
--- favourites saved in browsers (edition ids) are sent to the one that replaced them
+-- wishes saved in browsers (edition ids) are sent to the one that replaced them
 IF OBJECT_ID('dbo.merged_ids', 'U') IS NULL
 CREATE TABLE dbo.merged_ids (
     kind      VARCHAR(10) NOT NULL CHECK (kind IN ('game', 'edition')),

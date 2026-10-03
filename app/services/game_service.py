@@ -15,7 +15,7 @@ from db import fetch_all, fetch_one, placeholders
 DIGITAL_CODE = re.compile(r"download\s+digital|digital\s+download|c[oó]digo\s+(de\s+)?(download|digital|descarga)",
                           re.IGNORECASE)
 
-# A favourite that came back in stock is flagged for this many days
+# A wished edition that came back in stock is flagged for this many days
 RESTOCK_ALERT_DAYS = 14
 
 def search_filters(q, platform):
@@ -192,10 +192,10 @@ def merged_into(kind, ids):
 
 def editions_with_offers(edition_ids):
     """
-    For the favourites tab: each edition as a card group (same shape as /search) with all its
+    For the wishlist tab and the collection: each edition as a card group (same shape as /search) with all its
     current offers (in stock first, cheapest first) and its historical low (new, in stock).
     Offers that came back in stock in the last RESTOCK_ALERT_DAYS days have `restocked_at`.
-    Editions no store sells anymore are kept, with no offers, so a favourite doesn't vanish.
+    Editions no store sells anymore are kept, with no offers, so a wish doesn't vanish.
     """
     if not edition_ids:
         return []

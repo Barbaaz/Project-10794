@@ -8,18 +8,18 @@ Run it after changing core/normalizer.py, core/editions.py or core/close_match.p
     python -m pipeline.rematch
 
 A game or edition whose products all went to another one is recorded in merged_ids
-(old links and favourites saved in browsers follow it), and its IGDB information is
+(old links and wishes saved in browsers follow it), and its IGDB information is
 kept when the game it went to has none.
 """
 import argparse
 import logging
 from collections import Counter, defaultdict
 
-from sqlalchemy import delete, exists, insert, literal, select, update
+from sqlalchemy import delete, exists, insert, select, update
 from sqlalchemy.orm import aliased
 
 from app.models import (
-    CollectionItem, Favorite, Game, GameEdition, GameReview, Listing, MergedId, Platform, Store, StoreProduct,
+    CollectionItem, Game, GameEdition, GameReview, Listing, MergedId, Platform, Store, StoreProduct,
 )
 from core.editions import edition_key_of, is_excluded
 from db import session
@@ -137,17 +137,10 @@ def record_merges(s, moves):
             s.execute(update(MergedId).where(MergedId.kind == kind, MergedId.new_id == old).values(new_id=new))
             s.execute(delete(MergedId).where(MergedId.kind == kind, MergedId.old_id == old))
             s.execute(insert(MergedId).values(kind=kind, old_id=old, new_id=new))
-            # what users point to moves to the one that replaced it: listings, favourites
+            # what users point to moves to the one that replaced it: listings, collection items
             s.execute(update(Listing).where(getattr(Listing, column) == old).values({column: new}))
             if kind == "edition":
-                other = aliased(Favorite)
-                s.execute(insert(Favorite).from_select(
-                    ["user_id", "edition_id"],
-                    select(Favorite.user_id, literal(new)).where(
-                        Favorite.edition_id == old,
-                        ~exists().where(other.user_id == Favorite.user_id, other.edition_id == new))))
-                s.execute(delete(Favorite).where(Favorite.edition_id == old))
-                # collection items too (one per user and kind: a copy they already have there wins),
+                # collection items (one per user and kind: a copy they already have there wins),
                 # with the game of the edition they now point to
                 mine = aliased(CollectionItem)
                 s.execute(delete(CollectionItem).where(CollectionItem.edition_id == old, exists().where(
@@ -203,13 +196,12 @@ def refresh_names(s, model, column, max_len, candidates):
 
 
 def delete_orphans(s):
-    """Editions and games that no store product, listing, favourite or collection uses."""
+    """Editions and games that no store product, listing or collection item uses."""
     s.flush()
     editions = s.execute(
         delete(GameEdition).where(
             no_store_product(GameEdition, "edition_id"),
             ~exists().where(Listing.edition_id == GameEdition.id),
-            ~exists().where(Favorite.edition_id == GameEdition.id),
             ~exists().where(CollectionItem.edition_id == GameEdition.id),
         ).execution_options(synchronize_session=False)
     ).rowcount

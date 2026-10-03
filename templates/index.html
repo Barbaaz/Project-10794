@@ -95,7 +95,7 @@
             <li class="nav-item"><button class="nav-link" data-tab="catalog" role="tab" data-i18n="tab_catalog"></button></li>
             <li class="nav-item"><button class="nav-link" data-tab="special" role="tab" data-i18n="tab_special"></button></li>
             <li class="nav-item"><button class="nav-link" data-tab="market" role="tab" data-i18n="tab_market"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="favorites" role="tab" data-i18n="tab_favorites"></button></li>
+            <li class="nav-item"><button class="nav-link" data-tab="wishlist" role="tab" data-i18n="tab_wishlist"></button></li>
         </ul>
         <div id="front-loading" class="text-center my-4 d-none"><div class="spinner-border text-primary"></div></div>
         <div id="front-content"></div>
@@ -120,8 +120,7 @@ let hasSearched = false;
 let stores = {};
 let genres = [];     // categories with games in stock (/api/genres), for the category filter
 let tags = [];       // tags for the tag filter (/api/tags): game modes, themes, prices
-let favorites = [];     // the logged-in user's favourite edition ids (kept in the account: loadFavoriteIds)
-let collectionIds = {};     // {edition_id: {owned?: item id, wishlist?: item id}} (loadCollectionIds)
+let collectionIds = {};     // the user's collection: {edition_id: {owned?: item id, wishlist?: item id}} (loadCollectionIds)
 // esc(), storeName(), saved() / save(), toggleDark(): static/common.js
 
 function handleSearch(event) {
@@ -236,7 +235,7 @@ function marketCard(group) {
 
 const CATALOG_PAGE = 48;
 let catalogSort = saved("catalogSort", "name");
-// Store filter for the catalogue tabs and the search (/?…&store=darty); not remembered between visits
+// Store filter for the catalogue tabs and the search (/?…&store=cstech); not remembered between visits
 let catalogStore = new URLSearchParams(location.search).get("store") || "";
 // Category, tag and PEGI filters (/?…&genre=rpg&tags=coop&pegi=12), the same way
 let catalogGenre = new URLSearchParams(location.search).get("genre") || "";
@@ -277,7 +276,7 @@ async function showCatalogPage(page) {
     document.getElementById("front").scrollIntoView({ block: "start" });
 }
 
-// /?tab=catalog&page=3&store=darty&genre=rpg or /?q=zelda&page=2: page, store and category only when not the default
+// /?tab=catalog&page=3&store=cstech&genre=rpg or /?q=zelda&page=2: page, store and category only when not the default
 function listUrl(params, page = 1) {
     const query = new URLSearchParams(params);
     if (page > 1) query.set("page", page);
@@ -505,20 +504,22 @@ const FRONT_TABS = {
         render: renderMarket,
         empty: "empty_market",
     },
-    favorites: {
-        // the list changes as the visitor stars games, so it's fetched every time
-        load: () => loadFavorites(),
+    wishlist: {
+        // the list changes as the visitor wishes for games, so it's fetched every time
+        load: () => loadWishlist(),
         fresh: true,
-        render: renderFavorites,
-        // logged out there's nothing to show: favourites belong to an account
-        get empty() { return currentUser ? "empty_favorites" : "empty_favorites_logged_out"; },
+        render: renderWishlist,
+        // logged out there's nothing to show: the wishlist belongs to an account
+        get empty() { return currentUser ? "empty_wishlist" : "empty_wishlist_logged_out"; },
     },
 };
 const frontData = {};      // tab → data, loaded once per visit
 const frontDataPlatform = {};   // tab → platform its data was loaded for (platform-aware tabs)
+// The favourites tab became the wishlist (favourites were folded into it): old links and choices go there
+const tabName = tab => tab === "favorites" ? "wishlist" : tab;
 // Open tab: /?tab=releases if given (shareable links), else the visitor's last choice
-let frontTab = FRONT_TABS[saved("frontTab")] ? saved("frontTab") : "discounts";
-const tabFromUrl = new URLSearchParams(location.search).get("tab");
+let frontTab = FRONT_TABS[tabName(saved("frontTab"))] ? tabName(saved("frontTab")) : "discounts";
+const tabFromUrl = tabName(new URLSearchParams(location.search).get("tab"));
 if (FRONT_TABS[tabFromUrl]) frontTab = tabFromUrl;
 
 // Month and weekday names in the visitor's language
@@ -556,7 +557,7 @@ async function selectFrontTab(tab) {
     const config = FRONT_TABS[tab];
     const platform = document.getElementById("consoleFilter").value;
     const stale = config.platformAware && frontDataPlatform[tab] !== platform;
-    if (tab === "favorites" && !favorites.length) {
+    if (tab === "wishlist" && !wishedIds().length) {
         frontData[tab] = [];
     } else if (!frontData[tab] || config.fresh || stale) {
         document.getElementById("front-content").innerHTML = "";
@@ -620,8 +621,8 @@ function cardGrid() {
     return grid;
 }
 
-// Favourite editions with all their offers and the historical low (new copies, in stock)
-function renderFavorites(groups) {
+// Wished editions with all their offers and the historical low (new copies, in stock)
+function renderWishlist(groups) {
     const grid = cardGrid();
     groups.forEach(g => {
         const low = g.lowest_price;
@@ -643,7 +644,7 @@ function renderFavorites(groups) {
 }
 
 // ---------------------------------------------------------------------------
-// Back-in-stock alerts for favourites
+// Back-in-stock alerts for the wishlist
 // The server flags offers that went from sold out to in stock recently (restocked_at);
 // dismissed alerts are remembered per restock, so a later restock alerts again.
 // ---------------------------------------------------------------------------
@@ -657,17 +658,17 @@ function dismissedRestocks() {
 }
 
 async function loadRestockAlerts() {
-    if (!favorites.length) return;
+    if (!wishedIds().length) return;
     try {
-        const groups = await loadFavorites();
-        frontData.favorites = groups;
+        const groups = await loadWishlist();
+        frontData.wishlist = groups;
         const dismissed = dismissedRestocks();
         const alerts = groups.flatMap(g => g.offers
             .filter(o => o.restocked_at && !dismissed.has(restockKey(o)))
             .map(o => ({ group: g, offer: o })));
         renderRestockAlerts(alerts);
     } catch (e) {
-        console.error("Erro a verificar stock dos favoritos:", e);
+        console.error("Erro a verificar stock da lista de desejos:", e);
     }
 }
 
@@ -913,49 +914,38 @@ function renderStoreStatus(storeList) {
         `${t("status_intro")} ${parts.join(" · ")}`;
 }
 
-// Favourites are game editions, kept in the user's account. Before accounts they were kept
-// in this browser ("favoriteEditions"): those move into the account at the first log-in.
+// The user's collection and wishlist, to mark the cards (app/services/collection_service.py).
+// Favourites were folded into the wishlist; ones an old browser still keeps ("favoriteEditions",
+// from before accounts) go onto the wishlist at log-in.
 const BROWSER_FAVORITES = "favoriteEditions";
 
-async function loadFavoriteIds() {
-    favorites = [];
+async function loadCollectionIds() {
+    collectionIds = {};
     if (!currentUser) return;
     const fromBrowser = savedJSON(BROWSER_FAVORITES, []).filter(Number.isInteger);
-    if (fromBrowser.length) {
-        const { ok, data } = await api("/api/favorites/import", { body: { ids: fromBrowser } });
-        if (ok) {
-            forget(BROWSER_FAVORITES);
-            favorites = data;
-            return;
-        }
+    if (fromBrowser.length && (await api("/api/collection/import", { body: { ids: fromBrowser } })).ok) {
+        forget(BROWSER_FAVORITES);
     }
-    favorites = await fetch("/api/favorites").then(r => r.ok ? r.json() : []).catch(() => []);
+    collectionIds = await fetch("/api/collection/editions").then(r => r.ok ? r.json() : {}).catch(() => ({}));
 }
 
-// The favourite editions with their offers (cards)
-function loadFavorites() {
-    return fetch(`/api/games/editions?ids=${favorites.join(",")}`).then(r => r.json());
+// The wished edition ids (numbers)
+function wishedIds() {
+    return Object.entries(collectionIds).filter(([, mine]) => mine.wishlist).map(([id]) => Number(id));
 }
 
-function isFavorite(group) {
-    return favorites.includes(group.edition_id);
+// The wished editions with their offers (cards); the API takes 200 at a time, /collection lists them all
+function loadWishlist() {
+    return fetch(`/api/games/editions?ids=${wishedIds().slice(0, 200).join(",")}`).then(r => r.json());
 }
 
-// The user's collection and wishlist, to mark the cards (app/services/collection_service.py)
-async function loadCollectionIds() {
-    collectionIds = currentUser
-        ? await fetch("/api/collection/editions").then(r => r.ok ? r.json() : {}).catch(() => ({}))
-        : {};
-}
-
-// The card's star: ★ = favourite; a small 📚 / ⭐ under it = in the collection / wishlist
+// The card's star: ★ = on the wishlist; a small 📚 under it = in the collection
 function starButton(group) {
     const mine = collectionIds[group.edition_id] || {};
-    const mark = mine.owned ? "📚" : mine.wishlist ? "⭐" : "";
-    return `${isFavorite(group) ? "★" : "☆"}${mark ? `<span class="fav-mark" aria-hidden="true">${mark}</span>` : ""}`;
+    return `${mine.wishlist ? "★" : "☆"}${mine.owned ? `<span class="fav-mark" aria-hidden="true">📚</span>` : ""}`;
 }
 
-// The star opens a menu for the card's edition: ★ Favorito, 📚 Tenho, ⭐ Quero, each on / off.
+// The star opens a menu for the card's edition: ⭐ Quero, 📚 Tenho, each on / off.
 // One menu open at a time; Esc, a click elsewhere or Tab closes it
 let cardMenu = null;    // {menu, button, group}
 
@@ -969,15 +959,14 @@ function toggleCardMenu(button, group) {
     button.after(menu);
     button.setAttribute("aria-expanded", "true");
     cardMenu = { menu, button, group };
-    fillCardMenu("favorite");
+    fillCardMenu("wishlist");
 }
 
 function fillCardMenu(focusKind) {
     const { menu, group } = cardMenu;
     const mine = collectionIds[group.edition_id] || {};
-    const items = [["favorite", `★ ${t("favorite")}`, isFavorite(group)],
-                   ["owned", t("collection_add_owned"), Boolean(mine.owned)],
-                   ["wishlist", t("collection_add_wishlist"), Boolean(mine.wishlist)]];
+    const items = [["wishlist", t("collection_add_wishlist"), Boolean(mine.wishlist)],
+                   ["owned", t("collection_add_owned"), Boolean(mine.owned)]];
     menu.innerHTML = items.map(([kind, label, on]) => `
         <button type="button" class="dropdown-item" role="menuitemcheckbox" aria-checked="${on}" data-kind="${kind}">
             <span class="check">${on ? "✓" : ""}</span>${esc(label)}</button>`).join("");
@@ -1009,27 +998,23 @@ document.addEventListener("keydown", e => {
     }
 });
 
-// Logged out, every entry asks to log in first (favourites and the collection belong to an account)
+// Logged out, every entry asks to log in first (the wishlist and the collection belong to an account)
 async function toggleCardItem(group, kind) {
     if (!currentUser) return location.assign(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
     const id = group.edition_id;
-    if (kind === "favorite") {
-        const { ok, data } = await api(`/api/favorites/${id}`, { method: favorites.includes(id) ? "DELETE" : "PUT" });
-        if (!ok) return;
-        favorites = data;
-        // taken off the favourites tab: the card goes
-        if (!hasSearched && frontTab === "favorites" && !favorites.includes(id)) {
-            closeCardMenu();
-            frontData.favorites = (frontData.favorites || []).filter(g => favorites.includes(g.edition_id));
-            return renderFront();
-        }
-    } else {
-        const item = (collectionIds[id] || {})[kind];
-        const { ok } = item
-            ? await api(`/api/collection/${item}`, { method: "DELETE" })
-            : await api("/api/collection", { body: { edition_id: id, kind } });
-        if (!ok) return;
-        await loadCollectionIds();      // "Tenho" also takes it off the wishlist
+    const item = (collectionIds[id] || {})[kind];
+    const { ok } = item
+        ? await api(`/api/collection/${item}`, { method: "DELETE" })
+        : await api("/api/collection", { body: { edition_id: id, kind } });
+    if (!ok) return;
+    await loadCollectionIds();      // "Tenho" also takes it off the wishlist
+
+    // off the wishlist while its tab is open: the card goes
+    const wished = wishedIds();
+    if (!hasSearched && frontTab === "wishlist" && !wished.includes(id)) {
+        closeCardMenu();
+        frontData.wishlist = (frontData.wishlist || []).filter(g => wished.includes(g.edition_id));
+        return renderFront();
     }
     // the same edition can be on more than one card
     document.querySelectorAll(`.fav-btn[data-edition="${id}"]`).forEach(b => b.innerHTML = starButton(group));
@@ -1038,11 +1023,11 @@ async function toggleCardItem(group, kind) {
 
 applyI18n();
 
-// Who's logged in first (their favourites mark the stars), then the filters and the page;
+// Who's logged in first (their wishlist marks the stars), then the filters and the page;
 // /?q=zelda opens with that search, so searches can be bookmarked or shared
 (async () => {
     await renderAccountArea();
-    await Promise.all([loadFavoriteIds(), loadCollectionIds()]);
+    await loadCollectionIds();
     await loadFilters();
     const params = new URLSearchParams(location.search);
     const q = params.get("q");

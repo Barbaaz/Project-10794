@@ -20,7 +20,7 @@ def list_games():
 @bp.get("/catalog")
 def catalog():
     """
-    /api/games/catalog?platform=PS5&sort=name|price_asc|price_desc&page=1&per_page=48&editions=special&q=zelda&store=darty&genre=rpg
+    /api/games/catalog?platform=PS5&sort=name|price_asc|price_desc&page=1&per_page=48&editions=special&q=zelda&store=cstech&genre=rpg
     editions=special: only editions above Standard (Deluxe, Collector's...)
     q: search words (all of them in the title); store: only editions that store has in stock;
     genre: only games in that category (/api/genres); tags=coop,horror: only games with all of
@@ -40,14 +40,14 @@ def catalog():
 
 @bp.get("/editions")
 def editions():
-    """/api/games/editions?ids=12,34: these editions with their offers (the favourites tab)."""
+    """/api/games/editions?ids=12,34: these editions with their offers (the wishlist tab)."""
     try:
         ids = [int(i) for i in request.args.get("ids", "").split(",") if i.strip()]
     except ValueError:
         abort(400, description="'ids' must be a comma-separated list of numbers")
     if len(ids) > 200:
         abort(400, description="at most 200 ids")
-    # Favourites saved before two editions were merged: answer with the edition now, and say
+    # Ids saved before two editions were merged: answer with the edition now, and say
     # which saved id it replaces (merged_from) so the page can update what it saved
     merged = game_service.merged_into("edition", ids)
     groups = game_service.editions_with_offers(list(dict.fromkeys(merged.get(i, i) for i in ids)))

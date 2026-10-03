@@ -7,7 +7,7 @@ from pipeline.matcher import GameMatcher, same_with_typos
 @pytest.fixture
 def cursor(app_on_test_db):
     c = app_on_test_db.conn.cursor()
-    for table in ("merged_ids", "game_reviews", "collection_items", "match_overrides", "moderation_log", "reports", "user_ratings", "messages", "conversations", "listing_photos", "user_listings", "user_favorites",
+    for table in ("merged_ids", "game_reviews", "collection_items", "match_overrides", "moderation_log", "reports", "user_ratings", "messages", "conversations", "listing_photos", "user_listings",
                   "users", "price_snapshots", "store_products", "game_editions", "games"):
         c.execute(f"DELETE FROM {table}")
     return c
@@ -94,10 +94,9 @@ def test_rematch_merges_duplicates_and_records_redirects(cursor):
     full_game, full_edition = product("Doom: The Dark Ages PS5", "https://x/2")
     cursor.execute("UPDATE games SET igdb_id = 77, summary = 'Fight.' WHERE id = ?", short_game)
     assert short_game != full_game
-    # a user's favourite and listing on the copy that will be merged
+    # a user's listing and collection item on the copy that will be merged
     user = cursor.execute("INSERT INTO users (username, email, display_name) OUTPUT INSERTED.id "
                           "VALUES ('fan', 'fan@x.pt', 'Fan')").fetchone()[0]
-    cursor.execute("INSERT INTO user_favorites (user_id, edition_id) VALUES (?, ?)", user, short_edition)
     cursor.execute("INSERT INTO user_listings (user_id, game_id, edition_id, price, condition) VALUES (?, ?, ?, 20, 'good')",
                    user, short_game, short_edition)
     cursor.execute("INSERT INTO collection_items (user_id, game_id, edition_id, kind) VALUES (?, ?, ?, 'owned')",
@@ -110,7 +109,6 @@ def test_rematch_merges_duplicates_and_records_redirects(cursor):
 
     rematch_all()
 
-    assert cursor.execute("SELECT edition_id FROM user_favorites WHERE user_id = ?", user).fetchone()[0] == full_edition
     assert tuple(cursor.execute("SELECT game_id, edition_id FROM collection_items WHERE user_id = ?", user).fetchone())         == (full_game, full_edition)
     assert tuple(cursor.execute("SELECT game_id, edition_id FROM user_listings WHERE user_id = ?", user).fetchone())         == (full_game, full_edition)
 
@@ -125,7 +123,7 @@ def test_rematch_merges_duplicates_and_records_redirects(cursor):
     assert cursor.execute("SELECT igdb_id FROM games WHERE id = ?", full_game).fetchone()[0] == 77
 
 
-def test_old_links_and_favourites_follow_a_merge(cursor, web_client):
+def test_old_links_and_saved_editions_follow_a_merge(cursor, web_client):
     client = web_client
 
     full_game, full_edition = match(matcher(cursor), "Doom: The Dark Ages PS5")
@@ -136,6 +134,6 @@ def test_old_links_and_favourites_follow_a_merge(cursor, web_client):
     assert response.status_code == 301 and response.headers["Location"].endswith(f"/game/{full_game}")
     assert client.get(f"/game/{full_game}").status_code == 200
 
-    # a favourite saved with the old edition id gets the edition now, marked as replacing it
+    # an edition saved with the old id gets the edition now, marked as replacing it
     groups = client.get("/api/games/editions?ids=999002").get_json()
     assert [(g["edition_id"], g["merged_from"]) for g in groups] == [(full_edition, [999002])]

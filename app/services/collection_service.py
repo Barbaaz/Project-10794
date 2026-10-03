@@ -129,6 +129,30 @@ def add(user_id, edition_id, kind, **changes):
         return item.id
 
 
+def add_wishes(user_id, edition_ids):
+    """
+    Put these editions on the wishlist: the favourites browsers kept before accounts (they were
+    folded into the wishlist). Merged editions become the one that replaced them; unknown ones,
+    and editions already wished or owned, are skipped. {added}
+    """
+    from app.services.game_service import merged_into
+    try:
+        ids = list(dict.fromkeys(int(i) for i in edition_ids))[:MAX_ITEMS]
+    except (TypeError, ValueError):
+        raise CollectionError("edition_invalid")
+    merged = merged_into("edition", ids)
+    ids = list(dict.fromkeys(merged.get(i, i) for i in ids))
+    with session() as s:
+        known = set(s.scalars(select(GameEdition.id).where(GameEdition.id.in_(ids)))) if ids else set()
+        have = set(s.scalars(select(CollectionItem.edition_id).where(CollectionItem.user_id == user_id)))
+    added = 0
+    for edition_id in ids:
+        if edition_id in known and edition_id not in have:
+            add(user_id, edition_id, "wishlist")
+            added += 1
+    return {"added": added}
+
+
 def update(user_id, item_id, changes):
     with session() as s:
         item = _own(s, user_id, item_id)

@@ -1,7 +1,7 @@
 """
 The tables as SQLAlchemy models:
-- the marketplace (users, listings and their photos, conversations and messages, favourites,
-  ratings, moderation): Alembic manages these tables (migrations/, MARKET_TABLES)
+- the marketplace (users, listings and their photos, conversations and messages,
+  ratings, moderation, collection, reviews): Alembic manages these tables (migrations/, MARKET_TABLES)
 - the catalogue and prices (platforms, stores, games, editions, store products, price
   snapshots, merged ids): the pipeline writes them (pipeline/); their tables are made by
   database/*.sql, which these models follow
@@ -22,7 +22,7 @@ NOW = func.sysutcdatetime()      # the database's clock, in UTC
 
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages",
-                 "user_favorites", "user_ratings", "reports", "moderation_log", "match_overrides",
+                 "user_ratings", "reports", "moderation_log", "match_overrides",
                  "collection_items", "game_reviews"}
 
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
@@ -133,7 +133,7 @@ class PriceSnapshot(Base):
 
 
 class MergedId(Base):
-    """A game / edition merged into another (old links and favourites follow it)."""
+    """A game / edition merged into another (old links and collection items follow it)."""
     __tablename__ = "merged_ids"
     kind: Mapped[str] = mapped_column(String(10), primary_key=True)      # game / edition
     old_id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -234,13 +234,6 @@ class Message(Base):
     sender_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))   # None: a message from the site
     body: Mapped[str | None] = mapped_column(Unicode(2000))
     event: Mapped[str | None] = mapped_column(String(20))
-    created_at = created_at()
-
-
-class Favorite(Base):
-    __tablename__ = "user_favorites"
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
-    edition_id: Mapped[int] = mapped_column(ForeignKey("game_editions.id"), primary_key=True)
     created_at = created_at()
 
 

@@ -39,7 +39,7 @@ store takes a few minutes; please don't repeat runs, the stores rate-limit):
 ```
 docker compose run --rm web python -m scheduler.run_single_store cstech
 ```
-Other stores: `press_start`, `mega-mania`, `darty`. Run the tests with
+Other stores: `press_start`, `mega-mania`, `gaming_replay`, `radio_popular`. Run the tests with
 `docker compose run --rm web python -m pytest -q`.
 
 On Apple Silicon Macs, enable "Use Rosetta for x86/amd64 emulation" in Docker Desktop's settings
@@ -84,7 +84,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special&q=&store=&genre=&tags=&pegi=` | The whole catalogue (and the search): every edition with an offer in stock, paged; `editions=special` = only editions above Standard; `q` = words in the title; `store` = only what that store has in stock; `genre` = only games in that category; `tags=coop,horror` = only games with all those tags; `pegi=12` = PEGI up to 12 |
 | `GET /api/genres` | Categories with games in stock (`{genre, count}`), from the IGDB genres; close genres share one (TBS / RTS / Tactical → `strategy`) |
 | `GET /api/tags` | Tags for the filter: game modes and themes from IGDB (with counts), price tags `on_sale`, `historical_low` (dropped to the lowest price ever), `used` |
-| `GET /api/games/editions?ids=12,34` | Favourites: these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
+| `GET /api/games/editions?ids=12,34` | The wishlist tab (up to 200): these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
 | `GET /api/stores` | Active stores with `last_updated`, `last_status` / `last_error` of the latest run and `is_stale` (no update in 36 h) |
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |
 | `POST /api/auth/register` `{username, email, password, display_name?}` | Create an account and log in (the session cookie) |
@@ -100,8 +100,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/conversations` · `GET /api/conversations/unread` | The user's conversations (unread count, last message) · the total unread |
 | `GET /api/conversations/<id>?after=` · `POST …/messages` `{body}` | One conversation (only messages after `after`, for refreshing) · send a message |
 | `POST /api/conversations/<id>/steps` `{action}` | Purchase step: `request`, `accept` (reserves), `decline`, `sent`, `received` (sold), `problem`, `cancel`; 7 days after `sent` it completes by itself |
-| `GET /api/favorites` · `PUT` / `DELETE /api/favorites/<edition_id>` | The logged-in user's favourite editions (ids) · star / unstar |
-| `POST /api/favorites/import` `{ids}` | Favourites kept in the browser before accounts, moved into the account (merged editions followed) |
+| `POST /api/collection/import` `{ids}` | Favourites an old browser kept (before accounts; favourites are now the wishlist), put on the wishlist (merged editions followed) → `{added}` |
 | `GET /api/ratings/pending` | Completed purchases the user still has to rate (`overdue` after 14 days: buying and selling blocked until rated) |
 | `POST /api/conversations/<id>/rating` `{stars, comment?}` | Rate the other side of a completed purchase (changeable for 14 days) |
 | `POST /api/ratings/<id>/reply` `{reply}` | The rated user answers a rating |
@@ -109,7 +108,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/collection` · `GET /api/collection/editions` | The user's collection and wishlist with current prices and statistics (per platform / status, hours, worth new / used) · which editions they have (for the game page's Tenho / Quero) |
 | `POST /api/collection` `{edition_id, kind: owned\|wishlist, format?, status?, hours?, notes?}` · `PATCH` / `DELETE /api/collection/<id>` | Add (owning one takes it off the wishlist) · edit (`kind: owned` = bought it) / remove |
 | `PUT /api/collection/settings` `{public}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown) · a public collection |
-| `GET /api/games/<id>/reviews?page=` | Players' reviews of a game on that platform: average, count and how many gave each score 1–10, the user's own review, 20 shown reviews per page (newest first; hidden ones and blocked users' left out; `owner` = has the game in their collection). Catalogue / deals / favourites cards carry `review_score` and `review_count` |
+| `GET /api/games/<id>/reviews?page=` | Players' reviews of a game on that platform: average, count and how many gave each score 1–10, the user's own review, 20 shown reviews per page (newest first; hidden ones and blocked users' left out; `owner` = has the game in their collection). Catalogue / deals / wishlist cards carry `review_score` and `review_count` |
 | `PUT /api/games/<id>/reviews/mine` `{score: 1–10, title?, body?}` · `DELETE` | Write or change one's review (one per user and game) · delete it (not once a moderator hid it) |
 | `POST /api/reports` `{kind: listing\|user\|rating\|review, target_id, reason, details?}` | Report something to the moderators (not your own; once while open; 20 a day) |
 | `GET /api/mod/reports` · `GET /api/mod/problems` · `GET /api/mod/log` | Moderators: open reports grouped by what was reported · purchases with a problem · past actions |
@@ -139,12 +138,14 @@ with status 400 or 404. `per_page` is at most 100.
 Tabs, the visitor's choice remembered in the browser (or opened with `/?tab=…`):
 `discounts` (featured real discounts, or best prices between stores until there are some),
 `preorders`, `releases` (calendar by month / day), `catalog` (everything in stock, by platform,
-sortable, 48 at a time), `special` (only editions above Standard) and `favorites` (starred
-editions with their offers and historical low). Search uses the catalogue too: 48 editions per
-page, sort by name / price, and a store filter (also on the catalogue tabs); the address keeps
-them (`/?q=zelda&page=2&store=darty`). The game page's back button returns to the
-search or tab the game was opened from. Favourites that came
-back in stock show as a banner. Favourites are stored in the browser for now.
+sortable, 48 at a time), `special` (only editions above Standard) and `wishlist` (the logged-in user's wished
+editions with their offers and historical low; `?tab=favorites` still opens it). Search uses the
+catalogue too: 48 editions per page, sort by name / price, and a store filter (also on the
+catalogue tabs); the address keeps them (`/?q=zelda&page=2&store=cstech`). The game page's back
+button returns to the search or tab the game was opened from. Wished editions that came back in
+stock show as a banner. Each card's ☆ opens a menu: ⭐ Quero (wishlist; ★ on the card) and
+📚 Tenho (collection; a small 📚 on the card). Favourites were folded into the wishlist
+(migration 0007).
 
 ## Games and editions
 
@@ -174,7 +175,7 @@ python -m pipeline.rematch
 ```
 
 Games and editions merged into another are recorded in `merged_ids`: old `/game/<id>` links
-redirect, and favourites saved in browsers move to the edition that replaced theirs.
+redirect, and listings, collection items and reviews move to the game / edition that replaced theirs.
 
 ## Discounts
 
@@ -203,8 +204,8 @@ Live prices and stock are re-checked twice a day by two Windows scheduled tasks:
 - **06:00** `python -m scheduler.run_all_scrapers`: every store (including product pages for
   descriptions / release dates), then the IGDB lookups (new games, videos, tags, time to beat)
 - **18:00** `python -m scheduler.run_all_scrapers --light`: Press Start, Mega Mania and Gaming Replay
-  again, listing pages only (~250 requests), so their prices are at most ~12 h old. Darty and
-  CSTech stay once a day (both have answered "too many requests" before)
+  again, listing pages only (~250 requests), so their prices are at most ~12 h old. CSTech
+  (has answered "too many requests" before) and Rádio Popular stay once a day
 
 A store isn't run again within 8 hours of a successful run (`MIN_HOURS_BETWEEN_RUNS`).
 
@@ -225,8 +226,8 @@ only stored when a price or stock status changes.
 
 ## Database code
 
-- **Marketplace** (users, listings, photos, conversations, messages, favourites, ratings): SQLAlchemy
-  models in `app/models.py`, used by `app/services/{auth,listing,chat,rating,favorite}_service.py`
+- **Marketplace** (users, listings, photos, conversations, messages, ratings, collection, reviews):
+  SQLAlchemy models in `app/models.py`, used by `app/services/{auth,listing,chat,rating,collection,review}_service.py`
   through `db.session()` — no SQL text there. Their tables are made and changed by **Alembic**
   migrations (`migrations/versions/`).
 - **Pipeline** (`pipeline/process_scraped_data.py`, `matcher.py`, `rematch.py`): writes games,
@@ -287,8 +288,9 @@ All scraper requests go through `scrapers/base/http_client.py`:
 - a store isn't scraped again within 12 hours of a successful run:
   `python -m scheduler.run_single_store <store> --force` overrides it
 
-A daily run makes about 150 requests to Press Start, 60 to Mega Mania, 16 to CSTech and 24 to Darty.
-Shopify stores (CSTech, Darty) answer 429 after many requests in a short time: avoid extra manual runs.
+A daily run makes about 150 requests to Press Start, 60 to Mega Mania, 16 to CSTech, ~110 to
+Gaming Replay and ~72 to Rádio Popular. Shopify stores (CSTech) answer 429 after many requests in a
+short time: avoid extra manual runs.
 
 ## Safeguard against a half-broken scraper
 
@@ -307,9 +309,8 @@ python -m scheduler.run_single_store <store> --accept-drop
 | Press Start | HTML, game category pages                |
 | Mega Mania  | HTML, game category pages                |
 | CSTech      | Shopify JSON feed (`/products.json`)     |
-| Darty       | Shopify JSON feed, games collection only (`/collections/videojogos/products.json`); pre-orders = the `pre-vendas-gaming` collection |
 | Gaming Replay | HTML (PrestaShop), per platform the "Jogos" and "Seminovos" (pre-owned) category pages, 12 games per page (~110 requests a run); "(COIB)" = code in box, excluded; "(Edição Americana / Asiática / Japonesa)" = import editions |
-| Rádio Popular | JSON from its "load more" request (POST `/ajax`, 12 games per page); **switched off** until a run in match-only mode is checked |
+| Rádio Popular | JSON from its "load more" request (POST `/ajax`, 12 games per page); match-only (see below) |
 
 Rádio Popular shortens names ("TALES OF ETERNIA REMAS", "LUIGI MANS 3"): its products are also
 matched to a known game they're a short form of (`core/close_match.py`: same numbers, same first
@@ -319,7 +320,8 @@ match-only store (`MATCH_ONLY_STORES` in `pipeline/matcher.py`): a product links
 edition that already exist, otherwise it stays unlinked and isn't shown.
 
 Checked and not added (2026-10-02 / 03): Fnac, Worten and shop4nerds block plain requests (captcha /
-Cloudflare challenge), Amazon's Conditions of Use forbid scraping, El Corte Inglés only has prices on
+Cloudflare challenge), Darty answered 429 to every run's first request (dropped), Amazon's
+Conditions of Use forbid scraping, El Corte Inglés only has prices on
 product pages (one request per game). Details in the project plan.
 
 ### Adding a store
@@ -329,6 +331,6 @@ product pages (one request per game). Details in the project plan.
    `parser.py` — and, if its product pages are useful, `product_page_parser`; implement
    `build_page_url`) or `scrapers.base.shopify.ShopifyScraper` (Shopify stores: `store_slug`,
    `base_url`; stores selling more than games also set `collections` / `game_type_prefix`, see
-   `scrapers/darty/scraper.py`).
+   `scrapers/base/shopify.py`).
 2. Register it in `SCRAPERS` in `scheduler/jobs.py`.
 3. Add a row to `database/seed_stores.sql` with the same slug and re-run it.

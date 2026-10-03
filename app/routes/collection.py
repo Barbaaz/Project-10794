@@ -50,6 +50,14 @@ def add():
     return jsonify(id=item_id), 201
 
 
+@bp.post("/collection/import")
+@login_required
+def import_from_browser():
+    """{ids: [...]}: favourites an old browser kept (before accounts), onto the wishlist → {added}"""
+    ids = body().get("ids") or []
+    return jsonify(collection_service.add_wishes(current_user()["id"], ids if isinstance(ids, list) else []))
+
+
 @bp.patch("/collection/<int:item_id>")
 @login_required
 def update(item_id):

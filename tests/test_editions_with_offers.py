@@ -1,5 +1,5 @@
 """
-The favourites endpoint (game_service.editions_with_offers): offers per edition,
+The wishlist tab's endpoint (game_service.editions_with_offers): offers per edition,
 the historical low, and back-in-stock detection from the price history.
 """
 import pytest
@@ -50,7 +50,7 @@ def edition_id(app_on_test_db):
     cursor.execute("DELETE FROM games WHERE id = ?", game_id)
 
 
-def test_favourite_edition_with_offers(edition_id):
+def test_edition_with_offers(edition_id):
     [group] = editions_with_offers([edition_id])
     assert group["name"] == "Fav Game"
     assert group["console"] == "PS5"

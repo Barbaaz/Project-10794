@@ -2,7 +2,7 @@
 Fixing wrong matches by hand (moderators, the "Correspondências" tab of /admin). A store
 product moved to another edition is pinned there (match_overrides): the daily processing and
 `python -m pipeline.rematch` leave it alone. An edition or game a move leaves empty is merged
-into where its products went, as the rematch does (merged_ids, favourites and listings follow).
+into where its products went, as the rematch does (merged_ids, collection items and listings follow).
 Unpinning lets the next rematch decide again.
 """
 from collections import Counter, defaultdict

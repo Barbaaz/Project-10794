@@ -18,7 +18,7 @@ from datetime import timedelta
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import delete, or_, select
 
-from app.models import Conversation, Favorite, Listing, Message, ModerationLog, Rating, Report, User
+from app.models import CollectionItem, Conversation, Listing, Message, ModerationLog, Rating, Report, User
 from app.services import auth_service, chat_service, listing_service
 from app.services.photo_storage import storage
 from db import fetch_all, session
@@ -66,7 +66,7 @@ def remove():
         for listing in listings:
             s.delete(listing)                  # its photos go with it
         s.flush()
-        s.execute(delete(Favorite).where(Favorite.user_id.in_(users)))
+        s.execute(delete(CollectionItem).where(CollectionItem.user_id.in_(users)))
         s.execute(delete(User).where(User.id.in_(users)))
     for key in keys:
         storage.delete(key)
