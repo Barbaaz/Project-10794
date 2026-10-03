@@ -440,6 +440,13 @@ const STRINGS = {
         match_unpinned: "Solto: a próxima recorrespondência decide pelo nome.",
         error_products_invalid: "Marque entre 1 e 50 produtos.",
         error_new_edition_invalid: "Escreva o nome da nova edição.",
+        match_title_en: "Nome em inglês",
+        match_title_en_placeholder: "Nome em inglês (vazio: o da loja)",
+        match_title_en_save: "Guardar nome",
+        match_title_en_saved: "Nome em inglês guardado.",
+        error_title_en_invalid: "Nome demasiado longo (máximo 300 caracteres).",
+        action_rename_game_en: "Nome em inglês alterado",
+        mod_kind_game: "Jogo",
         sort: "Ordenar:",
         sort_name: "Nome (A–Z)",
         sort_price_asc: "Preço: mais barato primeiro",
@@ -985,6 +992,13 @@ const STRINGS = {
         match_unpinned: "Unpinned: the next rematch goes by the name.",
         error_products_invalid: "Tick between 1 and 50 products.",
         error_new_edition_invalid: "Write the new edition's name.",
+        match_title_en: "English name",
+        match_title_en_placeholder: "English name (empty: the store's)",
+        match_title_en_save: "Save name",
+        match_title_en_saved: "English name saved.",
+        error_title_en_invalid: "Name too long (at most 300 characters).",
+        action_rename_game_en: "English name changed",
+        mod_kind_game: "Game",
         sort: "Sort:",
         sort_name: "Name (A–Z)",
         sort_price_asc: "Price: lowest first",
@@ -1109,6 +1123,12 @@ function savedLanguage() {
 const LANG = savedLanguage();
 const LOCALE = LANG === "pt" ? "pt-PT" : "en-GB";
 const eur = new Intl.NumberFormat(LOCALE, { style: "currency", currency: "EUR" });
+
+// A game's (or card's) name in the page's language: item.name_en / item.title_en when the page is
+// in English and the game has an English name (IGDB's, or a moderator's), else the store's
+function localName(item, field = "name") {
+    return (LANG === "en" && item[`${field}_en`]) || item[field];
+}
 
 // fallback: what to show when there's no text for `key` (by default the key itself)
 function t(key, vars = {}, fallback = key) {

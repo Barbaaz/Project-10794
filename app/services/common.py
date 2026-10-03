@@ -2,6 +2,7 @@
 Pieces the services share: the offer columns sent to clients, SQL fragments, how a card
 is named and built, the lowest-price query, and a small cache.
 """
+import re
 import time
 
 from core.normalizer import normalize_name
@@ -30,9 +31,32 @@ LATEST_PRICE = """
 
 # What card_group() needs, from game_editions e JOIN games g JOIN platforms p
 EDITION_CARD_COLUMNS = """
-    e.id AS edition_id, e.name AS edition, e.edition_key, g.id AS game_id, g.title,
+    e.id AS edition_id, e.name AS edition, e.edition_key, g.id AS game_id, g.title, g.title_en,
     p.code AS console, p.name AS platform_name
 """
+
+# Portuguese edition words in English, for the English page ("Edição Especial" → "Special Edition")
+EDITION_WORDS_EN = [(re.compile(rf"\b{pt}\b", re.IGNORECASE), en) for pt, en in [
+    ("de colecionador", "Collector's"), ("colecionador", "Collector's"), ("jogo do ano", "Game of the Year"),
+    ("especial", "Special"), ("limitada", "Limited"), ("definitiva", "Definitive"), ("completa", "Complete"),
+    ("ouro", "Gold"), ("europeia", "European"), ("americana", "American"),
+]]
+EDITION_FIRST = re.compile(r"(edição|versão)\s+(.+)", re.IGNORECASE)
+
+
+def edition_en(name):
+    """An edition's name in English: "Edição Especial Limitada" → "Special Limited Edition"."""
+    text = name or ""
+    for pattern, english in EDITION_WORDS_EN:
+        text = pattern.sub(english, text)
+    if m := EDITION_FIRST.fullmatch(text):
+        text = f"{m.group(2)} {'Edition' if m.group(1).lower().startswith('edi') else 'Version'}"
+    return text
+
+
+def title_en(row):
+    """The game's English name when it has one, else its title (row: title, title_en)."""
+    return row.get("title_en") or row["title"]
 
 CACHE_SECONDS = 600   # prices change once a day; no need to recompute on every visit
 _cache = {}
@@ -72,6 +96,7 @@ def card_group(row, offers, **extra):
         "edition_id": row["edition_id"],
         "game_id": row["game_id"],
         "name": card_name(row["title"], row["edition_key"], row["edition"]),
+        "name_en": card_name(title_en(row), row["edition_key"], edition_en(row["edition"])),
         "console": row["console"],
         "platform_name": row["platform_name"],
         **extra,

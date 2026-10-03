@@ -49,7 +49,7 @@ def with_prices(rows):
         g = prices.get(r["edition_id"], {})
         offers = [o for o in g.get("offers", []) if o["in_stock"] and o["condition"] == "new"]
         best = min(offers, key=lambda o: o["price"]) if offers else None
-        r.update(name=g.get("name"), platform=g.get("console"),
+        r.update(name=g.get("name"), name_en=g.get("name_en"), platform=g.get("console"),
                  platform_name=g.get("platform_name"), image=g.get("image"),
                  best_price=best["price"] if best else None, best_store=best["store_name"] if best else None,
                  on_sale=any(o["is_discount"] for o in offers),
@@ -195,7 +195,7 @@ def public_collection(username):
             return None
         user_id = user.id
     data = collection(user_id)
-    keep = ("kind", "status", "format", "edition_id", "game_id", "name", "platform", "platform_name", "image",
+    keep = ("kind", "status", "format", "edition_id", "game_id", "name", "name_en", "platform", "platform_name", "image",
             "best_price", "used")
     return {"items": [{k: r[k] for k in keep} for r in data["items"]], "stats": data["stats"]}
 

@@ -7,6 +7,7 @@ screenshots, YouTube trailers, game modes, themes, time to beat) for the game pa
     python -m pipeline.igdb --videos         # trailers for games matched before videos were kept
     python -m pipeline.igdb --tags           # game modes / themes for games matched before they were kept
     python -m pipeline.igdb --time-to-beat   # time to beat (rushed / normal / 100%) of matched games
+    python -m pipeline.igdb --names          # English names of games matched before they were kept
 
 Credentials: a Twitch developer app, in the environment variables IGDB_CLIENT_ID and
 IGDB_CLIENT_SECRET (never in the code). IGDB allows 4 requests per second; we stay under it.
@@ -15,6 +16,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 import time
 
@@ -37,8 +39,14 @@ IGDB_PLATFORMS = {"PS5": 167, "PS4": 48, "PS3": 9, "Switch": 130, "Switch2": 508
 
 # IGDB game_type: 1 DLC, 2 expansion, 5 mod, 13 pack, 14 update — not the game itself
 NOT_A_GAME = {1, 5, 13, 14}
+# ... nor are 3 bundle, 6 episode, 7 season: no English name from those (a wrong match shows a wrong name)
+NOT_THE_GAMES_NAME = NOT_A_GAME | {2, 3, 6, 7}
+# A store title in Portuguese: letters / words English titles don't have (after normalize_name)
+PORTUGUESE = re.compile(r"[ãõç]", re.IGNORECASE)
+PORTUGUESE_WORDS = {"parte", "edicao", "versao", "colecao", "fim", "ladrao", "remasterizado", "remasterizada", "um",
+                    "uma", "dos", "das", "jogo", "aventura", "aventuras", "lenda", "expansao"}
 
-FIELDS = ("name,version_parent,game_type,first_release_date,summary,genres.name,"
+FIELDS = ("name,version_parent.name,game_type,first_release_date,summary,genres.name,"
           "involved_companies.company.name,involved_companies.publisher,involved_companies.developer,"
           "age_ratings.rating_category.rating,age_ratings.organization.name,"
           "cover.image_id,screenshots.image_id,videos.video_id,videos.name,total_rating,game_modes.name,themes.name")
@@ -171,6 +179,20 @@ def game_info(g):
     }
 
 
+def english_name(g):
+    """
+    IGDB's name for the game, shown when the page is in English: for an edition IGDB matched
+    ("Batman: Arkham Knight - Special Edition Steelbook") its main game's name; "" for a bundle,
+    DLC or episode matched instead of the game (the store's title is shown then).
+    """
+    parent = g.get("version_parent")
+    if isinstance(parent, dict) and parent.get("name"):
+        return parent["name"]
+    if g.get("game_type") in NOT_THE_GAMES_NAME:
+        return ""
+    return g.get("name") or ""
+
+
 def tag_lists(g):
     """{game_modes, themes}: IGDB names, comma-separated; "" when IGDB lists none (looked up)."""
     return {key: ", ".join(x["name"] for x in g.get(key, []) if x.get("name")) for key in ("game_modes", "themes")}
@@ -264,6 +286,44 @@ def fill_tags(client=None):
     return fill_missing("game_modes", "game_modes.name,themes.name", tag_lists, client)
 
 
+def english_title(title, igdb_name):
+    """
+    The English name shown for a game: IGDB's when the store's title is Portuguese ("The Last of Us
+    Parte II" → "The Last of Us Part II") or is the same words written worse ("DEADLY PREMONITION 2");
+    else "" and the store's title is shown (IGDB's would often be a longer edition's name).
+    """
+    if not igdb_name:
+        return ""
+    if normalize_name(igdb_name) == normalize_name(title) or PORTUGUESE.search(title) \
+            or set(normalize_name(title).split()) & PORTUGUESE_WORDS:
+        return igdb_name
+    return ""
+
+
+def fill_names(client=None):
+    """
+    English names for matched games that don't have one yet (new games each day): looked up by
+    IGDB id, 500 per request. "" when there's none to show; a moderator's name is never replaced.
+    """
+    with connection() as conn:
+        cursor = conn.cursor()
+        games = cursor.execute("SELECT id, title, igdb_id FROM games WHERE igdb_id IS NOT NULL AND title_en IS NULL").fetchall()
+        if not games:
+            return 0
+        client = client or IGDBClient()
+        ids = sorted({g.igdb_id for g in games})
+        names = {}
+        for start in range(0, len(ids), BATCH):
+            batch = ids[start:start + BATCH]
+            names.update({g["id"]: english_name(g) for g in client.query(
+                f"fields id,name,game_type,version_parent.name; where id = ({','.join(map(str, batch))}); limit {BATCH};")})
+        for game_id, title, igdb_id in games:
+            cursor.execute("UPDATE games SET title_en = ? WHERE id = ?", english_title(title, names.get(igdb_id)), game_id)
+        conn.commit()
+    log.info("IGDB: English names looked up for %d games", len(games))
+    return len(games)
+
+
 def fill_time_to_beat(client=None):
     """
     Time to beat from IGDB's players (seconds to finish rushing / normally / 100%) for matched
@@ -305,9 +365,12 @@ if __name__ == "__main__":
     parser.add_argument("--videos", action="store_true", help="only fill videos of games already matched")
     parser.add_argument("--tags", action="store_true", help="only fill game modes / themes of games already matched")
     parser.add_argument("--time-to-beat", action="store_true", help="only fill the time to beat of matched games")
+    parser.add_argument("--names", action="store_true", help="only fill the English names of matched games")
     args = parser.parse_args()
     setup_logging()
-    if args.videos:
+    if args.names:
+        fill_names()
+    elif args.videos:
         fill_videos()
     elif args.tags:
         fill_tags()

@@ -211,6 +211,12 @@ IF COL_LENGTH('dbo.games', 'ttb_normally') IS NULL
         ttb_count INT NULL, ttb_checked_at DATETIME2 NULL;
 GO
 
+-- The game's English name, shown when the page is in English: IGDB's name (pipeline/igdb.py),
+-- correctable by moderators. "" = looked up, IGDB has none (the store title is shown)
+IF COL_LENGTH('dbo.games', 'title_en') IS NULL
+    ALTER TABLE dbo.games ADD title_en NVARCHAR(300) NULL;
+GO
+
 -- The store's photos of a product besides the cover (special editions: what's in the box),
 -- JSON list of URLs, read with the description
 IF COL_LENGTH('dbo.store_products', 'image_urls') IS NULL

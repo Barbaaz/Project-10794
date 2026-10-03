@@ -3,7 +3,8 @@ import re
 from datetime import datetime, timezone
 
 from app.services.common import (
-    EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, card_group, lowest_prices, page_result, title_word_filters,
+    EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, card_group, edition_en, lowest_prices, page_result,
+    title_word_filters,
 )
 from app.services.genre_service import genre_filter
 from app.services.listing_service import used_summaries
@@ -82,8 +83,8 @@ def get_game(game_id):
     """A game with its editions, each with its store offers (cheapest in-stock first)."""
     game = fetch_one(
         """
-        SELECT g.id, g.title, p.code AS platform, p.name AS platform_name, g.image_url AS image,
-               g.igdb_id, g.summary, g.genres, g.publishers, g.developers, g.first_release_date,
+        SELECT g.id, g.title, NULLIF(g.title_en, '') AS title_en, p.code AS platform, p.name AS platform_name,
+               g.image_url AS image, g.igdb_id, g.summary, g.genres, g.publishers, g.developers, g.first_release_date,
                g.rating, g.pegi, g.cover_image_id, g.screenshot_ids, g.video_ids AS videos,
                g.ttb_hastily, g.ttb_normally, g.ttb_completely, g.ttb_count
         FROM games g JOIN platforms p ON p.id = g.platform_id
@@ -115,6 +116,7 @@ def get_game(game_id):
     photos = store_photos(game_id)
 
     for edition in editions:
+        edition["name_en"] = edition_en(edition["name"])
         edition["offers"] = [o for o in offers if o["edition_id"] == edition["id"]]
         in_stock = [o["price"] for o in edition["offers"] if o["in_stock"]]
         edition["best_price"] = min(in_stock) if in_stock else None

@@ -96,6 +96,13 @@ def move_products():
     return jsonify(edition_id=edition_id)
 
 
+@bp.put("/mod/games/<int:game_id>/title-en")
+@moderator_required
+def set_title_en(game_id):
+    """{title_en}: the game's English name ("" = show the store's title)."""
+    return jsonify(match_service.set_title_en(current_user()["id"], game_id, body().get("title_en")))
+
+
 @bp.get("/mod/pins")
 @moderator_required
 def pins():

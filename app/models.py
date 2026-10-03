@@ -60,6 +60,7 @@ class Game(Base):
     platform_id: Mapped[int] = mapped_column(ForeignKey("platforms.id"))
     title: Mapped[str] = mapped_column(Unicode(300))
     normalized_title: Mapped[str] = mapped_column(Unicode(300))     # the game key (core/editions.py)
+    title_en: Mapped[str | None] = mapped_column(Unicode(300))      # English name (IGDB / moderators)
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))
     created_at = created_at()
     # From IGDB (pipeline/igdb.py, IGDB_COLUMNS)

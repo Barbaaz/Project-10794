@@ -195,8 +195,8 @@ async function load() {
 }
 
 function render() {
-    document.title = `${game.title} (${game.platform}) · Game Price Tracker`;
-    document.getElementById("title").textContent = game.title;
+    document.title = `${localName(game, "title")} (${game.platform}) · Game Price Tracker`;
+    document.getElementById("title").textContent = localName(game, "title");
     document.getElementById("platform").textContent = game.platform_name;
 
     // Upcoming games: announced release date ("31/12" means only the year is known)
@@ -426,7 +426,7 @@ function renderEdition(edition, i) {
 
     card.innerHTML = `
         <div class="card-body">
-            <h2 class="h5 mb-3">${esc(edition.name)}
+            <h2 class="h5 mb-3">${esc(localName(edition))}
                 ${edition.digital_code ? `<span class="badge text-bg-warning ms-1 align-middle"
                     title="${t("digital_code_hint")}">${t("digital_code")}</span>` : ""}</h2>
 
@@ -445,7 +445,7 @@ function renderEdition(edition, i) {
 
             <h3 class="h6 mt-4 mb-2">${t("price_history")} <span class="text-body-secondary fw-normal small">${t("new_copies")}</span></h3>
             <div class="chart-box"><canvas id="chart-${i}" role="img"
-                aria-label="${esc(t("price_history_of", { name: edition.name }))}"></canvas></div>
+                aria-label="${esc(t("price_history_of", { name: localName(edition) }))}"></canvas></div>
             <p class="small text-body-secondary mt-1 mb-0">${t("dashed_sold_out")}</p>
 
             <details class="mt-2">

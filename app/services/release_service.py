@@ -99,7 +99,7 @@ def upcoming_releases():
                   AND sp.game_id IN (SELECT game_id FROM game_release
                                      WHERE release_date >= CAST(SYSUTCDATETIME() AS DATE))
             )
-            SELECT g.id AS game_id, g.title, p.code AS platform, p.name AS platform_name, g.image_url AS image,
+            SELECT g.id AS game_id, g.title, NULLIF(g.title_en, '') AS title_en, p.code AS platform, p.name AS platform_name, g.image_url AS image,
                    r.release_date, CAST(r.date_is_estimate AS BIT) AS date_is_estimate,
                    pr.price AS best_price, pr.store, pr.store_name, pr.url,
                    (SELECT COUNT(DISTINCT sp.edition_id) FROM store_products sp

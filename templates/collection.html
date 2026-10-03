@@ -151,7 +151,7 @@ function itemRow(item) {
                 <a href="/game/${item.game_id}"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
                 <div class="flex-grow-1 min-w-0">
                     <div class="d-flex flex-wrap justify-content-between gap-1">
-                        <a href="/game/${item.game_id}" class="fw-semibold link-body-emphasis text-decoration-none">${esc(item.name || "")}</a>
+                        <a href="/game/${item.game_id}" class="fw-semibold link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
                         <span class="small text-body-secondary">${esc(item.platform_name || "")}</span>
                     </div>
                     <div class="small mt-1">${priceLine(item)}</div>
@@ -178,8 +178,8 @@ function renderItems() {
     const words = document.getElementById("filter-text").value.toLowerCase().split(/\s+/).filter(Boolean);
     const items = data.items.filter(i => i.kind === kind
         && (kind !== "owned" || !status.value || i.status === status.value)
-        && words.every(w => (i.name || "").toLowerCase().includes(w)))
-        .sort((a, b) => (a.name || "").localeCompare(b.name || "", LOCALE));
+        && words.every(w => `${i.name || ""} ${i.name_en || ""}`.toLowerCase().includes(w)))
+        .sort((a, b) => (localName(a) || "").localeCompare(localName(b) || "", LOCALE));
     const list = document.getElementById("items");
     list.innerHTML = items.map(itemRow).join("");
     const empty = document.getElementById("empty");

@@ -1,7 +1,25 @@
 """Choosing the IGDB entry for a game (no network)."""
 import json
 
-from pipeline.igdb import best_match, game_info
+from pipeline.igdb import best_match, english_name, english_title, game_info
+
+
+def test_english_name_is_the_main_games_never_a_bundles():
+    assert english_name({"name": "Batman: Arkham Knight - Special Edition Steelbook", "game_type": 0,
+                         "version_parent": {"id": 1, "name": "Batman: Arkham Knight"}}) == "Batman: Arkham Knight"
+    assert english_name({"name": "The Witcher 3: Wild Hunt + Dark Souls III", "game_type": 3}) == ""
+    assert english_name({"name": "Mario Kart 8 Deluxe: Booster Course Pass", "game_type": 1}) == ""
+    assert english_name({"name": "Uncharted 4: A Thief's End", "game_type": 0}) == "Uncharted 4: A Thief's End"
+
+
+def test_english_title_only_for_portuguese_or_better_written_titles():
+    assert english_title("The Last of Us Parte II", "The Last of Us Part II") == "The Last of Us Part II"
+    assert english_title("UNCHARTED 4 O FIM DE UM LADRÃO", "Uncharted 4: A Thief's End") == "Uncharted 4: A Thief's End"
+    assert english_title("DEADLY PREMONITION 2", "Deadly Premonition 2") == "Deadly Premonition 2"
+    # an English store title stays: IGDB's is often a longer edition's name
+    assert english_title("Layers of Fear", "Layers of Fear: The Final Masterpiece Edition") == ""
+    assert english_title("Dead Cells: Return To Castlevania", "Dead Cells") == ""
+    assert english_title("Some Game", "") == ""
 
 
 def test_prefers_the_main_game_over_editions_and_dlc():

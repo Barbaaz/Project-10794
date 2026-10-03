@@ -237,6 +237,11 @@ function matchCard(game) {
             <div class="card-body">
                 <h3 class="h6"><a href="/game/${game.id}">${esc(game.title)}</a>
                     <span class="text-body-secondary small">· ${esc(game.platform)} · #${game.id}</span></h3>
+                <form class="title-en-form d-flex gap-2 mb-2">
+                    <input name="title_en" maxlength="300" class="form-control form-control-sm" value="${esc(game.title_en)}"
+                           placeholder="${esc(t("match_title_en_placeholder"))}" aria-label="${esc(t("match_title_en"))}">
+                    <button class="btn btn-sm btn-secondary text-nowrap">${esc(t("match_title_en_save"))}</button>
+                </form>
                 ${game.editions.map(e => `
                     <div class="mb-2">
                         <div class="fw-semibold small">${esc(e.name)} <span class="text-body-secondary">#${e.id} · ${esc(e.key || "standard")}</span></div>
@@ -275,6 +280,14 @@ async function searchMatches(q) {
     const games = await getJSON(`/api/mod/matches?q=${encodeURIComponent(q)}`);
     const box = document.getElementById("match-results");
     box.innerHTML = games.length ? games.map(matchCard).join("") : `<p class="text-body-secondary small">${esc(t("no_results"))}</p>`;
+    // the English name, shown when the page is in English (empty: the store's title)
+    box.querySelectorAll(".title-en-form").forEach(form => form.onsubmit = async e => {
+        e.preventDefault();
+        const gameId = form.closest("[data-game]").dataset.game;
+        const { ok, data } = await api(`/api/mod/games/${gameId}/title-en`,
+                                       { method: "PUT", body: { title_en: form.title_en.value } });
+        showMessage(ok, ok ? t("match_title_en_saved") : t(`error_${data?.error || "unknown"}`));
+    });
     box.querySelectorAll(".move-form").forEach(form => {
         const card = form.closest("[data-game]");
         const target = form.querySelector("[name=target]");

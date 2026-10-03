@@ -41,7 +41,7 @@ def find(q):
             return {"id": p.id, "store": store, "name": p.external_name, "url": p.url, "is_active": p.is_active,
                     "pinned": p.id in pinned}
         return [{
-            "id": g.id, "title": g.title, "platform": g.platform.name,
+            "id": g.id, "title": g.title, "title_en": g.title_en or "", "platform": g.platform.name,
             "editions": [{"id": e.id, "name": e.name, "key": e.edition_key,
                           "products": [product(p, store) for p, store in products if p.edition_id == e.id]}
                          for e in editions if e.game_id == g.id],
@@ -99,6 +99,25 @@ def _target_edition(s, edition_id, game_id, new_edition):
         s.add(edition)
         s.flush()
     return edition
+
+
+def set_title_en(moderator_id, game_id, title):
+    """
+    A game's English name, shown when the page is in English ("" = the store's title). A
+    moderator's name is kept: the IGDB fill only fills games that have none.
+    """
+    title = (title or "").strip()
+    if len(title) > 300:
+        raise ModerationError("title_en_invalid")
+    with session() as s:
+        game = s.get(Game, int(game_id))
+        if not game:
+            raise ModerationError("not_found", 404)
+        game.title_en = title
+        s.add(ModerationLog(moderator_id=moderator_id, action="rename_game_en", kind="game", target_id=game.id,
+                            note=f"{game.title} → {title or '(store title)'}"[:500]))
+    clear_cache()
+    return {"title_en": title}
 
 
 def unpin(moderator_id, product_id):

@@ -86,6 +86,32 @@ def test_move_to_a_new_edition(mod):
     assert again == new
 
 
+def test_english_name_by_a_moderator(mod):
+    client = mod["client"]
+    game, _ = editions(client)
+    put = lambda title: client.put(f"/api/mod/games/{game['id']}/title-en", headers=HEADERS, json={"title_en": title})
+    assert put("Shadow Quest: Reborn").get_json() == {"title_en": "Shadow Quest: Reborn"}
+    cards = client.get("/api/games/catalog?q=shadow quest").get_json()["groups"]
+    assert {c["name_en"] for c in cards} == {"Shadow Quest: Reborn", "Shadow Quest: Reborn — Deluxe Edition",
+                                             "Shadow Quest: Reborn — Gold Edition"}
+    assert {c["name"] for c in cards} >= {"Shadow Quest"}                   # the Portuguese page keeps the store's
+    assert client.get("/api/mod/log").get_json()[0]["action"] == "rename_game_en"
+    assert put("x" * 301).get_json()["error"] == "title_en_invalid"
+    assert put("").get_json() == {"title_en": ""}                         # back to the store's title
+
+    sign_up(client, "not_a_mod_2")
+    assert put("Nope").status_code == 403
+
+
+def test_edition_names_in_english():
+    from app.services.common import edition_en
+    assert edition_en("Edição Especial Limitada") == "Special Limited Edition"
+    assert edition_en("Edição Jogo do Ano") == "Game of the Year Edition"
+    assert edition_en("Edição de Colecionador") == "Collector's Edition"
+    assert edition_en("Versão Europeia") == "European Version"
+    assert edition_en("Deluxe Edition") == "Deluxe Edition"
+
+
 def test_move_errors_and_access(mod):
     client = mod["client"]
     post = lambda data: client.post("/api/mod/matches", headers=HEADERS, json=data)
