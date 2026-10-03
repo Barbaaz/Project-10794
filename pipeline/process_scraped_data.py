@@ -8,7 +8,7 @@ from app.models import NOW, GameEdition, MatchOverride, Platform, PriceSnapshot,
 from core.editions import is_excluded
 from db import json_or_none, session
 from pipeline.deduplicator import deduplicate
-from pipeline.matcher import GameMatcher
+from pipeline.matcher import MATCH_ONLY_STORES, GameMatcher
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +22,8 @@ def process_products(store_slug, products, full_catalog=True):
 
     full_catalog=True means `products` is the store's whole catalogue, so
     products not seen in this run are marked inactive (removed from the store).
-    "Código na caixa" products are skipped (core.editions.is_excluded).
+    "Código na caixa" products are skipped (core.editions.is_excluded). A MATCH_ONLY_STORES
+    store's products only link to games and editions that already exist.
     """
     scraped = deduplicate(products)
     products = [p for p in scraped if not is_excluded(p["external_name"])]
@@ -39,7 +40,9 @@ def process_products(store_slug, products, full_catalog=True):
         run_started_at = s.scalar(select(NOW))
         platform_ids = dict(s.execute(select(Platform.code, Platform.id)).all())
         matcher = GameMatcher(s, platform_ids)
-        matcher.learn(p["external_name"] for p in products)
+        create = store_slug not in MATCH_ONLY_STORES
+        if create:
+            matcher.learn(p["external_name"] for p in products)
 
         # The store's products and their latest prices, loaded once
         known = {product_key(sp.url, sp.condition): sp
@@ -54,7 +57,7 @@ def process_products(store_slug, products, full_catalog=True):
 
             sp = known.get(product_key(p["url"], p["condition"]))
             # a product a moderator pinned to an edition stays there (app/services/match_service.py)
-            game_id, edition_id = pinned[sp.id] if sp is not None and sp.id in pinned else matcher.match(p)
+            game_id, edition_id = pinned[sp.id] if sp is not None and sp.id in pinned else matcher.match(p, create)
             if sp is None:
                 sp = StoreProduct(store_id=store.id, url=p["url"], condition=p["condition"])
                 s.add(sp)

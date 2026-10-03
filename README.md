@@ -307,11 +307,14 @@ python -m scheduler.run_single_store <store> --accept-drop
 | CSTech      | Shopify JSON feed (`/products.json`)     |
 | Darty       | Shopify JSON feed, games collection only (`/collections/videojogos/products.json`); pre-orders = the `pre-vendas-gaming` collection |
 | Gaming Replay | HTML (PrestaShop), per platform the "Jogos" and "Seminovos" (pre-owned) category pages, 12 games per page (~110 requests a run); "(COIB)" = code in box, excluded; "(Edição Americana / Asiática / Japonesa)" = import editions |
-| Rádio Popular | JSON from its "load more" request (POST `/ajax`, 12 games per page); **switched off** until a first manual run is checked |
+| Rádio Popular | JSON from its "load more" request (POST `/ajax`, 12 games per page); **switched off** until a run in match-only mode is checked |
 
-Rádio Popular shortens names ("TALES OF ETERNIA REMAS", "FF VII REVELATION"): its products are
-also matched to a known game they're a short form of (`core/close_match.py`: same numbers, same
-first and last word, only linking words may be missing, exactly one candidate).
+Rádio Popular shortens names ("TALES OF ETERNIA REMAS", "LUIGI MANS 3"): its products are also
+matched to a known game they're a short form of (`core/close_match.py`: same numbers, same first
+and last word, only linking words may be missing, exactly one candidate). Its names are too cut
+down to start games from (a first run made 340 games like "INSP GADGET MAD TIME P"), so it's a
+match-only store (`MATCH_ONLY_STORES` in `pipeline/matcher.py`): a product links only to a game and
+edition that already exist, otherwise it stays unlinked and isn't shown.
 
 Checked and not added (2026-10-02 / 03): Fnac, Worten and shop4nerds block plain requests (captcha /
 Cloudflare challenge), Amazon's Conditions of Use forbid scraping, El Corte Inglés only has prices on

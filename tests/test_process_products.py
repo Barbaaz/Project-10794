@@ -59,6 +59,27 @@ def test_descriptions_only_replace_when_the_page_was_read(cursor):
     assert tuple(row) == ("Primeira.", '{"ean13": "1"}')
 
 
+def test_a_match_only_store_links_to_known_games_and_editions_only(cursor):
+    """Rádio Popular's names are cut down ("LUIGI MANS 3"): they never start a game or edition."""
+    from pipeline.rematch import rematch_all
+
+    process_products("press_start", [product(1, external_name="Test Game 1")])
+    games = lambda: [tuple(r) for r in cursor.execute("SELECT title FROM games").fetchall()]
+    links = lambda: {r.url[-1]: r.game_id is not None for r in cursor.execute(
+        "SELECT url, game_id FROM store_products WHERE store_id = (SELECT id FROM stores WHERE slug = 'radio_popular')")}
+
+    process_products("radio_popular", [
+        product("a", external_name="TEST GAME 1"),                     # known game, Standard edition
+        product("b", external_name="TEST GAME 1 COLLECTORS EDITION"),  # known game, unknown edition
+        product("c", external_name="TEST GAM NINE"),                   # unknown game
+    ])
+    assert links() == {"a": True, "b": False, "c": False}
+    assert games() == [("Test Game 1",)] and cursor.execute("SELECT COUNT(*) FROM game_editions").fetchone()[0] == 1
+    # a rematch keeps to the same rule
+    rematch_all()
+    assert links() == {"a": True, "b": False, "c": False} and games() == [("Test Game 1",)]
+
+
 def test_to_cents_rounds_like_sql_server():
     assert [str(to_cents(v)) for v in (1.005, 25.995, 2.675, 10.125)] == ["1.00", "26.00", "2.67", "10.13"]
     assert to_cents(None) is None

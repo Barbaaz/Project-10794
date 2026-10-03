@@ -10,6 +10,11 @@ MIN_TYPO_LENGTH = 5     # words this long may differ by a typo ("delixe" / "delu
 TYPO_SIMILARITY = 0.8
 NOT_TITLE_WORDS = EDITION_WORDS | {"ultra", "anniversary", "th"}   # never moved from an edition into a title
 
+# Stores whose product names are too cut down to start a game or an edition from ("JOGO SWITCH
+# LUIGI MANS 3"): their products only link to a game and edition that already exist, otherwise
+# they stay unlinked (not shown). Their names don't rename games or editions either.
+MATCH_ONLY_STORES = {"radio_popular"}
+
 
 class GameMatcher:
     """
@@ -21,6 +26,7 @@ class GameMatcher:
     - a name cut in the wrong place is mended: "Star Wars" + edition "Galactic Racer Deluxe"
       → "Star Wars Galactic Racer" + "Deluxe" when that game is known;
     - an edition differing by a typo from one the game has is that edition ("delixe" → "deluxe").
+    With create=False (MATCH_ONLY_STORES) nothing is created: no known game and edition, no link.
     """
 
     def __init__(self, session, platform_ids):
@@ -46,14 +52,15 @@ class GameMatcher:
             if phrase:
                 self.known_phrases.add(phrase)
 
-    def match(self, product):
-        """(game_id, edition_id), or (None, None) when the platform is unknown."""
-        return self.match_details(product)[:2]
+    def match(self, product, create=True):
+        """(game_id, edition_id), or (None, None) when the platform is unknown (or, create=False, no known game / edition)."""
+        return self.match_details(product, create)[:2]
 
-    def match_details(self, product):
+    def match_details(self, product, create=True):
         """
         (game_id, edition_id, game_title, edition_name). game_title is None when the name was
         shortened or cut wrongly: it isn't a good display title for the game it went to.
+        With create=False only known games / editions, and no names (the store's aren't good ones).
         """
         platform_id = self.platform_ids.get(product["console"])
         parsed = parse_title(product["external_name"], self.known_phrases)
@@ -67,16 +74,22 @@ class GameMatcher:
         # Its own name is a good display title, also when it only differs by a leading "The"
         # or an abbreviation; a shortened or mended one isn't
         own_title = parsed.game_title if expand(game_key) == expand(parsed.game_key) else None
+        if not create:
+            own_title = edition_name = None
 
         game_id = self.games.get((game_key, platform_id))
         if game_id is None:
-            game_id = self.get_or_create_game(game_key, own_title, platform_id, product.get("image"))
+            game_id = self.get_or_create_game(game_key, own_title, platform_id, product.get("image"), create)
+            if game_id is None:
+                return None, None, None, None
             self.games[(game_key, platform_id)] = game_id
             index.add(game_key)
 
         edition_id = self.editions.get((game_id, edition_key))
         if edition_id is None:
-            edition_id = self.get_or_create_edition(game_id, edition_key, edition_name)
+            edition_id = self.get_or_create_edition(game_id, edition_key, edition_name, create)
+            if edition_id is None:
+                return None, None, None, None
             self.editions[(game_id, edition_key)] = edition_id
 
         return game_id, edition_id, own_title, edition_name
@@ -103,7 +116,7 @@ class GameMatcher:
                 return longer, "|".join([key] + tags), name or "Standard"
         return parsed.game_key, parsed.edition_key, parsed.edition_name
 
-    def get_or_create_game(self, game_key, title, platform_id, image):
+    def get_or_create_game(self, game_key, title, platform_id, image, create=True):
         game = self.session.scalars(
             select(Game).where(Game.normalized_title == game_key, Game.platform_id == platform_id)).first()
 
@@ -113,6 +126,8 @@ class GameMatcher:
             if title and game.title.isupper() and not title.isupper():
                 game.title = title[:300]
             return game.id
+        if not create:
+            return None
 
         # A new game comes from its own name (resolve() and mend_split() only go to known games)
         game = Game(platform_id=platform_id, title=(title or game_key)[:300], normalized_title=game_key, image_url=image)
@@ -120,7 +135,7 @@ class GameMatcher:
         self.session.flush()        # its id
         return game.id
 
-    def get_or_create_edition(self, game_id, edition_key, name):
+    def get_or_create_edition(self, game_id, edition_key, name, create=True):
         known = self.game_editions.get(game_id)
         if known is None:
             known = dict(self.session.execute(
@@ -132,6 +147,8 @@ class GameMatcher:
         typo = next((key for key in known if same_with_typos(edition_key, key)), None)
         if typo is not None:
             return known[typo]
+        if not create:
+            return None
 
         edition = GameEdition(game_id=game_id, edition_key=edition_key, name=name[:200])
         self.session.add(edition)

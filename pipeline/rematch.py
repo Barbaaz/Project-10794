@@ -18,11 +18,13 @@ from collections import Counter, defaultdict
 from sqlalchemy import delete, exists, insert, literal, select, update
 from sqlalchemy.orm import aliased
 
-from app.models import CollectionItem, Favorite, Game, GameEdition, GameReview, Listing, MergedId, Platform, StoreProduct
+from app.models import (
+    CollectionItem, Favorite, Game, GameEdition, GameReview, Listing, MergedId, Platform, Store, StoreProduct,
+)
 from core.editions import edition_key_of, is_excluded
 from db import session
 from pipeline.igdb import IGDB_COLUMNS
-from pipeline.matcher import GameMatcher
+from pipeline.matcher import MATCH_ONLY_STORES, GameMatcher
 from pipeline.process_scraped_data import pinned_editions
 
 log = logging.getLogger(__name__)
@@ -35,6 +37,7 @@ def rematch_all(dry_run=False):
     with session() as s:
         platform_ids = dict(s.execute(select(Platform.code, Platform.id)).all())
         codes = {v: k for k, v in platform_ids.items()}
+        match_only = set(s.scalars(select(Store.id).where(Store.slug.in_(MATCH_ONLY_STORES))))
         products = s.scalars(select(StoreProduct).order_by(StoreProduct.id)).all()
         pinned = pinned_editions(s)       # moderators' pins: these products stay where they are
 
@@ -58,7 +61,7 @@ def rematch_all(dry_run=False):
                 (game_id, edition_id), title, edition_name = pinned[sp.id], None, None    # names: as they are
             else:
                 product = {"external_name": sp.external_name, "console": codes.get(sp.platform_id), "image": sp.image_url}
-                game_id, edition_id, title, edition_name = matcher.match_details(product)
+                game_id, edition_id, title, edition_name = matcher.match_details(product, sp.store_id not in match_only)
 
             if game_id:
                 if title:

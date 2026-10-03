@@ -36,7 +36,7 @@ USING (VALUES
     ('mega-mania',    N'Mega Mania',    N'https://mega-mania.com.pt',    1),
     ('cstech',        N'CSTech',        N'https://cstech.store',         1),
     ('darty',         N'Darty',         N'https://darty.pt',             1),
-    -- off until a first manual run is checked: python -m scheduler.run_single_store radio_popular
+    -- off until a match-only run is checked (pipeline/matcher.py MATCH_ONLY_STORES): python -m scheduler.run_single_store radio_popular --force
     ('radio_popular', N'Rádio Popular', N'https://www.radiopopular.pt',  0),
     ('gaming_replay', N'Gaming Replay', N'https://www.gamingreplay.com/pt/', 1)  -- since 2026-10-03
 ) AS s (slug, name, base_url, is_active)
