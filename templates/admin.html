@@ -90,7 +90,7 @@
 
 <script>
 const ACTIONS_BY_KIND = { listing: ["hide_listing", "restore_listing"], user: ["block_user", "unblock_user"],
-                          rating: ["hide_rating", "restore_rating"] };
+                          rating: ["hide_rating", "restore_rating"], review: ["hide_review", "restore_review"] };
 
 function showMessage(ok, text) {
     const box = document.getElementById("message");
@@ -129,6 +129,13 @@ function targetSummary(kind, target) {
                 <div class="small text-body-secondary">${esc(t("member_since"))} ${new Date(target.created_at).toLocaleDateString(LOCALE)}</div>`;
     }
     const hidden = target.hidden ? ` <span class="badge text-bg-dark">${esc(t("mod_hidden"))}</span>` : "";
+    if (kind === "review") {
+        return `<div><strong>${target.score}/10</strong>${hidden}
+                    <span class="small">${userLink(target.writer)} ·
+                        <a href="/game/${target.game_id}">${esc(target.game)} (${esc(target.platform)})</a></span></div>
+                ${target.title ? `<div class="fw-semibold">${esc(target.title)}</div>` : ""}
+                ${target.body ? `<div class="small" style="white-space: pre-line;">${esc(target.body)}</div>` : ""}`;
+    }
     return `<div><span class="text-warning">${"★".repeat(target.stars)}${"☆".repeat(5 - target.stars)}</span>${hidden}
                 <span class="small">${userLink(target.rater)} → ${userLink(target.rated)} (${esc(target.title)})</span></div>
             ${target.comment ? `<div>${esc(target.comment)}</div>` : ""}

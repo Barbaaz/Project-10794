@@ -102,12 +102,20 @@ def test_rematch_merges_duplicates_and_records_redirects(cursor):
                    user, short_game, short_edition)
     cursor.execute("INSERT INTO collection_items (user_id, game_id, edition_id, kind) VALUES (?, ?, ?, 'owned')",
                    user, short_game, short_edition)
+    # reviews: the fan's moves; a user who reviewed both keeps the one on the game that stays
+    both = cursor.execute("INSERT INTO users (username, email, display_name) OUTPUT INSERTED.id "
+                          "VALUES ('both', 'both@x.pt', 'Both')").fetchone()[0]
+    cursor.execute("INSERT INTO game_reviews (user_id, game_id, score) VALUES (?, ?, 9), (?, ?, 3), (?, ?, 7)",
+                   user, short_game, both, short_game, both, full_game)
 
     rematch_all()
 
     assert cursor.execute("SELECT edition_id FROM user_favorites WHERE user_id = ?", user).fetchone()[0] == full_edition
     assert tuple(cursor.execute("SELECT game_id, edition_id FROM collection_items WHERE user_id = ?", user).fetchone())         == (full_game, full_edition)
     assert tuple(cursor.execute("SELECT game_id, edition_id FROM user_listings WHERE user_id = ?", user).fetchone())         == (full_game, full_edition)
+
+    reviews = cursor.execute("SELECT user_id, game_id, score FROM game_reviews ORDER BY user_id").fetchall()
+    assert [tuple(r) for r in reviews] == [(user, full_game, 9), (both, full_game, 7)]
 
     rows = cursor.execute("SELECT DISTINCT game_id FROM store_products").fetchall()
     assert [r[0] for r in rows] == [full_game]

@@ -12,7 +12,7 @@ from flask import Flask, abort, request, jsonify, redirect, render_template, sen
 from werkzeug.exceptions import HTTPException
 
 from app.config import COOKIE_SECURE, SECRET_KEY
-from app.routes import auth, chat, collection, favorites, games, listings, moderation, prices, ratings, stores
+from app.routes import auth, chat, collection, favorites, games, listings, moderation, prices, ratings, reviews, stores
 from app.services.game_service import game_exists, merged_into
 from app.services.photo_storage import MAX_UPLOAD_BYTES, storage
 
@@ -28,7 +28,7 @@ app.config.update(
     MAX_CONTENT_LENGTH=11 * MAX_UPLOAD_BYTES,  # a listing's photos (up to 10) in one request
 )
 for blueprint in (auth.bp, chat.bp, collection.bp, favorites.bp, games.bp, listings.bp, moderation.bp, prices.bp,
-                  ratings.bp, stores.bp):
+                  ratings.bp, reviews.bp, stores.bp):
     app.register_blueprint(blueprint)
 
 CHANGING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}

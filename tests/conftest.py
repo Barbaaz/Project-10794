@@ -92,7 +92,7 @@ def market(web_client, test_db, tmp_path, monkeypatch):
     game_id, edition_id = game("Market Test Game")
     other_game, other_edition = game("Other Game")
     yield {"client": web_client, "game": game_id, "edition": edition_id, "other_edition": other_edition,
-           "dir": tmp_path, "db": c}
+           "other_game": other_game, "dir": tmp_path, "db": c}
     for table in MARKET_TABLES:
         c.execute(f"DELETE FROM {table}")
     c.execute("DELETE FROM game_editions WHERE game_id IN (?, ?)", game_id, other_game)

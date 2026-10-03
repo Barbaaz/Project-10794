@@ -1,7 +1,8 @@
 """
-Moderation. Logged-in users report a listing, a user or a rating; moderators (role moderator
-or admin) see the open reports and act: hide / restore a listing (the seller can't undo a
-hide), hide / restore a rating (a hidden one isn't shown or counted), block / unblock a user
+Moderation. Logged-in users report a listing, a user, a rating or a game review; moderators
+(role moderator or admin) see the open reports and act: hide / restore a listing (the seller
+can't undo a hide), hide / restore a rating or a review (a hidden one isn't shown or counted;
+its writer can't change or delete it), block / unblock a user
 (logged out, can't log in, their listings disappear), or dismiss the report. Every action is
 written to the moderation log. Admins also name and remove moderators; admins themselves are
 only made from the command line (python -m database.users role …).
@@ -11,7 +12,8 @@ from datetime import timedelta
 from sqlalchemy import func, select
 
 from app.models import (
-    NOW, REPORT_KINDS, REPORT_REASONS, Conversation, Listing, ModerationLog, Rating, Report, User, fields,
+    NOW, REPORT_KINDS, REPORT_REASONS, Conversation, GameReview, Listing, ModerationLog, Rating, Report, User,
+    fields,
 )
 from db import session
 
@@ -23,6 +25,7 @@ MAX_NOTE = 500
 ACTIONS = {
     "hide_listing": "listing", "restore_listing": "listing",
     "hide_rating": "rating", "restore_rating": "rating",
+    "hide_review": "review", "restore_review": "review",
     "block_user": "user", "unblock_user": "user",
     "dismiss": None,
 }
@@ -55,7 +58,7 @@ def report(user_id, kind, target_id, reason, details=None):
         if owner is None:
             raise ModerationError("not_found", 404)
         if owner == user_id:
-            raise ModerationError("report_own")              # yourself / your own listing or rating
+            raise ModerationError("report_own")              # yourself / your own listing, rating or review
         already = s.scalar(select(Report.id).where(Report.reporter_id == user_id, Report.kind == kind,
                                                    Report.target_id == target_id, Report.status == "open").limit(1))
         if already:
@@ -76,6 +79,9 @@ def _owner_of(s, kind, target_id):
     if kind == "user":
         user = s.get(User, target_id)
         return user.id if user and user.is_active else None
+    if kind == "review":
+        review = s.get(GameReview, target_id)
+        return review.user_id if review else None
     rating = s.get(Rating, target_id)
     return rating.rater_id if rating else None          # a rating is its writer's
 
@@ -103,6 +109,10 @@ def _summary(s, kind, target_id):
     if kind == "user":
         u = s.get(User, target_id)
         return u and fields(u, "id", "username", "display_name", "role", "is_active", "created_at")
+    if kind == "review":
+        r = s.get(GameReview, target_id)
+        return r and fields(r, "id", "game_id", "score", "title", "body", "hidden", writer=r.user.username,
+                            game=r.game.title, platform=r.game.platform.name)
     r = s.get(Rating, target_id)
     return r and fields(r, "id", "stars", "comment", "reply", "hidden", rater=r.rater.username,
                         rated=s.get(User, r.rated_id).username, title=r.conversation.listing.game.title)
@@ -149,6 +159,11 @@ def _apply(s, moderator, action, target_id):
         if not rating:
             raise ModerationError("not_found", 404)
         rating.hidden = action == "hide_rating"
+    elif action in ("hide_review", "restore_review"):
+        review = s.get(GameReview, target_id)
+        if not review:
+            raise ModerationError("not_found", 404)
+        review.hidden = action == "hide_review"
     else:
         user = s.get(User, target_id)
         if not user:

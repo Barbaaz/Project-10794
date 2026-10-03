@@ -109,9 +109,11 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/collection` · `GET /api/collection/editions` | The user's collection and wishlist with current prices and statistics (per platform / status, hours, worth new / used) · which editions they have (for the game page's Tenho / Quero) |
 | `POST /api/collection` `{edition_id, kind: owned\|wishlist, format?, status?, hours?, notes?}` · `PATCH` / `DELETE /api/collection/<id>` | Add (owning one takes it off the wishlist) · edit (`kind: owned` = bought it) / remove |
 | `PUT /api/collection/settings` `{public}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown) · a public collection |
-| `POST /api/reports` `{kind: listing\|user\|rating, target_id, reason, details?}` | Report something to the moderators (not your own; once while open; 20 a day) |
+| `GET /api/games/<id>/reviews?page=` | Players' reviews of a game on that platform: average, count and how many gave each score 1–10, the user's own review, 20 shown reviews per page (newest first; hidden ones and blocked users' left out; `owner` = has the game in their collection) |
+| `PUT /api/games/<id>/reviews/mine` `{score: 1–10, title?, body?}` · `DELETE` | Write or change one's review (one per user and game) · delete it (not once a moderator hid it) |
+| `POST /api/reports` `{kind: listing\|user\|rating\|review, target_id, reason, details?}` | Report something to the moderators (not your own; once while open; 20 a day) |
 | `GET /api/mod/reports` · `GET /api/mod/problems` · `GET /api/mod/log` | Moderators: open reports grouped by what was reported · purchases with a problem · past actions |
-| `POST /api/mod/actions` `{action, target_id, note?}` | Moderators: `hide_listing` / `restore_listing`, `hide_rating` / `restore_rating`, `block_user` / `unblock_user`, `dismiss` (target = the report) |
+| `POST /api/mod/actions` `{action, target_id, note?}` | Moderators: `hide_listing` / `restore_listing`, `hide_rating` / `restore_rating`, `hide_review` / `restore_review`, `block_user` / `unblock_user`, `dismiss` (target = the report) |
 | `GET /api/mod/conversations/<id>` | Moderators: a purchase's messages, read-only |
 | `GET` / `POST /api/mod/staff` `{username, role: moderator\|user}` | Admins: the moderators and admins · name or remove a moderator |
 | `GET /api/mod/matches?q=` · `POST /api/mod/matches` `{product_ids, edition_id \| game_id + new_edition}` | Moderators: a game's editions with their store products · move products to an edition and pin them there (the daily update and `pipeline.rematch` leave pinned products alone; an edition left empty is merged) |
