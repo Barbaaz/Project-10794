@@ -23,7 +23,7 @@ NOW = func.sysutcdatetime()      # the database's clock, in UTC
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages",
                  "user_favorites", "user_ratings", "reports", "moderation_log", "match_overrides",
-                 "collection_items"}
+                 "collection_items", "game_reviews"}
 
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
 ROLES = ("user", "moderator", "admin")
@@ -265,7 +265,7 @@ class Rating(Base):
 
 # --- moderation --------------------------------------------------------------------------
 
-REPORT_KINDS = ("listing", "user", "rating")
+REPORT_KINDS = ("listing", "user", "rating", "review")
 REPORT_REASONS = ("fake", "scam", "offensive", "wrong_game", "prohibited", "other")
 
 
@@ -345,6 +345,29 @@ class CollectionItem(Base):
 
     game: Mapped[Game] = relationship(lazy="joined")
     edition: Mapped[GameEdition] = relationship(lazy="joined")
+
+
+# --- players' reviews of games ------------------------------------------------------------
+
+class GameReview(Base):
+    """A user's score (1-10) and optional review of a game on one platform (app/services/review_service.py)."""
+    __tablename__ = "game_reviews"
+    __table_args__ = (
+        Index("ux_game_reviews", "user_id", "game_id", unique=True),
+        Index("ix_game_reviews_game", "game_id", "hidden", mssql_include=["score"]),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
+    score: Mapped[int] = mapped_column(TINYINT)
+    title: Mapped[str | None] = mapped_column(Unicode(120))
+    body: Mapped[str | None] = mapped_column(Unicode(4000))
+    hidden: Mapped[bool] = mapped_column(Boolean, server_default="0")    # by a moderator: not shown, not counted
+    created_at = created_at()
+    updated_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+
+    user: Mapped[User] = relationship(lazy="joined")
+    game: Mapped[Game] = relationship(lazy="joined")
 
 
 def fields(obj, *names, **extra):

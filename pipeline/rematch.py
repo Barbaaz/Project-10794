@@ -18,7 +18,7 @@ from collections import Counter, defaultdict
 from sqlalchemy import delete, exists, insert, literal, select, update
 from sqlalchemy.orm import aliased
 
-from app.models import CollectionItem, Favorite, Game, GameEdition, Listing, MergedId, Platform, StoreProduct
+from app.models import CollectionItem, Favorite, Game, GameEdition, GameReview, Listing, MergedId, Platform, StoreProduct
 from core.editions import edition_key_of, is_excluded
 from db import session
 from pipeline.igdb import IGDB_COLUMNS
@@ -154,6 +154,11 @@ def record_merges(s, moves):
                     game_id=select(GameEdition.game_id).where(GameEdition.id == new).scalar_subquery()))
             else:
                 s.execute(update(CollectionItem).where(CollectionItem.game_id == old).values(game_id=new))
+                # players' reviews too (one per user and game: a review they already wrote there wins)
+                theirs = aliased(GameReview)
+                s.execute(delete(GameReview).where(GameReview.game_id == old, exists().where(
+                    theirs.user_id == GameReview.user_id, theirs.game_id == new)))
+                s.execute(update(GameReview).where(GameReview.game_id == old).values(game_id=new))
 
     for old, new in merged["game"].items():
         replaced, replacement = s.get(Game, old), s.get(Game, new)
@@ -212,6 +217,7 @@ def delete_orphans(s):
             ~exists().where(Listing.game_id == Game.id),
             ~exists().where(GameEdition.game_id == Game.id),
             ~exists().where(CollectionItem.game_id == Game.id),
+            ~exists().where(GameReview.game_id == Game.id),
         ).execution_options(synchronize_session=False)
     ).rowcount
 
