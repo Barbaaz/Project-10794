@@ -7,12 +7,22 @@ NOISE_PATTERNS = [
     r"semi[\s-]?novo", r"seminovo", r"usad[oa]", r"novo",
     r"(nintendo\s+)?switch\s*2(\s+edition)?", r"(nintendo\s+)?switch",
     r"playstation\s*[345]?", r"ps[345]",
-    # "Xbox One / Series X", "XBOX ONE | X|S", "Xbox One & Series X", "Xbox Series X|S", "Xbox"
-    r"xbox\s+one\s*[/|&]\s*(xbox\s+)?(series\s+)?x(\s*\|\s*s)?",
-    r"xbox\s+series(\s+[xs](\s*\|\s*s)?)?", r"xbox\s+one", r"xbox", r"series\s+x(\s*\|\s*s)?",
+    # "Xbox One / Series X", "XBOX ONE | X|S", "Xbox One & Series X", "Xbox Series X|S", "X/S", "Xbox"
+    r"xbox\s+one\s*[/|&]\s*(xbox\s+)?(series\s+)?x(\s*[|/]\s*s)?",
+    r"xbox\s+series(\s+[xs](\s*[|/]\s*s)?)?", r"xbox\s+one", r"xbox", r"series\s+x(\s*[|/]\s*s)?",
     r"pc",
 ]
 NOISE_REGEX = re.compile(r"\b(" + "|".join(NOISE_PATTERNS) + r")\b", re.IGNORECASE)
+
+# Roman numerals are numbers in keys ("Dark Souls III" = "DARK SOULS 3", "GTA V" = "GTA 5").
+# "i" and "x" stay letters: "Octopath Traveler I", "Mega Man X", "I Am Bread"
+NUMERALS = {"ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6", "vii": "7", "viii": "8", "ix": "9",
+            "xi": "11", "xii": "12", "xiii": "13", "xiv": "14", "xv": "15", "xvi": "16"}
+
+
+def numerals(key):
+    """A normalized key with its Roman numerals as numbers (also used on keys stored before this rule)."""
+    return " ".join(NUMERALS.get(w, w) for w in key.split())
 
 
 def clean_name(name):
@@ -47,5 +57,5 @@ def normalize_name(name):
     # letras e números separados, para "Vol.2", "Vol. 2" e "vol2" darem o mesmo: "vol 2"
     name = re.sub(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])", " ", name)
 
-    # normalizar espaços
-    return " ".join(name.split())
+    # normalizar espaços; numerais romanos como números
+    return numerals(name)

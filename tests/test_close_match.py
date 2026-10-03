@@ -1,5 +1,5 @@
 """Shortened store names → known games (core/close_match.py)."""
-from core.close_match import close_match
+from core.close_match import KeyIndex, close_match
 
 KNOWN = {
     "star wars galactic racer", "star wars", "final fantasy vii revelation", "tales of eternia remastered",
@@ -35,3 +35,12 @@ def test_several_candidates_means_no_match():
 
 def test_one_word_names_are_too_short_to_guess():
     assert close_match("doom", {"doom eternal"}) is None
+
+
+def test_words_written_together_or_apart_are_the_same_game():
+    index = KeyIndex(["spongebob squarepants the cosmic shake", "lego marvel super heroes 2", "nier automata",
+                      "resident evil 3 4"])
+    assert index.resolve("sponge bob squarepants the cosmic shake") == "spongebob squarepants the cosmic shake"
+    assert index.resolve("lego marvel superheroes 2") == "lego marvel super heroes 2"
+    assert index.resolve("nierautomata") == "nier automata"
+    assert index.resolve("resident evil 34") == "resident evil 34"       # numbers must stay the same

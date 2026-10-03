@@ -22,6 +22,7 @@ from app.models import (
     CollectionItem, Game, GameEdition, GameReview, Listing, MergedId, Platform, Store, StoreProduct,
 )
 from core.editions import edition_key_of, is_excluded
+from core.normalizer import numerals
 from db import session
 from pipeline.igdb import IGDB_COLUMNS
 from pipeline.matcher import MATCH_ONLY_STORES, GameMatcher
@@ -41,7 +42,7 @@ def rematch_all(dry_run=False):
         products = s.scalars(select(StoreProduct).order_by(StoreProduct.id)).all()
         pinned = pinned_editions(s)       # moderators' pins: these products stay where they are
 
-        rekeyed = rekey_editions(s)
+        rekeyed = rekey_games(s) + rekey_editions(s)
         matcher = GameMatcher(s, platform_ids)
         changed = 0
         game_titles = defaultdict(Counter)      # {game_id: Counter of titles from its products}
@@ -84,13 +85,33 @@ def rematch_all(dry_run=False):
             report(s, merged)      # before the merged rows are deleted: it shows their names
         removed = delete_orphans(s)
 
-        log.info("Rematched %d products, %d changed, %d edition keys updated in place, %d names refreshed, "
+        log.info("Rematched %d products, %d changed, %d game / edition keys updated in place, %d names refreshed, "
                  "merged %s, removed %s", len(products), changed, rekeyed, renamed,
                  {k: len(v) for k, v in merged.items()}, removed)
         if dry_run:
             s.rollback()     # session() commits what's left at the end: nothing
             log.info("Dry run: nothing was changed")
     return changed, merged, removed
+
+
+def rekey_games(s):
+    """
+    Bring stored game keys to the current key rules in place ("dark souls iii" → "dark souls 3"),
+    so a game keeps its id. Where the new key is already taken on that platform (both spellings
+    were separate games), the rematch merges the two (and records it).
+    """
+    games = s.scalars(select(Game).order_by(Game.id)).all()
+    taken = {(g.platform_id, g.normalized_title) for g in games}
+    updated = 0
+    for g in games:
+        new = numerals(g.normalized_title)
+        if new != g.normalized_title and (g.platform_id, new) not in taken:
+            taken.discard((g.platform_id, g.normalized_title))
+            taken.add((g.platform_id, new))
+            g.normalized_title = new
+            updated += 1
+    s.flush()
+    return updated
 
 
 def rekey_editions(s):

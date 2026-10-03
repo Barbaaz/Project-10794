@@ -19,7 +19,7 @@ import re
 import string
 from dataclasses import dataclass
 
-from core.normalizer import clean_name, normalize_name
+from core.normalizer import clean_name, normalize_name, numerals
 
 EDITION_END = {"edition", "edicao", "version", "versao"}
 
@@ -52,12 +52,25 @@ BRACKET_TAGS = [
     ("Import US", re.compile(r"edi[cç][aã]o\s+americana", re.IGNORECASE)),       # Gaming Replay's imports
     ("Import Asia", re.compile(r"edi[cç][aã]o\s+asi[aá]tica", re.IGNORECASE)),
 ]
-# A bonus that comes with the game, written after it: "Mortal Kombat 1 Switch - Oferta DLC" (Gaming Replay)
-OFFER_SUFFIX = re.compile(r"\s+[-–]\s+oferta\b.*$", re.IGNORECASE)
+# A bonus or note written after the game: "Mortal Kombat 1 Switch - Oferta DLC" (Gaming Replay),
+# "BORDERLANDS 3 Oferta DLC", "MARVEL AVENGERS Com Ofertas" (Mega Mania), "FC 24 - Inclui Update ..."
+OFFER_SUFFIX = re.compile(
+    r"\s+(?:[-–]\s+oferta\b|com\s+ofertas?\b|ofertas?\s+(?:dlc|postal)\b|[-–]\s+inclui\b).*$", re.IGNORECASE)
 # Tags that appear anywhere in the name
 NAME_TAGS = [
     ("Game Key Card", re.compile(r"\bgame[\s-]*key[\s-]*card\b", re.IGNORECASE)),
+    # "PS Hits", "PSHits", "PlayStation Hits", or "HITS" ending the name ("RESIDENT EVIL 7 BIOHAZARD HITS PS4");
+    # not "Greatest Hits"
+    ("PlayStation Hits", re.compile(
+        r"\b(?:playstation|ps)\s*hits\b|(?<!greatest)\s+hits\b(?=\s*(?:ps\s*[45]|playstation\s*[45])?\s*$)",
+        re.IGNORECASE)),
 ]
+# "Steelbook Silent Hill: Townfall": the edition written first
+LEADING_STEELBOOK = re.compile(r"^steelbook\s+(.+)$", re.IGNORECASE)
+
+# Portuguese editions, "Edição ..." near the end: "Edição Especial Limitada", "Edição Jogo do Ano"
+PORTUGUESE_EDITION_WORDS = {"especial", "limitada", "colecionador", "de", "jogo", "do", "ano", "definitiva",
+                            "completa", "ouro"}
 
 DASH_SPLIT = re.compile(r"\s+[-–]\s+")
 BRACKETS = re.compile(r"[\(\[]([^\)\]]*)[\)\]]")
@@ -80,6 +93,8 @@ def is_excluded(name):
 def parse_title(name, known_phrases=()):
     text, tags = extract_tags(name)
     cleaned = clean_name(text)
+    if m := LEADING_STEELBOOK.match(cleaned):
+        cleaned = f"{m.group(1)} Steelbook"
 
     game_title, phrase, edition_text = split_on_dash(cleaned)
     if game_title is None:
@@ -105,6 +120,10 @@ EDITION_SYNONYMS = [
     ("day 1", "day one"),
     ("director s", "directors"),
     ("collector", "collectors"),
+    # Portuguese: "Edição Especial" = "Special Edition"
+    ("jogo do ano", "goty"), ("de colecionador", "collectors"), ("colecionador", "collectors"),
+    ("especial", "special"), ("limitada", "limited"), ("definitiva", "definitive"), ("completa", "complete"),
+    ("ouro", "gold"),
     ("edicao", ""), ("versao", ""),   # "Edição Deluxe"
 ]
 # Words that don't change which edition it is
@@ -117,7 +136,7 @@ def edition_key_of(phrase):
     "Steelbook Day One Edition" = "Day 1 Edition Steelbook", "Game of the Year" = "GOTY".
     The words are sorted, so their order doesn't matter.
     """
-    text = f" {phrase} "
+    text = f" {numerals(phrase)} "
     for written, same in EDITION_SYNONYMS:
         text = text.replace(f" {written} ", f" {same} ")
     return " ".join(sorted({w for w in text.split() if w not in EDITION_FILLER}))
@@ -171,10 +190,13 @@ def split_on_words(cleaned, known_phrases):
             break
     else:
         # Rule 3: trailing edition words, ending in "edition" or a strong word,
-        # or Portuguese order "Edição Standard" / "Edição Gold"
-        portuguese = len(tokens) > 2 and tokens[-2] in ("edicao", "versao") and tokens[-1] in EDITION_WORDS
-        if tokens and (tokens[-1] in EDITION_END | STRONG_EDITION_WORDS or portuguese):
-            while cut > 0 and tokens[cut - 1] in EDITION_WORDS:
+        # or Portuguese order "Edição Standard" / "Edição Especial Limitada" / "Edição Jogo do Ano"
+        portuguese = portuguese_edition_start(tokens)
+        if portuguese is not None:
+            cut = portuguese
+        if tokens and (tokens[-1] in EDITION_END | STRONG_EDITION_WORDS or portuguese is not None):
+            # "Day 1" is the edition too: "GAME X DAY 1 STEELBOOK EDITION"
+            while cut > 0 and (tokens[cut - 1] in EDITION_WORDS or tokens[cut - 2:cut] == ["day", "1"]):
                 cut -= 1
         if cut > 1 and tokens[cut:] and all(t in EDITION_END for t in tokens[cut:]):
             cut -= 1  # "midnight edition"
@@ -184,6 +206,15 @@ def split_on_words(cleaned, known_phrases):
 
     game_title, edition_text = cut_display(cleaned, cut)
     return game_title, " ".join(tokens[cut:]), edition_text
+
+
+def portuguese_edition_start(tokens):
+    """Where "edição ..." starts when the name ends with it ("... edicao especial limitada"), else None."""
+    for i in range(len(tokens) - 2, max(len(tokens) - 6, 0), -1):
+        if tokens[i] in ("edicao", "versao"):
+            rest = tokens[i + 1:]
+            return i if all(w in EDITION_WORDS | PORTUGUESE_EDITION_WORDS for w in rest) else None
+    return None
 
 
 def cut_display(cleaned, n_tokens):

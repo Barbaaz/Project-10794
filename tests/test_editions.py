@@ -109,3 +109,52 @@ def test_gaming_replay_names(name, game_key, edition_key):
 def test_coib_is_code_in_box():
     assert is_excluded("Sushi Bar Express (COIB) Switch")
     assert not is_excluded("Coibra Racing PS5")
+
+
+# Found by the audit of every stored name (2026-10-03)
+@pytest.mark.parametrize("name, game_key, edition_key", [
+    # "Day 1" before edition words is part of the edition
+    ("GAME X DAY 1 STEELBOOK EDITION PS5", "game x", "day one steelbook"),
+    # offers written without a dash
+    ("BORDERLANDS 3 (EM PORTUGUÊS) Oferta DLC XBOX ONE", "borderlands 3", ""),
+    ("MARVEL AVENGERS Com Ofertas PS4", "marvel avengers", ""),
+    ("EA Sports FC 24 PS5 - Inclui Update UEFA EURO 2024™", "ea sports fc 24", ""),
+    # PlayStation Hits outside brackets is the same tag
+    ("RESIDENT EVIL 7 BIOHAZARD HITS PS4", "resident evil 7 biohazard", "|PlayStation Hits"),
+    ("Resident Evil 7: Biohazard - PSHits PS4", "resident evil 7 biohazard", "|PlayStation Hits"),
+    ("Yakuza 6 The Song Of Life PS Hits PS4", "yakuza 6 the song of life", "|PlayStation Hits"),
+    ("Horizon Zero Dawn - Complete Edition - Hits PS4", "horizon zero dawn", "complete|PlayStation Hits"),
+    # Portuguese editions get the English keys
+    ("SPIDER-MAN Edição Jogo do Ano PS4", "spiderman", "goty"),
+    ("Metroid Ravenous Edição Especial - Nintendo Switch 2", "metroid ravenous", "special"),
+    ("Jogo Master Detective Archives: RAIN CODE Edição Especial Limitada Nintendo Switch",
+     "master detective archives rain code", "limited special"),
+    ("Game X Edição de Colecionador PS5", "game x", "collectors"),
+    # a leading "Steelbook"
+    ("Steelbook Silent Hill: Townfall", "silent hill townfall", "steelbook"),
+    # "Xbox One / Series X/S"
+    ("Jogo Saints Row - Day One Edition Xbox One / Series X/S", "saints row", "day one"),
+])
+def test_audit_names(name, game_key, edition_key):
+    parsed = parse_title(name)
+    assert (parsed.game_key, parsed.edition_key) == (game_key, edition_key)
+
+
+@pytest.mark.parametrize("a, b", [
+    ("Dark Souls III PS4", "DARK SOULS 3 PS4"),
+    ("Grand Theft Auto V PS4", "Grand Theft Auto 5 PS4"),
+    ("Final Fantasy VII Rebirth PS5", "FINAL FANTASY 7 REBIRTH PS5"),
+    ("Warhammer 40,000: Space Marine II PS5", "Warhammer 40,000: Space Marine 2 PS5"),
+])
+def test_roman_numerals_are_numbers(a, b):
+    assert normalize_name(a) == normalize_name(b)
+
+
+@pytest.mark.parametrize("name", ["Mega Man X Legacy Collection PS4", "Octopath Traveler I PS4", "I Am Bread PS4"])
+def test_i_and_x_stay_letters(name):
+    assert normalize_name(name).split()[-1] in ("collection", "i", "bread")
+    assert not any(w.isdigit() for w in normalize_name(name).split())
+
+
+def test_special_edition_in_portuguese_is_the_english_one():
+    assert parse_title("Game X Edição Especial PS5").edition_key == parse_title("Game X - Special Edition PS5").edition_key

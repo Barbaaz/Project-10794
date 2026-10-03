@@ -83,6 +83,7 @@ class KeyIndex:
 
     def __init__(self, keys=()):
         self.by_first = {}
+        self.by_compact = {}     # the key without spaces: "sponge bob" and "spongebob" are one game
         for key in keys:
             self.add(key)
 
@@ -90,6 +91,7 @@ class KeyIndex:
         words = expand(key).split()
         if words:
             self.by_first.setdefault(words[0], set()).add(key)
+            self.by_compact.setdefault("".join(words), set()).add(key)
 
     def __contains__(self, key):
         words = expand(key).split()
@@ -103,6 +105,14 @@ class KeyIndex:
         words = expand(key).split()
         if not words:
             return key
+        # The same words written together or apart ("SpongeBob" / "Sponge Bob", "Nier:Automata"),
+        # with the same numbers ("resident evil 3 4" isn't "resident evil 34"). When both are known
+        # (an old duplicate), always the same one wins, so they merge
+        twins = [k for k in self.by_compact.get("".join(words), ()) if k != key and numbers(k.split()) == numbers(words)]
+        if twins:
+            if key in self:
+                twins.append(key)
+            return max(twins, key=lambda k: (len(k.split()), k))
         found = [k for k in self.by_first.get(words[0], ()) if k != key and fits(key, k)]
         # Candidates that only differ by "the" / an abbreviation are one game written two ways
         if not found or len({expand(k) for k in found}) != 1:
