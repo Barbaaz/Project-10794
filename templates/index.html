@@ -33,6 +33,11 @@
             position: absolute; top: .4rem; right: .4rem; width: 1.75rem; height: 1.75rem; padding: 0;
             border-radius: 50%; line-height: 1; font-size: 1.05rem;
         }
+        /* 📚 / ⭐ under the star: the edition is in the user's collection / wishlist */
+        .fav-mark { position: absolute; right: -.3rem; bottom: -.3rem; font-size: .65rem; line-height: 1; }
+        /* The star's menu (favourite, collection, wishlist), inside the cover so the card doesn't clip it */
+        .card-menu { top: 2.4rem; right: .4rem; min-width: 9rem; font-size: .85rem; z-index: 5; }
+        .card-menu .check { display: inline-block; width: 1.1rem; }
         /* One button per store, linking to the product on the store's site */
         .offer-btn {
             display: flex; justify-content: space-between; align-items: baseline; gap: .4rem;
@@ -116,6 +121,7 @@ let stores = {};
 let genres = [];     // categories with games in stock (/api/genres), for the category filter
 let tags = [];       // tags for the tag filter (/api/tags): game modes, themes, prices
 let favorites = [];     // the logged-in user's favourite edition ids (kept in the account: loadFavoriteIds)
+let collectionIds = {};     // {edition_id: {owned?: item id, wishlist?: item id}} (loadCollectionIds)
 // esc(), storeName(), saved() / save(), toggleDark(): static/common.js
 
 function handleSearch(event) {
@@ -162,8 +168,8 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
                 ${coverBadge}
                 ${group.at_historical_low ? `<span class="badge text-bg-success low-price-badge"
                     title="${esc(t("low_badge_hint"))}">${t("low_badge")}</span>` : ""}
-                <button type="button" class="btn btn-light fav-btn shadow-sm"
-                    aria-label="${t("favorite")}" aria-pressed="${isFavorite(group)}">${isFavorite(group) ? "★" : "☆"}</button>
+                <button type="button" class="btn btn-light fav-btn shadow-sm" data-edition="${group.edition_id}"
+                    aria-label="${t("card_menu")}" aria-haspopup="menu" aria-expanded="false">${starButton(group)}</button>
             </div>
             <div class="card-body d-flex flex-column">
                 <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(group.name)}">${esc(group.name)}</a>
@@ -173,7 +179,7 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
                 <div class="mt-auto">${rows}${more}</div>
             </div>
         </div>`;
-    col.querySelector(".fav-btn").onclick = () => toggleFavorite(group);
+    col.querySelector(".fav-btn").onclick = e => toggleCardMenu(e.currentTarget, group);
     return col;
 }
 
@@ -935,17 +941,99 @@ function isFavorite(group) {
     return favorites.includes(group.edition_id);
 }
 
-// The star: logged out, it asks to log in first (favourites belong to an account)
-async function toggleFavorite(group) {
+// The user's collection and wishlist, to mark the cards (app/services/collection_service.py)
+async function loadCollectionIds() {
+    collectionIds = currentUser
+        ? await fetch("/api/collection/editions").then(r => r.ok ? r.json() : {}).catch(() => ({}))
+        : {};
+}
+
+// The card's star: ★ = favourite; a small 📚 / ⭐ under it = in the collection / wishlist
+function starButton(group) {
+    const mine = collectionIds[group.edition_id] || {};
+    const mark = mine.owned ? "📚" : mine.wishlist ? "⭐" : "";
+    return `${isFavorite(group) ? "★" : "☆"}${mark ? `<span class="fav-mark" aria-hidden="true">${mark}</span>` : ""}`;
+}
+
+// The star opens a menu for the card's edition: ★ Favorito, 📚 Tenho, ⭐ Quero, each on / off.
+// One menu open at a time; Esc, a click elsewhere or Tab closes it
+let cardMenu = null;    // {menu, button, group}
+
+function toggleCardMenu(button, group) {
+    const wasOpen = cardMenu?.button === button;
+    closeCardMenu();
+    if (wasOpen) return;
+    const menu = document.createElement("div");
+    menu.className = "dropdown-menu show card-menu shadow";
+    menu.setAttribute("role", "menu");
+    button.after(menu);
+    button.setAttribute("aria-expanded", "true");
+    cardMenu = { menu, button, group };
+    fillCardMenu("favorite");
+}
+
+function fillCardMenu(focusKind) {
+    const { menu, group } = cardMenu;
+    const mine = collectionIds[group.edition_id] || {};
+    const items = [["favorite", `★ ${t("favorite")}`, isFavorite(group)],
+                   ["owned", t("collection_add_owned"), Boolean(mine.owned)],
+                   ["wishlist", t("collection_add_wishlist"), Boolean(mine.wishlist)]];
+    menu.innerHTML = items.map(([kind, label, on]) => `
+        <button type="button" class="dropdown-item" role="menuitemcheckbox" aria-checked="${on}" data-kind="${kind}">
+            <span class="check">${on ? "✓" : ""}</span>${esc(label)}</button>`).join("");
+    menu.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => toggleCardItem(group, b.dataset.kind));
+    menu.querySelector(`[data-kind="${focusKind}"]`).focus();
+}
+
+function closeCardMenu(focusButton = false) {
+    if (!cardMenu) return;
+    cardMenu.menu.remove();
+    cardMenu.button.setAttribute("aria-expanded", "false");
+    if (focusButton) cardMenu.button.focus();
+    cardMenu = null;
+}
+
+document.addEventListener("click", e => {
+    if (cardMenu && !cardMenu.menu.contains(e.target) && !cardMenu.button.contains(e.target)) closeCardMenu();
+});
+
+document.addEventListener("keydown", e => {
+    if (!cardMenu) return;
+    if (e.key === "Escape") return closeCardMenu(true);
+    if (e.key === "Tab") return closeCardMenu();
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const items = [...cardMenu.menu.querySelectorAll("[data-kind]")];
+        const next = items.indexOf(document.activeElement) + (e.key === "ArrowDown" ? 1 : -1);
+        items[(next + items.length) % items.length].focus();
+    }
+});
+
+// Logged out, every entry asks to log in first (favourites and the collection belong to an account)
+async function toggleCardItem(group, kind) {
     if (!currentUser) return location.assign(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
     const id = group.edition_id;
-    const { ok, data } = await api(`/api/favorites/${id}`, { method: favorites.includes(id) ? "DELETE" : "PUT" });
-    if (!ok) return;
-    favorites = data;
-
-    if (hasSearched) return renderSearch();
-    if (frontTab === "favorites") frontData.favorites = (frontData.favorites || []).filter(g => favorites.includes(g.edition_id));
-    renderFront();
+    if (kind === "favorite") {
+        const { ok, data } = await api(`/api/favorites/${id}`, { method: favorites.includes(id) ? "DELETE" : "PUT" });
+        if (!ok) return;
+        favorites = data;
+        // taken off the favourites tab: the card goes
+        if (!hasSearched && frontTab === "favorites" && !favorites.includes(id)) {
+            closeCardMenu();
+            frontData.favorites = (frontData.favorites || []).filter(g => favorites.includes(g.edition_id));
+            return renderFront();
+        }
+    } else {
+        const item = (collectionIds[id] || {})[kind];
+        const { ok } = item
+            ? await api(`/api/collection/${item}`, { method: "DELETE" })
+            : await api("/api/collection", { body: { edition_id: id, kind } });
+        if (!ok) return;
+        await loadCollectionIds();      // "Tenho" also takes it off the wishlist
+    }
+    // the same edition can be on more than one card
+    document.querySelectorAll(`.fav-btn[data-edition="${id}"]`).forEach(b => b.innerHTML = starButton(group));
+    if (cardMenu) fillCardMenu(kind);
 }
 
 applyI18n();
@@ -954,7 +1042,7 @@ applyI18n();
 // /?q=zelda opens with that search, so searches can be bookmarked or shared
 (async () => {
     await renderAccountArea();
-    await loadFavoriteIds();
+    await Promise.all([loadFavoriteIds(), loadCollectionIds()]);
     await loadFilters();
     const params = new URLSearchParams(location.search);
     const q = params.get("q");
