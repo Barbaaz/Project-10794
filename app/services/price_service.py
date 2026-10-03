@@ -18,12 +18,12 @@ def attach_store_offers(items):
     others = fetch_all(
         f"""
         SELECT sp.id AS offer_id, sp.edition_id, s.slug AS store, s.name AS store_name, sp.condition,
-               last.price, CAST(1 AS BIT) AS in_stock, sp.is_preorder, sp.url, sp.image_url AS image
+               last.price, true AS in_stock, sp.is_preorder, sp.url, sp.image_url AS image
         FROM store_products sp
         JOIN stores s ON s.id = sp.store_id
         {LATEST_PRICE}
-        WHERE sp.edition_id IN ({placeholders(edition_ids)}) AND sp.is_active = 1 AND sp.condition = 'new' AND last.in_stock = 1
-        ORDER BY last.price
+        WHERE sp.edition_id IN ({placeholders(edition_ids)}) AND sp.is_active AND sp.condition = 'new' AND last.in_stock
+        ORDER BY last.price, sp.id
         """,
         *edition_ids,
     )
@@ -55,12 +55,12 @@ def _featured_discounts(limit, min_percent, platform):
     return fetch_all(
         f"""
         WITH ranked AS (
-            SELECT o.*, ROW_NUMBER() OVER (PARTITION BY o.edition_id ORDER BY o.price, o.discount_percent DESC) AS rn
+            SELECT o.*, ROW_NUMBER() OVER (PARTITION BY o.edition_id ORDER BY o.price, o.discount_percent DESC, o.store_product_id) AS rn
             FROM current_offers o
-            WHERE o.is_discount = 1 AND o.is_active = 1 AND o.in_stock = 1
+            WHERE o.is_discount AND o.is_active AND o.in_stock
               AND o.condition = 'new' AND o.discount_percent >= ?
         )
-        SELECT TOP ({int(limit)}) g.title, g.title_en, g.cover_image_id, p.code AS platform, p.name AS platform_name,
+        SELECT g.title, g.title_en, g.cover_image_id, p.code AS platform, p.name AS platform_name,
                e.name AS edition, e.edition_key, {OFFER_COLUMNS}
         FROM ranked o
         JOIN stores s ON s.id = o.store_id
@@ -68,7 +68,8 @@ def _featured_discounts(limit, min_percent, platform):
         JOIN platforms p ON p.id = g.platform_id
         JOIN game_editions e ON e.id = o.edition_id
         WHERE o.rn = 1 AND (? IS NULL OR p.code = ?)
-        ORDER BY o.discount_percent DESC, o.price
+        ORDER BY o.discount_percent DESC, o.price, o.store_product_id
+        LIMIT {int(limit)}
         """,
         min_percent, platform, platform,
     )
@@ -92,27 +93,26 @@ def _best_store_deals(limit, min_percent, max_percent, platform):
         WITH offers AS (
             SELECT sp.id AS offer_id, sp.edition_id, sp.store_id, last.price
             FROM store_products sp {LATEST_PRICE}
-            WHERE sp.is_active = 1 AND sp.condition = 'new' AND last.in_stock = 1 AND sp.edition_id IS NOT NULL
+            WHERE sp.is_active AND sp.condition = 'new' AND last.in_stock AND sp.edition_id IS NOT NULL
         ),
         -- the cheapest offer of each store, then the stores ranked by price
         per_store AS (
-            SELECT *, ROW_NUMBER() OVER (PARTITION BY edition_id, store_id ORDER BY price) AS store_rn
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY edition_id, store_id ORDER BY price, offer_id) AS store_rn
             FROM offers
         ),
         ranked AS (
-            SELECT *, ROW_NUMBER() OVER (PARTITION BY edition_id ORDER BY price) AS rn
+            SELECT *, ROW_NUMBER() OVER (PARTITION BY edition_id ORDER BY price, offer_id) AS rn
             FROM per_store WHERE store_rn = 1
         ),
         gaps AS (
             SELECT a.offer_id, a.edition_id, a.price, b.price AS next_price, b.store_id AS next_store_id,
-                   CAST(ROUND(100.0 * (b.price - a.price) / b.price, 0) AS INT) AS savings_percent
+                   CAST(ROUND(100.0 * (b.price - a.price) / b.price, 0) AS integer) AS savings_percent
             FROM ranked a JOIN ranked b ON b.edition_id = a.edition_id AND b.rn = 2
             WHERE a.rn = 1
         )
-        SELECT TOP ({int(limit)})
-               g.title, g.title_en, g.cover_image_id, p.code AS platform, p.name AS platform_name, e.name AS edition, e.edition_key,
+        SELECT g.title, g.title_en, g.cover_image_id, p.code AS platform, p.name AS platform_name, e.name AS edition, e.edition_key,
                sp.id AS offer_id, sp.game_id, sp.edition_id, s.slug AS store, s.name AS store_name,
-               sp.condition, gap.price, CAST(1 AS BIT) AS in_stock, sp.is_preorder, sp.url,
+               sp.condition, gap.price, true AS in_stock, sp.is_preorder, sp.url,
                sp.image_url AS image, sp.external_name,
                gap.next_price, ns.slug AS next_store, gap.savings_percent
         FROM gaps gap
@@ -123,7 +123,8 @@ def _best_store_deals(limit, min_percent, max_percent, platform):
         JOIN platforms p ON p.id = g.platform_id
         JOIN game_editions e ON e.id = sp.edition_id
         WHERE gap.savings_percent BETWEEN ? AND ? AND (? IS NULL OR p.code = ?)
-        ORDER BY gap.savings_percent DESC, gap.price
+        ORDER BY gap.savings_percent DESC, gap.price, gap.offer_id
+        LIMIT {int(limit)}
         """,
         min_percent, max_percent, platform, platform,
     )
@@ -131,7 +132,7 @@ def _best_store_deals(limit, min_percent, max_percent, platform):
 
 def list_discounts(platform=None, min_percent=0, page=1, per_page=20):
     """Offers that are really on sale (see current_offers in database/views.sql), biggest first."""
-    where = ["o.is_discount = 1", "o.is_active = 1", "o.in_stock = 1", "o.discount_percent >= ?"]
+    where = ["o.is_discount", "o.is_active", "o.in_stock", "o.discount_percent >= ?"]
     params = [min_percent]
 
     if platform:
@@ -152,7 +153,7 @@ def list_discounts(platform=None, min_percent=0, page=1, per_page=20):
         f"""
         SELECT g.title, p.code AS platform, e.name AS edition, {OFFER_COLUMNS}
         {sql_from}
-        ORDER BY o.discount_percent DESC, o.price
+        ORDER BY o.discount_percent DESC, o.price, o.store_product_id
         OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
         """,
         *params, (page - 1) * per_page, per_page,

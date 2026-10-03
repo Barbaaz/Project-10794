@@ -23,7 +23,7 @@ def test_modes_and_themes_on_the_database(test_db):
                                        ("T Solo", "Single player", "Kids", "3"),
                                        ("T Mmo", "Massively Multiplayer Online (MMO)", "", None)]:
         ids[title] = c.execute("INSERT INTO games (platform_id, title, normalized_title, game_modes, themes, pegi) "
-                               "OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)",
+                               "VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
                                ps5, title, title.lower(), modes, themes, pegi).fetchone()[0]
     try:
         def matching(tags=(), pegi=None):
@@ -64,16 +64,16 @@ def test_historical_low_needs_a_real_drop(app_on_test_db):
     made = {"games": [], "editions": [], "products": []}
 
     def edition_with_prices(name, prices):
-        game = c.execute("INSERT INTO games (platform_id, title, normalized_title) OUTPUT INSERTED.id VALUES (?, ?, ?)",
+        game = c.execute("INSERT INTO games (platform_id, title, normalized_title) VALUES (?, ?, ?) RETURNING id",
                          ps5, name, name.lower()).fetchone()[0]
-        edition = c.execute("INSERT INTO game_editions (game_id, edition_key, name) OUTPUT INSERTED.id "
-                            "VALUES (?, '', 'Standard')", game).fetchone()[0]
+        edition = c.execute("INSERT INTO game_editions (game_id, edition_key, name) "
+                            "VALUES (?, '', 'Standard') RETURNING id", game).fetchone()[0]
         sp = c.execute("INSERT INTO store_products (store_id, game_id, edition_id, platform_id, external_name, url) "
-                       "OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?)", store, game, edition, ps5, name,
+                       "VALUES (?, ?, ?, ?, ?, ?) RETURNING id", store, game, edition, ps5, name,
                        f"https://low.test/{name}").fetchone()[0]
         for days_ago, price in prices:
             c.execute("INSERT INTO price_snapshots (store_product_id, price, in_stock, scraped_at) "
-                      "VALUES (?, ?, 1, DATEADD(DAY, ?, SYSUTCDATETIME()))", sp, price, -days_ago)
+                      "VALUES (?, ?, true, utcnow() - make_interval(days => ?))", sp, price, days_ago)
         made["games"].append(game); made["editions"].append(edition); made["products"].append(sp)
         return edition
 

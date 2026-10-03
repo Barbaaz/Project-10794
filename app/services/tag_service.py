@@ -41,10 +41,10 @@ THEMES = {
 # The same rule for the tag, the "★ Mínimo histórico" badge on cards and the game page.
 AT_HISTORICAL_LOW = f"""
     SELECT sp.edition_id FROM store_products sp {LATEST_PRICE}
-    WHERE sp.is_active = 1 AND sp.condition = 'new' AND last.in_stock = 1 AND sp.edition_id IS NOT NULL
+    WHERE sp.is_active AND sp.condition = 'new' AND last.in_stock AND sp.edition_id IS NOT NULL
       AND EXISTS (SELECT 1 FROM price_snapshots earlier WHERE earlier.store_product_id = sp.id AND earlier.price > last.price)
       AND last.price <= (SELECT MIN(hp.price) FROM store_products h JOIN price_snapshots hp ON hp.store_product_id = h.id
-                         WHERE h.edition_id = sp.edition_id AND h.condition = 'new' AND hp.in_stock = 1)"""
+                         WHERE h.edition_id = sp.edition_id AND h.condition = 'new' AND hp.in_stock)"""
 
 
 def mark_historical_lows(groups, key="edition_id"):
@@ -61,7 +61,7 @@ def mark_historical_lows(groups, key="edition_id"):
 # with its best price, offers = store offers in stock, used = active listings)
 PRICE_TAGS = {
     "on_sale": """EXISTS (SELECT 1 FROM current_offers d WHERE d.edition_id = ed.edition_id
-                  AND d.is_discount = 1 AND d.is_active = 1 AND d.in_stock = 1)""",
+                  AND d.is_discount AND d.is_active AND d.in_stock)""",
     "historical_low": f"ed.edition_id IN ({AT_HISTORICAL_LOW})",
     "used": "ed.edition_id IN (SELECT edition_id FROM used)",
 }

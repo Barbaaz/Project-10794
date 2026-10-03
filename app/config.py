@@ -2,14 +2,12 @@ import os
 import secrets
 from pathlib import Path
 
-# Override with the DB_CONNECTION_STRING environment variable on other machines
+# PostgreSQL. Override with the DB_CONNECTION_STRING environment variable on other machines.
+# No password here: on a development machine it's in the user's pgpass file
+# (%APPDATA%\postgresql\pgpass.conf on Windows, ~/.pgpass elsewhere); Docker puts it in the URL.
 DB_CONNECTION_STRING = os.environ.get(
     "DB_CONNECTION_STRING",
-    # Driver 17 returns DATETIME2 as datetime; the old "{SQL Server}" driver returns text
-    "DRIVER={ODBC Driver 17 for SQL Server};"
-    "SERVER=localhost\\SQLEXPRESS;"
-    "DATABASE=Project10794;"
-    "Trusted_Connection=yes;"
+    "postgresql://project10794@localhost:5432/project10794",
 )
 
 INSTANCE_DIR = Path(__file__).resolve().parent.parent / "instance"   # local, never committed

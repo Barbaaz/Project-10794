@@ -26,8 +26,7 @@ def list_stores():
         SELECT x.slug, x.name, x.base_url, x.color_slot, x.last_updated,
                latest.status AS last_status, latest.finished_at AS last_run_at,
                CASE WHEN latest.status <> 'success' THEN LEFT(latest.error_message, 300) END AS last_error,
-               CAST(CASE WHEN x.last_updated IS NULL
-                          OR x.last_updated < DATEADD(HOUR, ?, SYSUTCDATETIME()) THEN 1 ELSE 0 END AS BIT) AS is_stale
+               (x.last_updated IS NULL OR x.last_updated < utcnow() + make_interval(hours => ?)) AS is_stale
         FROM (
             SELECT s.id, s.slug, s.name, s.base_url, s.is_active,
                    ROW_NUMBER() OVER (ORDER BY s.id) AS color_slot,
@@ -35,13 +34,14 @@ def list_stores():
                     WHERE r.store_id = s.id AND r.status = 'success') AS last_updated
             FROM stores s
         ) x
-        OUTER APPLY (
-            SELECT TOP 1 r.status, r.finished_at, r.error_message
+        LEFT JOIN LATERAL (
+            SELECT r.status, r.finished_at, r.error_message
             FROM scrape_runs r
             WHERE r.store_id = x.id AND r.status <> 'running'
             ORDER BY r.id DESC
-        ) latest
-        WHERE x.is_active = 1
+            LIMIT 1
+        ) latest ON true
+        WHERE x.is_active
         ORDER BY x.name
         """,
         -STALE_AFTER_HOURS,
@@ -53,7 +53,7 @@ def list_platforms():
     # Only platforms with something on sale, in display order
     return jsonify(fetch_all("""
         SELECT p.code, p.name FROM platforms p
-        WHERE EXISTS (SELECT 1 FROM store_products sp WHERE sp.platform_id = p.id AND sp.is_active = 1)
+        WHERE EXISTS (SELECT 1 FROM store_products sp WHERE sp.platform_id = p.id AND sp.is_active)
         ORDER BY p.sort_order, p.name
     """))
 

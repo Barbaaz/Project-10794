@@ -1,8 +1,5 @@
 -- Views for the API. Run after schema.sql. Safe to re-run.
 
-USE Project10794;
-GO
-
 -- ============================================================
 -- current_offers: one row per store product with its current price and
 -- whether it is REALLY on sale.
@@ -13,13 +10,15 @@ GO
 -- price we recorded in the 30 days before the price dropped.
 --
 -- We also need to have watched the product for those whole 30 days;
--- otherwise we can't know whether it was cheaper before, so is_discount = 0.
+-- otherwise we can't know whether it was cheaper before, so is_discount = false.
 -- ============================================================
-CREATE OR ALTER VIEW dbo.current_offers AS
+BEGIN;
+DROP VIEW IF EXISTS current_offers;   -- re-made whole: CREATE OR REPLACE can't change its columns
+CREATE VIEW current_offers AS
 WITH snapshots AS (
     SELECT store_product_id, price, scraped_at, id,
            LAG(price) OVER (PARTITION BY store_product_id ORDER BY scraped_at, id) AS previous_price
-    FROM dbo.price_snapshots
+    FROM price_snapshots
 ),
 -- A snapshot can be a stock-only change; keep the rows where the price changed
 price_changes AS (
@@ -39,23 +38,21 @@ current_period AS (
     FROM price_periods
     WHERE valid_to IS NULL
 ),
--- Lowest price in effect during the 30 days before the current price started.
--- HASH JOIN: SQL Server badly underestimates these CTEs and otherwise picks a
--- nested loop that recomputes the whole price history once per product (minutes instead of ms).
+-- Lowest price in effect during the 30 days before the current price started
 reference AS (
     SELECT c.store_product_id, MIN(p.price) AS reference_price
     FROM current_period c
-    INNER HASH JOIN price_periods p
+    JOIN price_periods p
       ON p.store_product_id = c.store_product_id
      AND p.valid_to IS NOT NULL
-     AND p.valid_to > DATEADD(DAY, -30, c.valid_from)
+     AND p.valid_to > c.valid_from - interval '30 days'
     GROUP BY c.store_product_id
 ),
 latest AS (
     SELECT store_product_id, price, old_price, in_stock,
            ROW_NUMBER() OVER (PARTITION BY store_product_id ORDER BY scraped_at DESC, id DESC) AS rn,
            MIN(scraped_at) OVER (PARTITION BY store_product_id) AS tracked_since
-    FROM dbo.price_snapshots
+    FROM price_snapshots
 ),
 offers AS (
     SELECT
@@ -78,23 +75,21 @@ offers AS (
         l.tracked_since,
         cur.valid_from AS price_since,
         ref.reference_price                       -- lowest price in the 30 days before price_since
-    FROM dbo.store_products sp
+    FROM store_products sp
     JOIN latest l ON l.store_product_id = sp.id AND l.rn = 1
     JOIN current_period cur ON cur.store_product_id = sp.id
     LEFT JOIN reference ref ON ref.store_product_id = sp.id
 )
 SELECT
     o.*,
-    CAST(CASE
-        WHEN o.reference_price IS NOT NULL
-         AND o.price < o.reference_price
-         AND o.tracked_since <= DATEADD(DAY, -30, o.price_since)
-        THEN 1 ELSE 0 END AS BIT) AS is_discount,
+    COALESCE(o.reference_price IS NOT NULL
+             AND o.price < o.reference_price
+             AND o.tracked_since <= o.price_since - interval '30 days', false) AS is_discount,
     CASE
         WHEN o.reference_price IS NOT NULL
          AND o.price < o.reference_price
-         AND o.tracked_since <= DATEADD(DAY, -30, o.price_since)
-        THEN CAST(ROUND(100.0 * (o.reference_price - o.price) / o.reference_price, 0) AS INT)
+         AND o.tracked_since <= o.price_since - interval '30 days'
+        THEN CAST(ROUND(100.0 * (o.reference_price - o.price) / o.reference_price, 0) AS integer)
     END AS discount_percent
 FROM offers o;
-GO
+COMMIT;

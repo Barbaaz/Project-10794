@@ -48,8 +48,8 @@ def register(username, email, password, display_name=None):
         raise AccountError("display_name_long")
 
     with session() as s:
-        # usernames / emails compare without case (the database's collation)
-        taken = s.scalars(select(User).where(or_(User.username == username, User.email == email))).first()
+        # usernames compare without case; emails are stored in lower case
+        taken = s.scalars(select(User).where(or_(User.named(username), User.email == email))).first()
         if taken:
             raise AccountError("username_taken" if (taken.username or "").lower() == username.lower() else "email_taken")
         user = User(username=username, email=email, password_hash=generate_password_hash(password),
@@ -68,7 +68,7 @@ def authenticate(login, password, ip="?"):
         raise AccountError("login_locked")
 
     with session() as s:
-        user = s.scalars(select(User).where(or_(User.username == login, User.email == login.lower()))).first()
+        user = s.scalars(select(User).where(or_(User.named(login), User.email == login.lower()))).first()
         # check a hash even when there's no such user, so the answer takes as long either way
         hash_ = user.password_hash if user and user.password_hash else _DUMMY_HASH
         if not (check_password_hash(hash_, password or "") and user and user.password_hash and user.is_active):

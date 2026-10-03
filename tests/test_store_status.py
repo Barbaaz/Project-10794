@@ -16,9 +16,9 @@ def client(app_on_test_db, web_client):
     for slug, status, hours_ago, error in runs:
         cursor.execute(
             "INSERT INTO scrape_runs (store_id, started_at, finished_at, status, error_message) "
-            "SELECT id, DATEADD(HOUR, ?, SYSUTCDATETIME()), DATEADD(HOUR, ?, SYSUTCDATETIME()), ?, ? "
+            "SELECT id, utcnow() - make_interval(hours => ?), utcnow() - make_interval(hours => ?), ?, ? "
             "FROM stores WHERE slug = ?",
-            -hours_ago, -hours_ago, status, error, slug,
+            hours_ago, hours_ago, status, error, slug,
         )
     yield web_client
     cursor.execute("DELETE FROM scrape_runs")
@@ -26,11 +26,11 @@ def client(app_on_test_db, web_client):
 
 def test_store_status(client, app_on_test_db):
     cursor = app_on_test_db.conn.cursor()
-    cursor.execute("UPDATE stores SET is_active = 0 WHERE slug = 'gaming_replay'")
+    cursor.execute("UPDATE stores SET is_active = false WHERE slug = 'gaming_replay'")
     try:
         stores = {s["slug"]: s for s in client.get("/api/stores").get_json()}
     finally:
-        cursor.execute("UPDATE stores SET is_active = 1 WHERE slug = 'gaming_replay'")
+        cursor.execute("UPDATE stores SET is_active = true WHERE slug = 'gaming_replay'")
 
     assert "gaming_replay" not in stores     # switched off
     assert "radio_popular" in stores

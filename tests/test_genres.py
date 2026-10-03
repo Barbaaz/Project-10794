@@ -18,8 +18,8 @@ def test_filter_matches_whole_genre_names(test_db):
     ids = {}
     for title, genres in [("G Strategy", "Strategy"), ("G Rts", "Indie, Real Time Strategy (RTS)"),
                           ("G Rpg", "Adventure, Role-playing (RPG)"), ("G None", None)]:
-        ids[title] = c.execute("INSERT INTO games (platform_id, title, normalized_title, genres) OUTPUT INSERTED.id "
-                               "VALUES (?, ?, ?, ?)", ps5, title, title.lower(), genres).fetchone()[0]
+        ids[title] = c.execute("INSERT INTO games (platform_id, title, normalized_title, genres) "
+                               "VALUES (?, ?, ?, ?) RETURNING id", ps5, title, title.lower(), genres).fetchone()[0]
     try:
         def matching(genre):
             condition, params = genre_filter(genre)

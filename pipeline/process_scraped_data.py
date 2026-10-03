@@ -136,8 +136,8 @@ def product_key(url, condition):
 
 
 def to_cents(price):
-    """A price as the DECIMAL(10,2) column keeps it: the exact value rounded half up, as SQL Server does
-    (1.005 as a float is 1.00499…, so 1.00)."""
+    """A price in cents, as the numeric(10,2) column keeps it: the float's exact value rounded half up
+    (1.005 as a float is 1.00499…, so 1.00), as SQL Server stored prices before the move to PostgreSQL."""
     return None if price is None else Decimal(price).quantize(CENT, ROUND_HALF_UP)
 
 

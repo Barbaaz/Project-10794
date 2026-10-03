@@ -14,19 +14,19 @@ OFFER_COLUMNS = """
     o.store_product_id AS offer_id, o.game_id, o.edition_id,
     s.slug AS store, s.name AS store_name,
     o.condition, o.price, o.in_stock, o.is_preorder, o.url, o.image_url AS image, o.external_name,
-    CASE WHEN o.is_discount = 1 THEN o.reference_price END AS was_price,
+    CASE WHEN o.is_discount THEN o.reference_price END AS was_price,
     o.discount_percent, o.is_discount, o.last_seen_at
 """
 
 # TWO_STEPS: queries pick the edition / game ids first, then read current_offers with
-# "IN (ids)". Joining current_offers to a subquery makes SQL Server recompute the view
-# for every row (30 s instead of 0.1 s).
+# "IN (ids)", so the view is only worked out for those products (on SQL Server, joining it
+# to a subquery took 30 s instead of 0.1 s).
 
 # The latest price and stock of each store product `sp`, as `last`:
-#   FROM store_products sp {LATEST_PRICE} WHERE last.in_stock = 1
+#   FROM store_products sp {LATEST_PRICE} WHERE last.in_stock
 LATEST_PRICE = """
-    CROSS APPLY (SELECT TOP 1 price, in_stock FROM price_snapshots ps
-                 WHERE ps.store_product_id = sp.id ORDER BY ps.scraped_at DESC, ps.id DESC) last
+    CROSS JOIN LATERAL (SELECT price, in_stock FROM price_snapshots ps
+                        WHERE ps.store_product_id = sp.id ORDER BY ps.scraped_at DESC, ps.id DESC LIMIT 1) last
 """
 
 # What card_group() needs, from game_editions e JOIN games g JOIN platforms p
@@ -141,12 +141,12 @@ def lowest_prices(condition, *params):
         SELECT edition_id, price, date, store, offer_id, tracked_since
         FROM (
             SELECT sp.edition_id, ps.price, ps.scraped_at AS date, s.slug AS store, sp.id AS offer_id,
-                   ROW_NUMBER() OVER (PARTITION BY sp.edition_id ORDER BY ps.price, ps.scraped_at) AS rn,
+                   ROW_NUMBER() OVER (PARTITION BY sp.edition_id ORDER BY ps.price, ps.scraped_at, ps.id) AS rn,
                    MIN(ps.scraped_at) OVER (PARTITION BY sp.edition_id) AS tracked_since
             FROM store_products sp
             JOIN price_snapshots ps ON ps.store_product_id = sp.id
             JOIN stores s ON s.id = sp.store_id
-            WHERE {condition} AND sp.condition = 'new' AND ps.in_stock = 1
+            WHERE {condition} AND sp.condition = 'new' AND ps.in_stock
         ) x
         WHERE rn = 1
         """,

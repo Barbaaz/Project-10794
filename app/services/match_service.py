@@ -29,12 +29,12 @@ def find(q):
         return []
     with session() as s:
         games = s.scalars(select(Game).where(*[Game.normalized_title.like(f"%{w}%") for w in words])
-                          .order_by(Game.title).limit(MAX_GAMES)).all()
+                          .order_by(Game.title, Game.id).limit(MAX_GAMES)).all()
         ids = [g.id for g in games]
         editions = s.scalars(select(GameEdition).where(GameEdition.game_id.in_(ids)).order_by(GameEdition.id)).all() if ids else []
         products = s.execute(
             select(StoreProduct, Store.name).join(Store, Store.id == StoreProduct.store_id)
-            .where(StoreProduct.game_id.in_(ids)).order_by(Store.name, StoreProduct.external_name)).all() if ids else []
+            .where(StoreProduct.game_id.in_(ids)).order_by(Store.name, StoreProduct.external_name, StoreProduct.id)).all() if ids else []
         pinned = set(s.scalars(select(MatchOverride.store_product_id).where(
             MatchOverride.store_product_id.in_([p.id for p, _ in products])))) if products else set()
 
@@ -136,7 +136,7 @@ def duplicates():
         dismissed = select(DuplicateDismissal).where(DuplicateDismissal.game_a == a.id,
                                                      DuplicateDismissal.game_b == b.id).exists()
         pairs = s.execute(select(a, b).join(b, (b.platform_id == a.platform_id) & (b.igdb_id == a.igdb_id) & (b.id > a.id))
-                          .where(a.igdb_id.is_not(None), ~dismissed).order_by(a.title).limit(MAX_DUPLICATES)).all()
+                          .where(a.igdb_id.is_not(None), ~dismissed).order_by(a.title, a.id, b.id).limit(MAX_DUPLICATES)).all()
         ids = {g.id for pair in pairs for g in pair}
         counts = dict(s.execute(select(StoreProduct.game_id, func.count()).where(
             StoreProduct.game_id.in_(ids), StoreProduct.is_active).group_by(StoreProduct.game_id)).all()) if ids else {}

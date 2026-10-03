@@ -21,15 +21,15 @@ def offers(test_db):
     cursor = test_db.conn.cursor()
     for name, (history, _) in SCENARIOS.items():
         sp_id = cursor.execute(
-            "INSERT INTO store_products (store_id, url, external_name) OUTPUT INSERTED.id "
-            "SELECT TOP 1 id, ?, ? FROM stores ORDER BY id",
+            "INSERT INTO store_products (store_id, url, external_name) "
+            "SELECT id, ?, ? FROM stores ORDER BY id LIMIT 1 RETURNING id",
             f"https://example.test/{name}", name,
         ).fetchone()[0]
         for price, old_price, in_stock, days_ago in history:
             cursor.execute(
                 "INSERT INTO price_snapshots (store_product_id, price, old_price, in_stock, scraped_at) "
-                "VALUES (?, ?, ?, ?, DATEADD(DAY, ?, SYSUTCDATETIME()))",
-                sp_id, price, old_price, in_stock, -days_ago,
+                "VALUES (?, ?, ?, ?, utcnow() - make_interval(days => ?))",
+                sp_id, price, old_price, bool(in_stock), days_ago,
             )
 
     rows = cursor.execute("SELECT external_name, is_discount, discount_percent FROM current_offers").fetchall()

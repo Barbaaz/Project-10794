@@ -85,7 +85,7 @@ def test_hidden_reviews_and_blocked_writers_are_not_counted(market):
     client.post("/api/mod/actions", json={"action": "restore_review", "target_id": review_id}, headers=HEADERS)
     assert reviews(client, game)["summary"]["count"] == 2
     # a blocked user's reviews disappear with them
-    db.execute("UPDATE users SET is_active = 0 WHERE username = 'troll'")
+    db.execute("UPDATE users SET is_active = false WHERE username = 'troll'")
     assert reviews(client, game)["summary"]["count"] == 1
 
 

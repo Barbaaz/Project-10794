@@ -1,4 +1,5 @@
 """Accounts: sign up, log in / out, lock-out, and the protection against requests from other sites."""
+import psycopg
 import pytest
 
 from app.services import auth_service
@@ -45,11 +46,14 @@ def test_sign_up_rules(client, fields, error):
     assert (response.status_code, response.get_json()["error"]) == (400, error)
 
 
-def test_username_and_email_are_unique(client):
+def test_username_and_email_are_unique(client, test_db):
     register(client)
     assert register(client, email="other@example.pt").get_json()["error"] == "username_taken"
     assert register(client, username="ANA_92", email="x@example.pt").get_json()["error"] == "username_taken"
     assert register(client, username="other").get_json()["error"] == "email_taken"     # case doesn't matter
+    # the database refuses it too (two sign-ups at the same moment)
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        test_db.conn.cursor().execute("INSERT INTO users (username, email, display_name) VALUES ('Ana_92', 'y@x.pt', 'A')")
 
 
 def test_log_in_with_username_or_email_and_log_out(client):
@@ -60,6 +64,8 @@ def test_log_in_with_username_or_email_and_log_out(client):
     assert post(client, "login", login="ana_92", password="segredo123").status_code == 200
     post(client, "logout")
     assert post(client, "login", login="ANA@example.pt", password="segredo123").get_json()["username"] == "ana_92"
+    post(client, "logout")
+    assert post(client, "login", login="Ana_92", password="segredo123").get_json()["username"] == "ana_92"
 
 
 def test_wrong_password_and_lock_out(client):
@@ -77,7 +83,7 @@ def test_wrong_password_and_lock_out(client):
 
 def test_blocked_account_is_logged_out(client, test_db):
     register(client)
-    test_db.conn.cursor().execute("UPDATE users SET is_active = 0")
+    test_db.conn.cursor().execute("UPDATE users SET is_active = false")
     assert client.get("/api/auth/me").get_json() is None
     assert post(client, "login", login="ana_92", password="segredo123").get_json()["error"] == "login_failed"
 

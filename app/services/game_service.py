@@ -23,7 +23,7 @@ RESTOCK_ALERT_DAYS = 14
 def search_filters(q, platform):
     """WHERE clause + params: every word of q must appear in the game's title."""
     words, params = title_word_filters(q)
-    where = ["EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active = 1)", *words]
+    where = ["EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active)", *words]
 
     if platform:
         where.append("p.code = ?")
@@ -45,7 +45,7 @@ def list_games(q=None, platform=None, page=1, per_page=20):
         SELECT g.id, g.title, p.code AS platform, g.image_url AS image
         FROM games g JOIN platforms p ON p.id = g.platform_id
         WHERE {where}
-        ORDER BY g.title, p.code
+        ORDER BY g.title, p.code, g.id
         OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
         """,
         *params, (page - 1) * per_page, per_page,
@@ -66,12 +66,12 @@ def offer_summaries(game_ids):
     rows = fetch_all(
         f"""
         SELECT game_id,
-               MIN(CASE WHEN in_stock = 1 THEN price END) AS best_price,
+               MIN(CASE WHEN in_stock THEN price END) AS best_price,
                COUNT(DISTINCT store_id) AS stores,
                COUNT(DISTINCT edition_id) AS editions,
-               CAST(MAX(CAST(is_discount AS INT)) AS BIT) AS has_discount
+               BOOL_OR(is_discount) AS has_discount
         FROM current_offers
-        WHERE is_active = 1 AND game_id IN ({placeholders(game_ids)})
+        WHERE is_active AND game_id IN ({placeholders(game_ids)})
         GROUP BY game_id
         """,
         *game_ids,
@@ -99,15 +99,15 @@ def get_game(game_id):
     game["videos"] = json.loads(game["videos"]) if game["videos"] else []
 
     editions = fetch_all(
-        "SELECT id, name FROM game_editions WHERE game_id = ? ORDER BY CASE WHEN edition_key = '' THEN 0 ELSE 1 END, name",
+        "SELECT id, name FROM game_editions WHERE game_id = ? ORDER BY CASE WHEN edition_key = '' THEN 0 ELSE 1 END, name, id",
         game_id,
     )
     offers = fetch_all(
         f"""
         SELECT {OFFER_COLUMNS}
         FROM current_offers o JOIN stores s ON s.id = o.store_id
-        WHERE o.game_id = ? AND o.is_active = 1
-        ORDER BY o.in_stock DESC, o.price
+        WHERE o.game_id = ? AND o.is_active
+        ORDER BY o.in_stock DESC, o.price, o.store_product_id
         """,
         game_id,
     )
@@ -150,8 +150,8 @@ def store_descriptions(game_id):
         """
         SELECT sp.edition_id, s.slug AS store, s.name AS store_name, sp.description AS text, sp.details
         FROM store_products sp JOIN stores s ON s.id = sp.store_id
-        WHERE sp.game_id = ? AND sp.is_active = 1 AND sp.description IS NOT NULL AND LEN(sp.description) > 20
-        ORDER BY LEN(sp.description) DESC
+        WHERE sp.game_id = ? AND sp.is_active AND sp.description IS NOT NULL AND LENGTH(sp.description) > 20
+        ORDER BY LENGTH(sp.description) DESC, sp.id
         """,
         game_id,
     )
@@ -171,8 +171,8 @@ def store_photos(game_id, limit=12):
         """
         SELECT sp.edition_id, s.slug AS store, sp.image_urls
         FROM store_products sp JOIN stores s ON s.id = sp.store_id
-        WHERE sp.game_id = ? AND sp.is_active = 1 AND sp.image_urls IS NOT NULL
-        ORDER BY s.slug
+        WHERE sp.game_id = ? AND sp.is_active AND sp.image_urls IS NOT NULL
+        ORDER BY s.slug, sp.id
         """,
         game_id,
     )
@@ -221,8 +221,8 @@ def editions_with_offers(edition_ids):
         f"""
         SELECT {OFFER_COLUMNS}
         FROM current_offers o JOIN stores s ON s.id = o.store_id
-        WHERE o.is_active = 1 AND o.edition_id IN ({ids})
-        ORDER BY o.in_stock DESC, o.price
+        WHERE o.is_active AND o.edition_id IN ({ids})
+        ORDER BY o.in_stock DESC, o.price, o.store_product_id
         """,
         *edition_ids,
     )
@@ -240,9 +240,9 @@ def editions_with_offers(edition_ids):
             JOIN store_products sp ON sp.id = ps.store_product_id
             WHERE sp.edition_id IN ({ids})
         ) x
-        WHERE in_stock = 1 AND was_in_stock = 0
+        WHERE in_stock AND NOT was_in_stock
         GROUP BY store_product_id
-        HAVING MAX(scraped_at) > DATEADD(DAY, ?, SYSUTCDATETIME())
+        HAVING MAX(scraped_at) > utcnow() + make_interval(days => ?)
         """,
         *edition_ids, -RESTOCK_ALERT_DAYS,
     ))
@@ -259,9 +259,9 @@ def editions_with_offers(edition_ids):
 
 
 CATALOG_SORTS = {
-    "name": "g.title, p.sort_order, CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, e.name",
-    "price_asc": "ed.best_price, g.title",
-    "price_desc": "ed.best_price DESC, g.title",
+    "name": "g.title, p.sort_order, CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, e.name, e.id",
+    "price_asc": "ed.best_price, g.title, p.sort_order, e.id",
+    "price_desc": "ed.best_price DESC, g.title, p.sort_order, e.id",
 }
 
 
@@ -285,7 +285,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
         WITH offers AS (
             SELECT sp.id AS store_product_id, sp.edition_id, sp.store_id, sp.condition, last.price
             FROM store_products sp {LATEST_PRICE}
-            WHERE sp.is_active = 1 AND last.in_stock = 1 AND sp.edition_id IS NOT NULL
+            WHERE sp.is_active AND last.in_stock AND sp.edition_id IS NOT NULL
         ),
         used AS (
             SELECT edition_id, price FROM user_listings WHERE status = 'active' AND edition_id IS NOT NULL
@@ -343,8 +343,8 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             f"""
             SELECT {OFFER_COLUMNS}, o.release_date AS own_release_date
             FROM current_offers o JOIN stores s ON s.id = o.store_id
-            WHERE o.is_active = 1 AND o.in_stock = 1 AND o.edition_id IN ({placeholders(ids)})
-            ORDER BY o.price
+            WHERE o.is_active AND o.in_stock AND o.edition_id IN ({placeholders(ids)})
+            ORDER BY o.price, o.store_product_id
             """,
             *ids,
         )
@@ -384,7 +384,7 @@ def get_price_history(game_id, days=90):
     """Price changes per offer over the last `days`, plus the price in effect at the start."""
     rows = fetch_all(
         """
-        WITH window_start AS (SELECT DATEADD(DAY, -?, SYSUTCDATETIME()) AS since)
+        WITH window_start AS (SELECT utcnow() - make_interval(days => ?) AS since)
         SELECT sp.id AS offer_id, s.slug AS store, s.name AS store_name, sp.edition_id, e.name AS edition,
                sp.condition, ps.scraped_at AS date, ps.price, ps.in_stock
         FROM store_products sp
@@ -394,9 +394,9 @@ def get_price_history(game_id, days=90):
         CROSS JOIN window_start w
         WHERE sp.game_id = ?
           AND (ps.scraped_at >= w.since
-               OR ps.id = (SELECT TOP 1 x.id FROM price_snapshots x
+               OR ps.id = (SELECT x.id FROM price_snapshots x
                            WHERE x.store_product_id = sp.id AND x.scraped_at < w.since
-                           ORDER BY x.scraped_at DESC, x.id DESC))
+                           ORDER BY x.scraped_at DESC, x.id DESC LIMIT 1))
         ORDER BY sp.id, ps.scraped_at
         """,
         days, game_id,

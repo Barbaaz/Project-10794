@@ -45,7 +45,7 @@ CONDITION_SHARE = {"new": 0.95, "like_new": 0.80, "good": 0.70, "fair": 0.55, "p
 
 def _demo_users(s):
     """The demo users (recognised by their username prefix and @demo.invalid email: never a real user)."""
-    return s.scalars(select(User).where(User.username.like("demo[_]%"), User.email.like("%@demo.invalid"))).all()
+    return s.scalars(select(User).where(User.username.startswith("demo_", autoescape=True), User.email.like("%@demo.invalid"))).all()
 
 
 def remove():
@@ -109,14 +109,15 @@ def add():
 
     # Popular games in stock: the editions with the most stores, each with its best store price
     games = fetch_all(f"""
-        SELECT TOP ({GAMES}) g.id AS game_id, e.id AS edition_id, g.title, p.name AS platform, MIN(o.price) AS price
+        SELECT g.id AS game_id, e.id AS edition_id, g.title, p.name AS platform, MIN(o.price) AS price
         FROM current_offers o
         JOIN games g ON g.id = o.game_id JOIN platforms p ON p.id = g.platform_id
         JOIN game_editions e ON e.id = o.edition_id
-        WHERE o.is_active = 1 AND o.in_stock = 1 AND o.condition = 'new' AND e.edition_key = ''
+        WHERE o.is_active AND o.in_stock AND o.condition = 'new' AND e.edition_key = ''
         GROUP BY g.id, e.id, g.title, p.name
         HAVING COUNT(DISTINCT o.store_id) >= 3 AND MIN(o.price) >= 15
         ORDER BY COUNT(DISTINCT o.store_id) DESC, MAX(o.price) DESC
+        LIMIT {GAMES}
     """)
     sellers = list(users)
     listings = []

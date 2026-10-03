@@ -24,8 +24,8 @@ def mod(market):
     c.execute("UPDATE users SET role = 'moderator' WHERE username = 'matcher_mod'")
     yield market
     c.execute("DELETE FROM match_overrides")
-    c.execute("DELETE ps FROM price_snapshots ps JOIN store_products sp ON sp.id = ps.store_product_id "
-              "WHERE sp.url LIKE 'https://match.test/%'")
+    c.execute("DELETE FROM price_snapshots ps USING store_products sp WHERE sp.id = ps.store_product_id "
+              "AND sp.url LIKE 'https://match.test/%'")
     games = [r[0] for r in c.execute("SELECT DISTINCT game_id FROM store_products WHERE url LIKE 'https://match.test/%'")]
     c.execute("DELETE FROM store_products WHERE url LIKE 'https://match.test/%'")
     for game in games:

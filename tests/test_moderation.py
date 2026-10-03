@@ -51,7 +51,7 @@ def test_daily_report_limit(market):
         market["db"].execute("INSERT INTO reports (reporter_id, kind, target_id, reason, status) "
                              "VALUES (?, 'user', ?, 'other', 'dismissed')", reporter["id"], seller["id"])
     assert report(client, "listing", listing["id"]).status_code == 429
-    market["db"].execute("UPDATE reports SET created_at = DATEADD(DAY, -2, created_at)")
+    market["db"].execute("UPDATE reports SET created_at = created_at - interval '2 days'")
     assert report(client, "listing", listing["id"]).status_code == 201
 
 

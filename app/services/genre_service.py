@@ -37,12 +37,13 @@ def genre_filter(genre, games_alias="g"):
 def names_filter(column, names):
     """(condition, params): the comma-separated `column` ("Adventure, Shooter") has one of `names`.
     Whole names only, so "Strategy" doesn't also match "Turn-based strategy (TBS)"."""
-    padded = f"(', ' + {column} + ', ')"
+    padded = f"(', ' || {column} || ', ')"
     return "(" + " OR ".join([f"{padded} LIKE ?"] * len(names)) + ")", [f"%, {_like(n)}, %" for n in names]
 
 
 def _like(text):
-    return text.replace("[", "[[]").replace("%", "[%]").replace("_", "[_]")
+    """The text as a LIKE pattern that matches only itself (% and _ are wildcards; a backslash escapes them)."""
+    return text.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
 
 
 def matching(groups, text):
@@ -60,7 +61,7 @@ def games_in_stock(columns):
     """These games columns for every game with an offer in stock (for counting categories / tags)."""
     return fetch_all(f"""
         SELECT {", ".join(f"g.{c}" for c in columns)} FROM games g
-        WHERE EXISTS (SELECT 1 FROM current_offers o WHERE o.game_id = g.id AND o.is_active = 1 AND o.in_stock = 1)""")
+        WHERE EXISTS (SELECT 1 FROM current_offers o WHERE o.game_id = g.id AND o.is_active AND o.in_stock)""")
 
 
 def genre_counts():
