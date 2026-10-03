@@ -1,7 +1,8 @@
 """
 Scrape every active store into the database.
 
-    python -m scheduler.run_all_scrapers
+    python -m scheduler.run_all_scrapers            # the morning run: every store, then IGDB
+    python -m scheduler.run_all_scrapers --light    # the evening run: LIGHT_STORES, listing pages only
 
 Runs daily via the Windows task set up by scheduler/register_daily_task.ps1.
 A store scraped successfully less than 12 hours ago is skipped (see MIN_HOURS_BETWEEN_RUNS).
@@ -9,7 +10,7 @@ A store scraped successfully less than 12 hours ago is skipped (see MIN_HOURS_BE
 import logging
 import sys
 
-from scheduler.jobs import SCRAPERS, RanRecently, active_store_slugs, run_store, setup_logging
+from scheduler.jobs import LIGHT_STORES, SCRAPERS, RanRecently, active_store_slugs, run_store, setup_logging
 from scheduler.notify import notify, run_summary
 from pipeline.igdb import enrich_games, fill_tags, fill_time_to_beat, fill_videos
 from app.services.chat_service import complete_overdue
@@ -17,18 +18,20 @@ from app.services.chat_service import complete_overdue
 log = logging.getLogger(__name__)
 
 
-def main():
+def main(light=False):
     setup_logging()
     failed, warnings = [], []
 
     for slug in active_store_slugs():
+        if light and slug not in LIGHT_STORES:
+            continue
         if slug not in SCRAPERS:
             log.warning("[%s] active in the database but has no scraper, skipped", slug)
             continue
 
         # One store failing must not stop the others
         try:
-            stats = run_store(slug)
+            stats = run_store(slug, light=light)
             if stats.get("status") == "warning":
                 warnings.append(slug)
         except RanRecently as e:
@@ -36,14 +39,15 @@ def main():
         except Exception:
             failed.append(slug)
 
-    # Game information for games added today (IGDB); never blocks the run
-    try:
-        enrich_games(limit=300)
-        fill_videos()
-        fill_tags()
-        fill_time_to_beat()
-    except Exception as e:
-        log.warning("IGDB lookup skipped: %s", e)
+    # Game information for games added today (IGDB); never blocks the run. Morning run only
+    if not light:
+        try:
+            enrich_games(limit=300)
+            fill_videos()
+            fill_tags()
+            fill_time_to_beat()
+        except Exception as e:
+            log.warning("IGDB lookup skipped: %s", e)
 
     # Marketplace: purchases sent 7 days ago without a problem reported are completed
     # (also done whenever someone opens their messages; this covers quiet days)
@@ -65,4 +69,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(light="--light" in sys.argv[1:])

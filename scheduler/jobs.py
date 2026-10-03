@@ -23,8 +23,13 @@ MIN_PRODUCT_RATIO = 0.7
 RELEASE_DATE_RECHECK_DAYS = 7
 
 # A store isn't scraped again this soon after a successful run (unless forced), so repeated
-# manual runs don't flood it with requests. The daily schedule is well above this.
-MIN_HOURS_BETWEEN_RUNS = 12
+# manual runs don't flood it with requests. The schedule (06:00 and 18:00) is above this.
+MIN_HOURS_BETWEEN_RUNS = 8
+
+# The evening run (run_all_scrapers --light): these stores again, listing pages only (prices and
+# stock; no product pages), so prices are at most ~12 h old. Darty and CSTech stay once a day:
+# both have answered "too many requests" before.
+LIGHT_STORES = ("press_start", "mega-mania", "gaming_replay")
 
 # To add a store: write its scraper, register it here and add it to database/seed_stores.sql
 SCRAPERS = {
@@ -65,11 +70,12 @@ class RanRecently(Exception):
     """The store was scraped successfully less than MIN_HOURS_BETWEEN_RUNS ago."""
 
 
-def run_store(slug, accept_drop=False, force=False):
+def run_store(slug, accept_drop=False, force=False, light=False):
     """
     Scrape one store's catalogue into the database, logging the run in scrape_runs.
     accept_drop=True: the store really has fewer products now; deactivate the missing ones.
     force=True: run even if the store was scraped less than MIN_HOURS_BETWEEN_RUNS ago.
+    light=True: listing pages only (no product pages for descriptions / release dates).
     """
     if slug not in SCRAPERS:
         raise ValueError(f"No scraper registered for '{slug}'. Known: {', '.join(SCRAPERS)}")
@@ -83,6 +89,8 @@ def run_store(slug, accept_drop=False, force=False):
 
     try:
         scraper = SCRAPERS[slug](fresh_release_urls=fresh_release_urls(slug), known_detail_urls=known_detail_urls(slug))
+        if light:
+            scraper.max_product_pages = 0
         products = scraper.scrape_catalog()
         log.info("[%s] %d requests", slug, scraper.http.request_count)
         if not products:

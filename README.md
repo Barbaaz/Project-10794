@@ -196,13 +196,22 @@ Each run is logged in the `scrape_runs` table and in `logs\scraper.log`.
 
 ### Daily update
 
-Live prices and stock are re-checked once per day by a Windows scheduled task:
+Live prices and stock are re-checked twice a day by two Windows scheduled tasks:
+
+- **06:00** `python -m scheduler.run_all_scrapers`: every store (including product pages for
+  descriptions / release dates), then the IGDB lookups (new games, videos, tags, time to beat)
+- **18:00** `python -m scheduler.run_all_scrapers --light`: Press Start, Mega Mania and Gaming Replay
+  again, listing pages only (~250 requests), so their prices are at most ~12 h old. Darty and
+  CSTech stay once a day (both have answered "too many requests" before)
+
+A store isn't run again within 8 hours of a successful run (`MIN_HOURS_BETWEEN_RUNS`).
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1              # daily at 06:00
-powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -Time 03:30  # other time
-Start-ScheduledTask -TaskName Project10794-Scrapers                                     # run now
-Unregister-ScheduledTask -TaskName Project10794-Scrapers -Confirm:$false                # remove
+powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1                   # 06:00 and 18:00
+powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -Time 03:30 -EveningTime 17:00
+powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -EveningTime ""   # morning only
+Start-ScheduledTask -TaskName Project10794-Scrapers                                          # run now
+Unregister-ScheduledTask -TaskName Project10794-Scrapers* -Confirm:$false                    # remove both
 ```
 
 The task runs while you are logged on; if the computer was off at the scheduled time,
