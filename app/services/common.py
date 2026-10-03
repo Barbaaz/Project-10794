@@ -58,6 +58,16 @@ def title_en(row):
     """The game's English name when it has one, else its title (row: title, title_en)."""
     return row.get("title_en") or row["title"]
 
+
+def better_title(row):
+    """
+    The title for the Portuguese page: the English name when it's the same words better written
+    ("ASSASSINS CREED ODYSSEY" → "Assassin's Creed Odyssey"), else the store's title (an English
+    name in other words is a translation: English page only).
+    """
+    english = row.get("title_en")
+    return english if english and normalize_name(english) == normalize_name(row["title"]) else row["title"]
+
 CACHE_SECONDS = 600   # prices change once a day; no need to recompute on every visit
 _cache = {}
 
@@ -95,7 +105,7 @@ def card_group(row, offers, **extra):
     return {
         "edition_id": row["edition_id"],
         "game_id": row["game_id"],
-        "name": card_name(row["title"], row["edition_key"], row["edition"]),
+        "name": card_name(better_title(row), row["edition_key"], row["edition"]),
         "name_en": card_name(title_en(row), row["edition_key"], edition_en(row["edition"])),
         "console": row["console"],
         "platform_name": row["platform_name"],

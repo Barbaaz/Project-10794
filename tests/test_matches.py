@@ -103,6 +103,15 @@ def test_english_name_by_a_moderator(mod):
     assert put("Nope").status_code == 403
 
 
+def test_portuguese_page_shows_the_better_written_name_only_when_the_words_are_the_same():
+    from app.services.common import better_title
+    assert better_title({"title": "ASSASSINS CREED ODYSSEY", "title_en": "Assassin's Creed Odyssey"}) \
+        == "Assassin's Creed Odyssey"
+    assert better_title({"title": "The Last of Us Parte II", "title_en": "The Last of Us Part II"}) \
+        == "The Last of Us Parte II"                                      # a translation: English page only
+    assert better_title({"title": "Some Game", "title_en": ""}) == "Some Game"
+
+
 def test_edition_names_in_english():
     from app.services.common import edition_en
     assert edition_en("Edição Especial Limitada") == "Special Limited Edition"

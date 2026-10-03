@@ -1,5 +1,5 @@
 """Pre-orders and upcoming releases for the front page."""
-from app.services.common import EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, cached, card_group
+from app.services.common import EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, cached, card_group
 from app.services.review_service import mark_review_scores
 from app.services.tag_service import mark_historical_lows
 from db import fetch_all, placeholders
@@ -86,7 +86,7 @@ def upcoming_releases():
     new offer in stock or on pre-order. Sorted by date; "31/12" estimates at the end.
     """
     def compute():
-        return fetch_all(f"""
+        rows = fetch_all(f"""
             WITH {GAME_RELEASE_DATES},
             prices AS (
                 SELECT sp.game_id, sp.url, s.slug AS store, s.name AS store_name, last.price,
@@ -111,5 +111,8 @@ def upcoming_releases():
             WHERE r.release_date >= CAST(SYSUTCDATETIME() AS DATE)
             ORDER BY r.date_is_estimate, r.release_date, g.title, p.sort_order
         """)
+        for r in rows:
+            r["title"] = better_title(r)
+        return rows
 
     return cached("releases", compute)

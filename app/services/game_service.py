@@ -3,7 +3,7 @@ import re
 from datetime import datetime, timezone
 
 from app.services.common import (
-    EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, card_group, edition_en, lowest_prices, page_result,
+    EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, card_group, edition_en, lowest_prices, page_result,
     title_word_filters,
 )
 from app.services.genre_service import genre_filter
@@ -94,6 +94,7 @@ def get_game(game_id):
     )
     if not game:
         return None
+    game["title"] = better_title(game)
     game["screenshot_ids"] = json.loads(game["screenshot_ids"]) if game["screenshot_ids"] else []
     game["videos"] = json.loads(game["videos"]) if game["videos"] else []
 

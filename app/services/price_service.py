@@ -1,4 +1,6 @@
-from app.services.common import LATEST_PRICE, OFFER_COLUMNS, cached, card_name, edition_en, page_result, title_en
+from app.services.common import (
+    LATEST_PRICE, OFFER_COLUMNS, better_title, cached, card_name, edition_en, page_result, title_en,
+)
 from app.services.review_service import mark_review_scores
 from app.services.tag_service import mark_historical_lows
 from db import fetch_all, fetch_one, placeholders
@@ -28,7 +30,7 @@ def attach_store_offers(items):
 
     for item in items:
         # the card's name in both languages ("Title — Edition")
-        item["name"] = card_name(item["title"], item["edition_key"], item["edition"])
+        item["name"] = card_name(better_title(item), item["edition_key"], item["edition"])
         item["name_en"] = card_name(title_en(item), item["edition_key"], edition_en(item["edition"]))
         own = {k: item[k] for k in ("offer_id", "store", "store_name", "condition", "price", "in_stock",
                                     "is_preorder", "url", "image") if k in item}
