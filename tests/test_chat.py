@@ -1,8 +1,11 @@
 """Marketplace conversations and the purchase steps (on a throwaway database)."""
+import io
+
 import pytest
+from PIL import Image
 
 from app.services import chat_service
-from helpers import HEADERS, log_in, new_listing, sign_up
+from helpers import HEADERS, jpeg, log_in, new_listing, sign_up
 
 
 @pytest.fixture
@@ -165,3 +168,52 @@ def test_message_rules(deal):
     assert send("x" * 2001).get_json()["error"] == "message_long"
     client.post("/api/auth/logout", headers=HEADERS)
     assert start(client, deal["listing"]["id"], message="x").status_code == 401
+
+
+def send_photos(client, conversation_id, n, body=""):
+    files = [(io.BytesIO(jpeg(gps=True)), f"photo{i}.jpg") for i in range(n)]
+    return client.post(f"/api/conversations/{conversation_id}/messages", data={"body": body, "photos": files},
+                       headers=HEADERS, content_type="multipart/form-data")
+
+
+def test_photos_in_a_conversation(deal):
+    """The buyer asks for more pictures; the seller sends them. Only the two sides (and moderators) see them."""
+    client = deal["client"]
+    conversation_id = start(client, deal["listing"]["id"], message="Pode mandar fotos do disco?").get_json()["id"]
+    log_in(client, "seller")
+    sent = send_photos(client, conversation_id, 2, body="Aqui estão").get_json()["messages"][-1]
+    assert sent["body"] == "Aqui estão" and len(sent["photos"]) == 2
+    photo_only = send_photos(client, conversation_id, 1).get_json()["messages"][-1]
+    assert photo_only["body"] is None and len(photo_only["photos"]) == 1
+
+    full, thumb = client.get(sent["photos"][0]["url"]), client.get(sent["photos"][0]["thumb_url"])
+    assert full.status_code == 200 and full.mimetype == "image/jpeg" and "private" in full.headers["Cache-Control"]
+    assert len(thumb.data) < len(full.data)
+    assert not Image.open(io.BytesIO(full.data)).getexif()          # EXIF (GPS) removed, as for listings
+
+    log_in(client, "buyer")
+    listed = {c["id"]: c for c in client.get("/api/conversations").get_json()}[conversation_id]
+    assert listed["last_photos"] is True and listed["unread"] == 2
+    assert client.get(sent["photos"][1]["url"]).status_code == 200
+
+    # not through /media (anyone with the address), not for others, not from another conversation's address
+    key = deal["db"].execute("SELECT photo_key FROM message_photos ORDER BY id LIMIT 1").fetchone()[0]
+    assert key.startswith(f"chats/{conversation_id}/") and client.get(f"/media/{key}").status_code == 404
+    sign_up(client, "stranger")
+    assert client.get(sent["photos"][0]["url"]).status_code == 404
+    deal["db"].execute("UPDATE users SET role = 'moderator' WHERE username = 'stranger'")
+    assert client.get(sent["photos"][0]["url"]).status_code == 200      # a moderator looking into a problem
+    other = client.get(sent["photos"][0]["url"].replace(f"/conversations/{conversation_id}/", "/conversations/999999/"))
+    assert other.status_code == 404
+
+
+def test_photo_rules(deal):
+    client = deal["client"]
+    conversation_id = start(client, deal["listing"]["id"], message="Olá").get_json()["id"]
+    too_many = send_photos(client, conversation_id, 6)
+    assert (too_many.status_code, too_many.get_json()["error"]) == (400, "message_photos_many")
+    not_a_photo = client.post(f"/api/conversations/{conversation_id}/messages", headers=HEADERS,
+                              data={"photos": [(io.BytesIO(b"not an image"), "x.jpg")]}, content_type="multipart/form-data")
+    assert (not_a_photo.status_code, not_a_photo.get_json()["error"]) == (400, "photo_type")
+    assert not list(deal["dir"].glob("chats/**/*.jpg"))      # nothing kept from refused messages
+    assert len(client.get(f"/api/conversations/{conversation_id}").get_json()["messages"]) == 1

@@ -23,6 +23,9 @@
         .bubble.mine { align-self: flex-end; background: var(--bs-primary); color: #fff; border-bottom-right-radius: .2rem; }
         .bubble.theirs { align-self: flex-start; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-bottom-left-radius: .2rem; }
         .bubble .time { display: block; font-size: .7rem; opacity: .75; margin-top: .15rem; }
+        .bubble .photos { display: flex; flex-wrap: wrap; gap: .25rem; margin-bottom: .2rem; white-space: normal; }
+        .bubble .photos img, .chosen-photos img { width: 96px; height: 72px; object-fit: cover; border-radius: .4rem; background: var(--bs-secondary-bg); }
+        .chosen-photos img { width: 56px; height: 42px; }
         .site-message { align-self: center; font-size: .8rem; color: var(--bs-secondary-color); text-align: center; }
         .star-input { display: inline-flex; flex-direction: row-reverse; gap: .1rem; }
         .star-input input { position: absolute; opacity: 0; }
@@ -66,7 +69,12 @@
                     <!-- After a completed purchase: rate the other side, see their rating of you -->
                     <div id="chat-rating" class="mb-2"></div>
                     <div id="chat-messages" class="chat-messages mb-2" aria-live="polite"></div>
+                    <!-- Photos chosen for the next message (more pictures of the copy, when the buyer asks) -->
+                    <div id="chosen-photos" class="chosen-photos d-flex flex-wrap align-items-center gap-1 mb-2 d-none"></div>
                     <form id="chat-form" class="d-flex gap-2">
+                        <button type="button" id="attach-photos" class="btn btn-secondary align-self-end"
+                                data-i18n-title="chat_attach_photos" data-i18n-aria-label="chat_attach_photos">📷</button>
+                        <input type="file" id="chat-photos" accept="image/jpeg,image/png,image/webp" multiple hidden>
                         <textarea id="chat-input" rows="2" maxlength="2000" class="form-control"
                                   data-i18n-placeholder="message_placeholder" data-i18n-aria-label="message_placeholder"></textarea>
                         <button class="btn btn-primary align-self-end" data-i18n="send"></button>
@@ -108,7 +116,7 @@ async function loadList() {
                     ${c.unread ? `<span class="badge rounded-pill text-bg-danger">${c.unread}</span>` : ""}
                 </div>
                 <div class="small">@${esc(c.other_username)} · ${t(c.role === "buyer" ? "you_buy" : "you_sell")}</div>
-                <div class="small preview opacity-75">${esc(c.last_event ? eventText(c.last_event) : c.last_body)}</div>
+                <div class="small preview opacity-75">${esc(c.last_event ? eventText(c.last_event) : c.last_body || (c.last_photos ? t("chat_photo") : ""))}</div>
             </div>
         </a>`).join("");
     list.querySelectorAll("[data-id]").forEach(a => a.onclick = e => { e.preventDefault(); openChat(Number(a.dataset.id)); });
@@ -161,7 +169,9 @@ function renderChat(newMessages) {
             row.textContent = `${eventText(m.event)} · ${fmtTime(m.created_at)}`;
         } else {
             row.className = `bubble ${m.sender_id === currentUser.id ? "mine" : "theirs"}`;
-            row.innerHTML = `${esc(m.body)}<span class="time">${fmtTime(m.created_at)}</span>`;
+            const photos = (m.photos || []).map(p => `<a href="${esc(p.url)}" target="_blank" rel="noopener"><img
+                src="${esc(p.thumb_url)}" alt="${esc(t("chat_photo_open"))}" loading="lazy"></a>`).join("");
+            row.innerHTML = `${photos ? `<div class="photos">${photos}</div>` : ""}${esc(m.body || "")}<span class="time">${fmtTime(m.created_at)}</span>`;
         }
         box.appendChild(row);
         lastId = Math.max(lastId, m.id);
@@ -243,14 +253,53 @@ async function takeStep(action) {
     update(data);
 }
 
+// Photos for the next message: up to MAX_PHOTOS, shown small above the box with a button to take them off
+const MAX_PHOTOS = 5;
+let chosenPhotos = [];
+
+function renderChosenPhotos() {
+    const box = document.getElementById("chosen-photos");
+    box.querySelectorAll("img").forEach(img => URL.revokeObjectURL(img.src));
+    box.innerHTML = chosenPhotos.map(f => `<img src="${URL.createObjectURL(f)}" alt="">`).join("") + (chosenPhotos.length
+        ? `<button type="button" class="btn btn-sm btn-secondary" id="clear-photos">✕ ${esc(t("chat_remove_photos"))}</button>` : "");
+    box.classList.toggle("d-none", !chosenPhotos.length);
+    box.querySelector("#clear-photos")?.addEventListener("click", () => { chosenPhotos = []; renderChosenPhotos(); });
+}
+
+document.getElementById("attach-photos").onclick = () => document.getElementById("chat-photos").click();
+document.getElementById("chat-photos").addEventListener("change", e => {
+    chosenPhotos = [...chosenPhotos, ...e.target.files];
+    e.target.value = "";
+    chatError(chosenPhotos.length > MAX_PHOTOS ? "message_photos_many" : null);
+    chosenPhotos = chosenPhotos.slice(0, MAX_PHOTOS);
+    renderChosenPhotos();
+});
+
 document.getElementById("chat-form").onsubmit = async e => {
     e.preventDefault();
     const input = document.getElementById("chat-input");
-    if (!input.value.trim()) return;
+    if (!input.value.trim() && !chosenPhotos.length) return;
     chatError(null);
-    const { ok, data } = await api(`/api/conversations/${open.id}/messages`, { body: { body: input.value } });
-    if (!ok) return chatError(data?.error);
+    const button = e.target.querySelector("button:not([type])");
+    button.disabled = true;
+    let ok, data;
+    if (chosenPhotos.length) {
+        // a form with the files (api() sends JSON); the same header our pages send with every change
+        const form = new FormData();
+        form.append("body", input.value);
+        chosenPhotos.forEach(f => form.append("photos", f));
+        const response = await fetch(`/api/conversations/${open.id}/messages`,
+            { method: "POST", body: form, headers: { "X-Requested-With": "fetch" } }).catch(() => null);
+        ok = response?.ok;
+        data = await response?.json().catch(() => null);
+    } else {
+        ({ ok, data } = await api(`/api/conversations/${open.id}/messages`, { body: { body: input.value } }));
+    }
+    button.disabled = false;
+    if (!ok) return chatError(data?.error || "unknown");
     input.value = "";
+    chosenPhotos = [];
+    renderChosenPhotos();
     update(data);
 };
 

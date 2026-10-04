@@ -221,7 +221,9 @@ async function showConversation(id) {
         ${c.messages.map(m => m.event
             ? `<div class="small text-body-secondary text-center my-1">${esc(t(`event_${m.event}`))} · ${date(m.created_at)}</div>`
             : `<div class="small my-1"><strong>@${esc(m.sender_id === c.buyer_id ? c.buyer : c.seller)}</strong>
-                   <span class="text-body-secondary">${date(m.created_at)}</span><div style="white-space: pre-line;">${esc(m.body)}</div></div>`).join("")}`;
+                   <span class="text-body-secondary">${date(m.created_at)}</span><div style="white-space: pre-line;">${esc(m.body || "")}</div>
+                   ${(m.photos || []).map(p => `<a href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.thumb_url)}" alt=""
+                       style="width: 96px; height: 72px; object-fit: cover;" class="rounded me-1 mt-1"></a>`).join("")}</div>`).join("")}`;
     box.classList.remove("d-none");
 }
 

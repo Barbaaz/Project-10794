@@ -18,7 +18,7 @@ from datetime import timedelta
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import delete, or_, select
 
-from app.models import CollectionItem, Conversation, Listing, Message, ModerationLog, Rating, Report, User
+from app.models import CollectionItem, Conversation, Listing, Message, MessagePhoto, ModerationLog, Rating, Report, User
 from app.services import auth_service, chat_service, listing_service
 from app.services.photo_storage import storage
 from db import fetch_all, session
@@ -58,9 +58,12 @@ def remove():
             or_(Conversation.buyer_id.in_(users), Conversation.seller_id.in_(users)))
         listings = s.scalars(select(Listing).where(Listing.user_id.in_(users))).all()
         keys = [key for l in listings for p in l.photos for key in (p.photo_key, p.thumb_key)]
+        sent = s.scalars(select(MessagePhoto).join(Message).where(Message.conversation_id.in_(conversations))).all()
+        keys += [key for p in sent for key in (p.photo_key, p.thumb_key)]
         s.execute(delete(Report).where(Report.reporter_id.in_(users)))
         s.execute(delete(ModerationLog).where(ModerationLog.moderator_id.in_(users)))
         s.execute(delete(Rating).where(Rating.conversation_id.in_(conversations)))
+        s.execute(delete(MessagePhoto).where(MessagePhoto.id.in_([p.id for p in sent])))
         s.execute(delete(Message).where(Message.conversation_id.in_(conversations)))
         s.execute(delete(Conversation).where(Conversation.id.in_(conversations)))
         for listing in listings:
