@@ -37,11 +37,11 @@
 
     <div id="tools" class="d-none">
         <ul class="nav nav-pills mb-3" role="tablist">
-            <li class="nav-item"><button class="nav-link active" data-tab="reports" role="tab" data-i18n="mod_tab_reports"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="problems" role="tab" data-i18n="mod_tab_problems"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="matches" role="tab" data-i18n="mod_tab_matches"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="log" role="tab" data-i18n="mod_tab_log"></button></li>
-            <li class="nav-item d-none" id="staff-tab"><button class="nav-link" data-tab="staff" role="tab" data-i18n="mod_tab_staff"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link active" data-tab="reports" role="tab" data-i18n="mod_tab_reports"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="problems" role="tab" data-i18n="mod_tab_problems"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="matches" role="tab" data-i18n="mod_tab_matches"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="log" role="tab" data-i18n="mod_tab_log"></button></li>
+            <li class="nav-item d-none" id="staff-tab" role="presentation"><button class="nav-link" data-tab="staff" role="tab" data-i18n="mod_tab_staff"></button></li>
         </ul>
         <div id="message" class="alert d-none py-2 small" role="alert"></div>
 
@@ -357,7 +357,7 @@ async function loadPins() {
     });
 }
 
-// --- possible duplicates (same platform, same IGDB entry) --------------------------------------
+// --- possible duplicates (same platform: the same IGDB entry, or names alike) --------------------
 async function loadDuplicates() {
     const pairs = await getJSON("/api/mod/duplicates");
     const list = document.getElementById("duplicates");
@@ -365,7 +365,8 @@ async function loadDuplicates() {
         <span class="text-body-secondary">#${g.id} · ${esc(t("dup_products", { count: g.products }))}</span>`;
     list.innerHTML = pairs.length ? pairs.map(p => `
         <li class="list-group-item px-0">
-            <div class="text-body-secondary">${esc(p.platform)}</div>
+            <div class="text-body-secondary">${esc(p.platform)}
+                <span class="badge ${p.reason === "name" ? "text-bg-warning" : "text-bg-info"} ms-1">${esc(t(`dup_reason_${p.reason}`))}</span></div>
             <div>${side(p.a)}</div><div>${side(p.b)}</div>
             <div class="d-flex flex-wrap gap-2 mt-1">
                 <button type="button" class="btn btn-sm btn-primary" data-from="${p.b.id}" data-into="${p.a.id}">${esc(t("dup_merge_into", { id: p.a.id }))}</button>

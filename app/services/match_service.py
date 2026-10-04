@@ -14,6 +14,7 @@ from app.models import DuplicateDismissal, Game, GameEdition, MatchOverride, Mod
 from app.services.common import clear_cache
 from app.services.moderation_service import ModerationError
 from core.editions import edition_key_of
+from core.similar_names import similar_pairs
 from core.normalizer import normalize_name
 from db import session
 
@@ -154,24 +155,36 @@ MAX_DUPLICATES = 50
 
 def duplicates():
     """
-    Possible duplicate games: two games on the same platform matched to the same IGDB entry
-    ("CRISIS CORE: FINAL FANTASY VII - REUNION" / "Final Fantasy VII - Crisis Core Reunion"),
-    for a moderator to merge or dismiss. Not merged automatically: about one in five is a
-    different product (a bundle with extras, or one of them matched to the wrong IGDB entry).
+    Possible duplicate games on the same platform, for a moderator to merge or dismiss:
+    - reason "igdb": matched to the same IGDB entry ("CRISIS CORE: FINAL FANTASY VII - REUNION" /
+      "Final Fantasy VII - Crisis Core Reunion");
+    - reason "name": names alike (core/similar_names.py: typos, a missing "The Legend of", a store's
+      longer name), among games stores sell now.
+    The IGDB pairs first, MAX_DUPLICATES at a time. Never merged automatically: about one in five
+    IGDB pairs, and more name pairs, are different products (a bundle with extras, a spin-off).
     """
     with session() as s:
         a, b = aliased(Game), aliased(Game)
-        dismissed = select(DuplicateDismissal).where(DuplicateDismissal.game_a == a.id,
-                                                     DuplicateDismissal.game_b == b.id).exists()
-        pairs = s.execute(select(a, b).join(b, (b.platform_id == a.platform_id) & (b.igdb_id == a.igdb_id) & (b.id > a.id))
-                          .where(a.igdb_id.is_not(None), ~dismissed).order_by(a.title, a.id, b.id).limit(MAX_DUPLICATES)).all()
-        ids = {g.id for pair in pairs for g in pair}
+        dismissed_pairs = set(s.execute(select(DuplicateDismissal.game_a, DuplicateDismissal.game_b)).all())
+        igdb_pairs = [(x.id, y.id) for x, y in s.execute(
+            select(a, b).join(b, (b.platform_id == a.platform_id) & (b.igdb_id == a.igdb_id) & (b.id > a.id))
+            .where(a.igdb_id.is_not(None)).order_by(a.title, a.id, b.id)).all()]
+        selling = s.execute(select(Game.id, Game.platform_id, Game.normalized_title, Game.igdb_id, Game.title).where(
+            select(StoreProduct.id).where(StoreProduct.game_id == Game.id, StoreProduct.is_active).exists())).all()
+        found = [(pair, "igdb") for pair in igdb_pairs]
+        known = set(igdb_pairs)
+        found += [(pair, "name") for pair in similar_pairs([tuple(g) for g in selling]) if pair not in known]
+        found = [(pair, reason) for pair, reason in found if pair not in dismissed_pairs][:MAX_DUPLICATES]
+
+        ids = {i for pair, _ in found for i in pair}
+        games = {g.id: g for g in s.scalars(select(Game).where(Game.id.in_(ids)))} if ids else {}
         counts = dict(s.execute(select(StoreProduct.game_id, func.count()).where(
             StoreProduct.game_id.in_(ids), StoreProduct.is_active).group_by(StoreProduct.game_id)).all()) if ids else {}
 
         def game(g):
             return {"id": g.id, "title": g.title, "products": counts.get(g.id, 0)}
-        return [{"platform": x.platform.name, "a": game(x), "b": game(y)} for x, y in pairs]
+        return [{"platform": games[x].platform.name, "reason": reason, "a": game(games[x]), "b": game(games[y])}
+                for (x, y), reason in found]
 
 
 def merge_games(moderator_id, from_id, into_id):
