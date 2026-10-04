@@ -7,7 +7,8 @@ from flask import Blueprint, jsonify, request
 
 from app.routes.auth import current_user, login_required
 from app.routes.params import choice_arg, int_arg, text_arg
-from app.services import listing_service
+from app.services import igdb_game_service, listing_service
+from app.services.igdb_game_service import IGDBGameError
 from app.services.listing_service import ListingError
 
 bp = Blueprint("listings", __name__, url_prefix="/api/listings")
@@ -57,9 +58,20 @@ def get(listing_id):
 @login_required
 def create():
     form = request.form
+    # an edition we don't have yet: only one of the game's IGDB editions (never a typed name)
+    new_edition = (form.get("new_edition") or "").strip() or None
+    if new_edition:
+        try:
+            options = igdb_game_service.edition_options(form.get("game_id"))
+        except IGDBGameError:
+            raise ListingError("igdb_unavailable", 503)
+        except (ValueError, TypeError):
+            raise ListingError("game_invalid")
+        if new_edition not in options:
+            raise ListingError("edition_invalid")
     listing = listing_service.create_listing(
         current_user()["id"], form.get("game_id"), form.get("edition_id"), form.get("price"),
-        form.get("condition"), form.get("description"), uploaded_photos(),
+        form.get("condition"), form.get("description"), uploaded_photos(), new_edition=new_edition,
     )
     return jsonify(listing), 201
 

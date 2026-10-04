@@ -1,16 +1,19 @@
 """
 Games no store sells (older platforms, mostly), created from IGDB when a user wants to sell a copy:
 the sell form searches IGDB when the catalogue doesn't have the game, and picking a result on a
-platform creates the game there with its IGDB information and a Standard edition. The game then
+platform creates the game there with its IGDB information and a Standard edition (the game's other
+IGDB editions are offered too: edition_options). The game then
 works like any other (game page, collection, reviews); if a store starts selling it, the daily
 processing finds it by its name. One created game nobody uses is removed by the next rematch.
 """
+import re
 from datetime import datetime, timedelta, timezone
 
 import requests
 from sqlalchemy import func, select
 
 from app.models import Game, GameEdition, Platform
+from core.editions import key_of_edition_name
 from core.normalizer import normalize_name
 from db import session
 from pipeline.igdb import FIELDS, IGDB_PLATFORMS, IGDBClient, game_info
@@ -114,6 +117,35 @@ def create(user_id, igdb_id, platform_code):
         s.add(game)
         s.flush()
         return _with_standard_edition(s, game)
+
+
+# Versions only sold as downloads: not a copy anyone can sell here (physical copies only)
+DIGITAL_VERSION = re.compile(r"digital|cloud|download", re.IGNORECASE)
+
+
+def edition_options(game_id):
+    """
+    The game's editions on IGDB that we don't have yet, for the sell form: [name] ("Collector's
+    Edition", "Steelbook Edition"…), physical, on the game's platform. The seller picks one instead
+    of typing a name (listing_service.create_listing creates it). [] without an IGDB match.
+    """
+    with session() as s:
+        game = s.get(Game, int(game_id))
+        if not game or not game.igdb_id:
+            return []
+        code = s.get(Platform, game.platform_id).code
+        have = set(s.scalars(select(GameEdition.edition_key).where(GameEdition.game_id == game.id)))
+    platform = IGDB_PLATFORMS.get(code)
+    versions = query(f"fields name,version_title,platforms; where version_parent = {int(game.igdb_id)}; limit 50;")
+    names = {}
+    for v in versions:
+        name = (v.get("version_title") or "").strip()
+        if not name or DIGITAL_VERSION.search(name) or (v.get("platforms") and platform not in v["platforms"]):
+            continue
+        key = key_of_edition_name(name)
+        if key not in have:
+            names.setdefault(key, name[:200])
+    return sorted(names.values())
 
 
 def _with_standard_edition(s, game):

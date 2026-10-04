@@ -10,6 +10,7 @@ from app.models import NOW, Conversation, Game, GameEdition, Listing, ListingPho
 from app.services.common import card_group, page_result
 from app.services.photo_storage import PhotoError, process_photo, storage
 from app.services.rating_service import check_not_blocked, summaries
+from core.editions import key_of_edition_name
 from db import json_value, session
 
 CONDITIONS = ("new", "like_new", "good", "fair", "poor")
@@ -152,8 +153,12 @@ def used_summaries(edition_ids):
 
 # --- changing -----------------------------------------------------------------------------
 
-def create_listing(user_id, game_id, edition_id, price, condition, description, photos):
-    """photos: the uploaded files' bytes. Returns the new listing."""
+def create_listing(user_id, game_id, edition_id, price, condition, description, photos, new_edition=None):
+    """
+    photos: the uploaded files' bytes. Returns the new listing. new_edition: the name of an edition
+    we don't have yet, one of the game's IGDB editions (checked by the caller against
+    igdb_game_service.edition_options), created with the listing.
+    """
     check_not_blocked(user_id, ListingError)       # a rating overdue: rate first
     checked = _checked_fields(price, condition, description)
     game_id, edition_id = _checked_game(game_id, edition_id)
@@ -164,6 +169,8 @@ def create_listing(user_id, game_id, edition_id, price, condition, description, 
     saved = []
     try:
         with session() as s:
+            if new_edition:
+                edition_id = _edition_named(s, game_id, new_edition)
             listing = Listing(user_id=user_id, game_id=game_id, edition_id=edition_id, **checked)
             s.add(listing)
             s.flush()
@@ -261,6 +268,17 @@ def _checked_game(game_id, edition_id):
         if edition_id is not None and (edition is None or edition.game_id != game_id):
             raise ListingError("edition_invalid")
     return game_id, edition_id
+
+
+def _edition_named(s, game_id, name):
+    """The game's edition with this name's key (a store may have added it meanwhile), else a new one."""
+    key = key_of_edition_name(name)
+    edition = s.scalars(select(GameEdition).where(GameEdition.game_id == game_id, GameEdition.edition_key == key)).first()
+    if edition is None:
+        edition = GameEdition(game_id=game_id, edition_key=key, name=name[:200])
+        s.add(edition)
+        s.flush()
+    return edition.id
 
 
 def _store_photos(listing, processed, first_position):

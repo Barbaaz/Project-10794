@@ -20,6 +20,13 @@ def search():
     return jsonify(igdb_game_service.search(request.args.get("q", "")))
 
 
+@bp.get("/games/<int:game_id>/editions")
+@login_required
+def editions(game_id):
+    """Our game's IGDB editions we don't have yet, for the sell form: [name]"""
+    return jsonify(igdb_game_service.edition_options(game_id))
+
+
 @bp.post("/games")
 @login_required
 def create():

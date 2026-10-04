@@ -182,6 +182,20 @@ async function chooseGame(id, editionId = null) {
     if (editionId && data.editions.some(e => e.id === editionId)) editions.value = editionId;   // "Vender" from the collection
     editions.onchange = storePriceHint;
     storePriceHint();
+    addIgdbEditions(id);
+}
+
+// The game's other editions on IGDB (Collector's, Steelbook…): picked from IGDB's list, never typed,
+// and created with the listing. Nothing is added when IGDB doesn't answer.
+async function addIgdbEditions(gameId) {
+    const names = await fetch(`/api/igdb/games/${gameId}/editions`).then(r => r.ok ? r.json() : []).catch(() => []);
+    if (!names.length || game?.id !== gameId) return;
+    const group = document.createElement("optgroup");
+    group.label = t("sell_more_editions");
+    for (const name of names) group.appendChild(new Option(name, `new:${name}`));
+    const editions = document.getElementById("edition");
+    editions.appendChild(group);
+    editions.disabled = false;
 }
 
 // "New at the stores from €X": helps the seller choose a price
@@ -228,7 +242,9 @@ document.getElementById("sell-form").onsubmit = async event => {
 
     const form = new FormData();
     form.set("game_id", game.id);
-    form.set("edition_id", document.getElementById("edition").value);
+    const edition = document.getElementById("edition").value;
+    if (edition.startsWith("new:")) form.set("new_edition", edition.slice(4));   // one of the game's IGDB editions
+    else form.set("edition_id", edition);
     for (const name of ["condition", "price", "description"]) form.set(name, document.getElementById(name).value);
     photos.forEach(file => form.append("photos", file));
 

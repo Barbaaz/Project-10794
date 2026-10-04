@@ -144,6 +144,13 @@ def edition_key_of(phrase):
     return " ".join(sorted({w for w in text.split() if w not in EDITION_FILLER}))
 
 
+def key_of_edition_name(name):
+    """An edition's name on its own ("Collector's Edition", IGDB's or a moderator's) as its key;
+    "Standard Edition" is the Standard edition (key "")."""
+    phrase = normalize_name(name)
+    return "" if phrase in STANDARD_PHRASES else edition_key_of(phrase)
+
+
 def extract_tags(name):
     tags = set()
 
