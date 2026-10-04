@@ -34,6 +34,9 @@ def parse_products(html, console=None):
             if image_tag:
                 image = image_tag.get("data-full-size-image-url") or image_tag.get("src")
 
+            url = card.select_one(LINK)["href"]
+            name = without_marketplace_mark(name, url)
+
             products.append({
                 "store": "press_start",
                 "external_name": name,
@@ -45,7 +48,7 @@ def parse_products(html, console=None):
                 "is_preorder": card.select_one(PREORDER_FLAG) is not None,
                 "release_date": None,             # filled from the product page, see PressStartScraper
                 "release_date_checked": False,
-                "url": card.select_one(LINK)["href"],
+                "url": url,
                 "image": image,
             })
 
@@ -53,6 +56,17 @@ def parse_products(html, console=None):
             log.warning("[PressStart Parser] Erro: %s", e)
 
     return products
+
+
+MARKETPLACE_MARK = re.compile(r"\s+MP$")
+
+
+def without_marketplace_mark(name, url):
+    """
+    Products other sellers sell through Press Start (/marketplace/ links) end in "MP"
+    ("Persona 5 Royal PS5 MP"): without it they match the same game as the store's own copy.
+    """
+    return MARKETPLACE_MARK.sub("", name) if "/marketplace/" in url else name
 
 
 def parse_product_page(html):

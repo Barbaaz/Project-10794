@@ -161,6 +161,16 @@ def test_product_pages_special_editions_first():
     assert fetched == ["https://x/collectors", "https://x/preorder"]
 
 
+def test_press_start_marketplace_mark():
+    from scrapers.press_start.parser import without_marketplace_mark
+
+    market = "https://www.pressstart.pt/pt/marketplace/persona-5-royal-ps5.html"
+    assert without_marketplace_mark("Persona 5 Royal PS5 MP", market) == "Persona 5 Royal PS5"
+    assert without_marketplace_mark("Persona 5 Royal PS5", market) == "Persona 5 Royal PS5"
+    # only on marketplace links
+    assert without_marketplace_mark("Game PS5 MP", "https://www.pressstart.pt/pt/jogos-ps5/game.html") == "Game PS5 MP"
+
+
 def test_press_start_product_page():
     from scrapers.press_start.parser import parse_product_page
 
