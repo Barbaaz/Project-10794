@@ -45,10 +45,36 @@ def product_page(name, category="Consolas Jogos Playstation", availability="InSt
 def test_category_page():
     games = parse_products(LISTING)
     assert [(g["external_name"], g["console"], g["price"], g["in_stock"]) for g in games] == [
-        ("Playstation PS5 Bomb Rush Cyberfunk", "PS5", 12.49, True),
-        ("Playstation PS2 Pro Evolution Soccer 4 Platinum PES 4", "PS2", 9.99, True),    # older platforms too
+        ("PS5 Bomb Rush Cyberfunk", "PS5", 12.49, True),
+        ("Pro Evolution Soccer 4 Platinum PES 4", "PS2", 9.99, True),    # older platforms too (their name taken off)
     ]
     assert games[0]["url"] == f"{BASE}/playstation-ps5-bomb-rush-cyberfunk/141367194/p" and games[0]["old_price"] is None
+
+
+def test_names_lose_the_brand_and_the_box_language():
+    """Techinn's names, as found on 2026-10-04, against what the other stores call the game."""
+    from core.editions import is_excluded, parse_title
+    from scrapers.techinn.parser import _product
+
+    def title(raw, console=None):
+        p = _product(raw, 1.0, True, "u", None, console)
+        t = parse_title(p["external_name"])
+        return p["console"], t.game_title, t.edition_name
+
+    assert title("XBOX Xbox One Just Cause 3 (Gold Edition) (DE/Multi in Game)") == ("XboxOne", "Just Cause 3", "Gold Edition")
+    assert title("Nintendo Nintendo Switch Neva") == ("Switch", "Neva", "Standard")
+    assert title("Pc Games PC Endless Space 2", "PC") == ("PC", "Endless Space 2", "Standard")
+    assert title("XBOX 360 Call of Duty Modern Warfare 2 Hardened Edition") == ("Xbox360", "Call of Duty Modern Warfare 2", "Hardened Edition")
+    assert title("XBOX Xbox One/Xbox Series X Persona 5 Tactica IT") == ("XboxSeries", "Persona 5 Tactica", "Standard")
+    assert title("XBOX Smart Delivery Wreckreation")[1] == "Wreckreation"
+    assert title("Playstation PS3 Metal Gear Rising: Revengeance IMP UK")[1:] == ("Metal Gear Rising: Revengeance", "Standard")
+    assert title("Playstation PS4 Middle Earth Shadow of War IMP EU")[1] == "Middle Earth Shadow of War"
+    assert title("Nintendo Switch Castlevania Dominus Collection (Portrait Cover) (Import USA)")[2] == "Standard · Import US"
+    assert title("Pc Games PC The Chant-Limited Edition-EN/PL", "PC")[1:] == ("The Chant", "Limited Edition")
+    assert title("Playstation PS4 Journey (Collector´s Edition)")[1:] == ("Journey", "Collector's Edition")
+    assert title("Nintendo Switch Imp of the Sun")[1] == "Imp of the Sun"            # "Imp" in a title stays
+    assert title("Nintendo Wii U Mario Kart 8") == ("WiiU", "Mario Kart 8", "Standard")
+    assert is_excluded(_product("Nintendo Switch Red Dead Redemption CIAB", 1.0, True, "u", None)["external_name"])
 
 
 def test_sitemap_keeps_the_games():

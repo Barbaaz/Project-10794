@@ -4,7 +4,7 @@ import re
 
 from bs4 import BeautifulSoup
 
-from app.utils.utils import detetar_plataforma
+from app.utils.utils import PLATFORM_PATTERNS, detetar_plataforma, extrair_consola
 from scrapers.base.parser_utils import detect_condition, html_to_text, parse_price
 
 log = logging.getLogger(__name__)
@@ -24,11 +24,55 @@ NOT_A_GAME = re.compile(
     r"disco-rigido|camara|camera|teclado|rato|dock|grip|alimentador|bateria|caneta|estojo|modulo|vr2?)(?:-|/)")
 
 
+# Techinn's names start with the brand, often before the platform ("XBOX Xbox One Rage 2", "Nintendo
+# Nintendo Switch Neva", "Pc Games PC Endless Space 2") and end with the box's language ("(FR/Multi
+# in Game)", "(UK/AR)", "… IT", "…-PL"): the same game for us
+PC_GAMES = re.compile(r"^pc\s+games\s+", re.IGNORECASE)
+BRAND = re.compile(r"^(?:playstation|nintendo|xbox|microsoft)\s+", re.IGNORECASE)
+LANGUAGE_TAG = re.compile(r"\s*\((?:[A-Z]{2,4}(?:[/-][^)]*)?|[a-z]{2}/multi[^)]*)\)", re.IGNORECASE)
+LANGUAGES = r"(?:IT|ITA|ENG|EN|PL|POL|FR|DE|ES|NL|UK|PT|AR|EU)"
+LANGUAGE_END = re.compile(rf"[\s-]+{LANGUAGES}(?:/{LANGUAGES})*$")
+# "… Import", "… IMP", "(Portrait Cover) Import USA": a bracketed tag (core/editions.py: "Import US" an
+# edition of its own, a plain "(Import)" ignored)
+IMPORT = re.compile(r"\s*\(?\b(?:[Ii]mport(?:ed)?|IMPORT|IMP)\b(\s+USA?\b)?\)?\s*$")
+# The platforms the name-normaliser doesn't remove (core/normalizer.py knows the current ones):
+# taken off the front of the name once the platform is known ("Xbox 360 Batman" → "Batman")
+OLDER_PLATFORMS = [(code, re.compile(rf"^(?:{pattern})\s*", re.IGNORECASE)) for code, pattern in PLATFORM_PATTERNS
+                   if code not in {"Switch2", "Switch", "PS5", "PS4", "PS3", "XboxSeries", "XboxOne", "Xbox", "PC"}]
+EDITION_AFTER_HYPHEN = re.compile(r"(?<=\w)-(?=(?:Special|Deluxe|Gold|Premium|Ultimate|Complete|Collector|Limited|"
+                                  r"Standard|Launch|Day|PlayStation\s+Hits)\b)", re.IGNORECASE)
+
+
+def clean_name(name):
+    """
+    "XBOX Xbox One Just Cause 3 (Gold Edition) (DE/Multi in Game)" → "Xbox One Just Cause 3 (Gold Edition)";
+    the brand stays when the platform needs it ("XBOX 360 Call of Duty").
+    """
+    name = " ".join(name.replace("´", "'").split())
+    name = PC_GAMES.sub("PC ", name)
+    name = re.sub(r"^PC\s+PC\s+", "PC ", name, flags=re.IGNORECASE)
+    rest = BRAND.sub("", name, count=1)
+    if rest != name and extrair_consola(rest):
+        name = rest
+    name = re.sub(r"^xbox\s+one\s*/\s*(?!\s*(?:xbox|series))", "Xbox One ", name, flags=re.IGNORECASE)   # "Xbox One/ FIFA®21"
+    name = re.sub(r"\bsmart\s+delivery\b\s*", "", name, flags=re.IGNORECASE)
+    name = LANGUAGE_TAG.sub("", name)
+    for _ in range(2):              # "… IMP EU": the language, then the import mark
+        name = LANGUAGE_END.sub("", name.strip())
+        name = IMPORT.sub(lambda m: " (Import USA)" if m.group(1) else " (Import)", name)
+    return EDITION_AFTER_HYPHEN.sub(" ", name).strip()
+
+
 def _product(name, price, in_stock, url, image, console=None, description=None, details_checked=False):
+    name = clean_name(name)
+    console = detetar_plataforma(name, console)
+    for code, at_start in OLDER_PLATFORMS:
+        if code == console:
+            name = at_start.sub("", name, count=1)
     return {
         "store": "techinn",
         "external_name": name,
-        "console": detetar_plataforma(name, console),
+        "console": console,
         "condition": detect_condition(name),
         "price": price,
         "old_price": None,          # the store's crossed-out price is never a discount for us

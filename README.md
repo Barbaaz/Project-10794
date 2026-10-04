@@ -336,7 +336,7 @@ All scraper requests go through `scrapers/base/http_client.py`:
   `python -m scheduler.run_single_store <store> --force` overrides it
 
 A daily run makes about 150 requests to Press Start, 60 to Mega Mania, 16 to CSTech, ~110 to
-Gaming Replay and ~72 to Rádio Popular. Shopify stores (CSTech) answer 429 after many requests in a
+Gaming Replay, ~72 to Rádio Popular and ~155 to Techinn. Shopify stores (CSTech) answer 429 after many requests in a
 short time: avoid extra manual runs.
 
 ## Safeguard against a half-broken scraper
@@ -358,6 +358,7 @@ python -m scheduler.run_single_store <store> --accept-drop
 | CSTech      | Shopify JSON feed (`/products.json`)     |
 | Gaming Replay | HTML (PrestaShop), per platform the "Jogos" and "Seminovos" (pre-owned) category pages, 12 games per page (~110 requests a run); "(COIB)" = code in box, excluded; "(Edição Americana / Asiática / Japonesa)" = import editions |
 | Rádio Popular | JSON from its "load more" request (POST `/ajax`, 12 games per page); match-only (see below) |
+| Techinn | HTML: the 4 game category pages (only the ~96 most popular each; the rest load from Techinn's search service, not used) + the product sitemap and up to 150 product pages a run (schema.org price / stock), the longest unseen first, so each is re-read every ~4 days; only products gone from the sitemap are deactivated. Names cleaned (brand, box language, "IMP"); "CIAB" = code in a box, excluded; older platforms (PS2, PS3, Xbox 360, Wii U…) kept |
 
 Rádio Popular shortens names ("TALES OF ETERNIA REMAS", "LUIGI MANS 3"): its products are also
 matched to a known game they're a short form of (`core/close_match.py`: same numbers, same first
