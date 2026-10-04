@@ -51,6 +51,9 @@ NOT_A_GAME = {1, 5, 13, 14}
 # (IGDB also files compilations like "Rayman: 30th Anniversary Edition" as bundles: scored as usual.)
 PARTS = {2, 6, 7}
 BUNDLE = 3
+# 8 remake: on a newer console, a game with an old game's name is most likely its remake (a store's
+# "Resident Evil 2" on PS4 / PS5 is the 2019 remake, not the PS1 game's 2025 port with the same name)
+REMAKE = 8
 JOINED_GAMES = re.compile(r"[+&/]|\bvs\b", re.IGNORECASE)
 NOT_THE_GAMES_NAME = NOT_A_GAME | PARTS | {BUNDLE}
 # Words about the packaging, not another game: allowed in such a name besides ours ("Class of Heroes
@@ -140,6 +143,10 @@ def title_variants(title):
     if " - " in title:
         variants += [title.split(" - ")[-1], title.split(" - ")[0]]
     variants.append(" ".join(normalize_name(title).split()))
+    # IGDB names most remakes like the original ("Resident Evil 2", type remake): tried last, so a
+    # remake IGDB does call that ("Final Fantasy VII Remake") is found first
+    if re.search(r"\bremake\b", title, re.IGNORECASE):
+        variants.append(re.sub(r"\s*\bremake\b", "", title, flags=re.IGNORECASE))
     return [v.strip() for v in dict.fromkeys(variants) if len(v.strip()) >= 3]
 
 
@@ -172,6 +179,8 @@ def best_match(game_key, results):
         score = name_score(game_key, g["name"])
         if g.get("version_parent"):
             score -= 0.05        # "X: Deluxe Edition" — we want X
+        if g.get("game_type") == REMAKE:
+            score += 0.01        # only a tie-break: same name as a port of the original → the remake
         if score > best_score:
             best, best_score = g, score
     return best if best_score >= MIN_SCORE else None

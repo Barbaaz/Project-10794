@@ -74,6 +74,20 @@ def test_title_variants():
     from pipeline.igdb import title_variants
     assert title_variants("Formula One - F1 23") == ["Formula One - F1 23", "F1 23", "Formula One", "formula one f 1 23"]
     assert "Fallout 4 GOTY" in title_variants("Fallout 4 GOTY: 25th Anniversary")
+    assert title_variants("Resident Evil 2 Remake")[-1] == "Resident Evil 2"
+
+
+def test_a_remake_beats_a_port_of_the_original():
+    """IGDB, 2026-10-04: two "Resident Evil 2" on PS5, the PS1 game's 2025 port listed first."""
+    results = [{"id": 347128, "name": "Resident Evil 2", "game_type": 11},
+               {"id": 19686, "name": "Resident Evil 2", "game_type": 8}]
+    assert best_match("resident evil 2", results)["id"] == 19686
+    assert best_match("resident evil 2 remake", results)["id"] == 19686
+    assert best_match("resident evil 2", results[:1])["id"] == 347128       # a port alone still matches
+    # port vs the original game: the first result, as before (Bayonetta 2 on Switch keeps its Switch port)
+    port_first = [{"id": 279336, "name": "Bayonetta 2", "game_type": 11}, {"id": 2135, "name": "Bayonetta 2", "game_type": 0}]
+    assert best_match("bayonetta 2", port_first)["id"] == 279336
+    assert best_match("no mans sky", [{"id": 191418, "name": "No Man's Sky: Nintendo Switch Edition", "game_type": 11}])
 
 
 def test_game_info():
