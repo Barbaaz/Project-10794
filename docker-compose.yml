@@ -23,6 +23,13 @@ services:
       # Optional: only needed to look up new games on IGDB (pipeline/igdb.py)
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}
+      # Optional: e-mail (password reset). Without SMTP_HOST, e-mails are only written to the log
+      SITE_URL: ${SITE_URL:-http://localhost:5000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
     ports:
       - "5000:5000"
     volumes:

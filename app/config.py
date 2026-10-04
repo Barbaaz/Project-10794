@@ -30,3 +30,15 @@ def _secret_key():
 SECRET_KEY = _secret_key()
 # Only send the login cookie over HTTPS: set COOKIE_SECURE=1 once the site is served with HTTPS
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE") == "1"
+
+# The site's own address, for links in e-mails (never taken from the request: its Host header
+# could point a password-reset link at another site)
+SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:5000").rstrip("/")
+
+# E-mail (app/services/mail_service.py): sent by SMTP once SMTP_HOST is set (any provider);
+# until then, e-mails are only written to the log
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+MAIL_FROM = os.environ.get("MAIL_FROM", "")

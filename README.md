@@ -106,6 +106,8 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |
 | `POST /api/auth/register` `{username, email, password, display_name?}` | Create an account and log in (the session cookie) |
 | `POST /api/auth/login` `{login, password}` | Log in with username or email; locked for 15 min after 5 wrong passwords |
+| `POST /api/auth/forgot` `{email, lang}` | E-mail a link to choose a new password (valid 1 hour, works once); the same answer whether or not the email has an account. Sent by SMTP once `SMTP_HOST` is set (`.env.example`), else only logged |
+| `POST /api/auth/reset` `{token, password}` | The new password from that link; logs in |
 | `POST /api/auth/logout` · `GET /api/auth/me` | Log out · the logged-in user (or `null`) |
 | `GET /api/listings?game_id=` · `GET /api/listings/<id>` | Pre-owned copies people sell (active / reserved), with photos; never the seller's email |
 | `GET /api/listings?platform=&sort=newest\|price_asc\|price_desc&page=` | The "Used" tab: one group per game edition with its sellers' active listings, paged |
@@ -118,6 +120,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/conversations/<id>?after=` · `POST …/messages` `{body}` | One conversation (only messages after `after`, for refreshing) · send a message |
 | `POST /api/conversations/<id>/steps` `{action}` | Purchase step: `request`, `accept` (reserves), `decline`, `sent`, `received` (sold), `problem`, `cancel`; 7 days after `sent` it completes by itself |
 | `GET /api/igdb/games?q=` · `POST /api/igdb/games` `{igdb_id, platform}` | The sell form, for games the catalogue doesn't have (older platforms): IGDB games on our platforms · the game on that platform, created from IGDB if needed (20 per user per day) → `{game_id, edition_id}` |
+| `PUT /api/mod/games/<id>/title` `{title}` | Moderators: correct a store's typo in a game's title, kept by the processing and the rematch (`""` = the stores' title again) |
 | `PUT /api/mod/games/<id>/title-en` `{title_en}` | Moderators: a game's English name, shown when the page is in English (`""` = the store's title) |
 | `POST /api/collection/import` `{ids}` | Favourites an old browser kept (before accounts; favourites are now the wishlist), put on the wishlist (merged editions followed) → `{added}` |
 | `GET /api/ratings/pending` | Completed purchases the user still has to rate (`overdue` after 14 days: buying and selling blocked until rated) |
@@ -129,6 +132,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `PUT /api/collection/settings` `{public}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown) · a public collection |
 | `GET /api/games/<id>/reviews?page=` | Players' reviews of a game on that platform: average, count and how many gave each score 1–10, the user's own review, 20 shown reviews per page (newest first; hidden ones and blocked users' left out; `owner` = has the game in their collection). Catalogue / deals / wishlist cards carry `review_score` and `review_count` |
 | `PUT /api/games/<id>/reviews/mine` `{score: 1–10, title?, body?}` · `DELETE` | Write or change one's review (one per user and game) · delete it (not once a moderator hid it) |
+| `PUT /api/games/<id>/reviews/mine/score` `{score: 1–10 or ""}` | Only the review's score (the collection page's rating); its text is kept |
 | `POST /api/reports` `{kind: listing\|user\|rating\|review, target_id, reason, details?}` | Report something to the moderators (not your own; once while open; 20 a day) |
 | `GET /api/mod/reports` · `GET /api/mod/problems` · `GET /api/mod/log` | Moderators: open reports grouped by what was reported · purchases with a problem · past actions |
 | `POST /api/mod/actions` `{action, target_id, note?}` | Moderators: `hide_listing` / `restore_listing`, `hide_rating` / `restore_rating`, `hide_review` / `restore_review`, `block_user` / `unblock_user`, `dismiss` (target = the report) |

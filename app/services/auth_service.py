@@ -1,15 +1,20 @@
 """
 Accounts: sign up with a username, email and password; log in with the username or the email.
-Passwords are hashed (werkzeug's scrypt), never stored as typed. Google / Microsoft sign-in
+Passwords are hashed (werkzeug's scrypt), never stored as typed; a forgotten one is replaced
+through a signed link sent by e-mail (no table: the link names the user and expires; see
+request_password_reset). Google / Microsoft sign-in
 come later and create accounts without a password (password_hash None).
 """
+import hashlib
 import re
 import time
 
 from sqlalchemy import or_, select
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from app import config
 from app.models import NOW, User, fields
+from app.services import mail_service
 from db import session
 
 USERNAME = re.compile(r"^[A-Za-z0-9_.-]{3,30}$")
@@ -78,6 +83,70 @@ def authenticate(login, password, ip="?"):
         user_id = user.id
 
     _failures.pop(key, None)
+    return get_user(user_id)
+
+
+# --- forgotten password: a link by e-mail ---------------------------------------------------
+RESET_SECONDS = 60 * 60
+RESET_MAIL = {
+    "pt": ("Nova palavra-passe",
+           "Olá {username},\n\nPara escolher uma nova palavra-passe, abra esta ligação (válida durante 1 hora):\n"
+           "{link}\n\nSe não foi o próprio a pedir, ignore este email: a palavra-passe fica como está."),
+    "en": ("New password",
+           "Hello {username},\n\nTo choose a new password, open this link (it works for 1 hour):\n"
+           "{link}\n\nIf you didn't ask for this, ignore this email: your password stays as it is."),
+}
+
+
+def _reset_tokens():
+    from itsdangerous import URLSafeTimedSerializer
+    return URLSafeTimedSerializer(config.SECRET_KEY, salt="password-reset")
+
+
+def _password_mark(user):
+    """Part of the reset link: once the password changes, links made before stop working (each works once)."""
+    return hashlib.sha256((user.password_hash or "").encode()).hexdigest()[:16]
+
+
+def request_password_reset(email, lang="pt", ip="?"):
+    """
+    E-mail a link to choose a new password. Nothing tells whether the address has an account
+    (the same answer either way). At most MAX_FAILURES requests per address (IP) per LOCK_SECONDS.
+    """
+    key = (ip, "password reset")
+    if _locked(key):
+        raise AccountError("reset_locked")
+    _failures.setdefault(key, []).append(time.monotonic())
+
+    email = (email or "").strip().lower()
+    with session() as s:
+        user = s.scalars(select(User).where(User.email == email, User.is_active)).first()
+        if not user:
+            return
+        token = _reset_tokens().dumps({"id": user.id, "mark": _password_mark(user)})
+        username = user.username
+    subject, text = RESET_MAIL.get(lang, RESET_MAIL["pt"])
+    mail_service.send(email, subject, text.format(username=username, link=f"{config.SITE_URL}/account?reset={token}"))
+
+
+def reset_password(token, password):
+    """A new password from a reset link (logged in afterwards); AccountError("reset_invalid") for an old or used link."""
+    if len(password or "") < MIN_PASSWORD:
+        raise AccountError("password_short")
+    from itsdangerous import BadSignature
+    try:
+        data = _reset_tokens().loads(token or "", max_age=RESET_SECONDS)
+    except BadSignature:            # also an expired one
+        raise AccountError("reset_invalid")
+
+    with session() as s:
+        user = s.get(User, data.get("id"))
+        if not user or not user.is_active or _password_mark(user) != data.get("mark"):
+            raise AccountError("reset_invalid")
+        user.password_hash = generate_password_hash(password)
+        user_id, logins = user.id, {user.username.lower(), user.email}
+    for key in [k for k in _failures if k[1] in logins]:      # locked out by wrong passwords: not any more
+        _failures.pop(key, None)
     return get_user(user_id)
 
 
