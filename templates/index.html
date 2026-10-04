@@ -952,7 +952,8 @@ function starButton(group) {
     return `${mine.wishlist ? "★" : "☆"}${mine.owned ? `<span class="fav-mark" aria-hidden="true">📚</span>` : ""}`;
 }
 
-// The star opens a menu for the card's edition: ⭐ Quero, 📚 Tenho, each on / off.
+// The star opens a menu for the card's edition: ⭐ Quero, 📚 Tenho, each on / off, and 🏷️ Vender
+// (the sell form on this edition, without going through the game page).
 // One menu open at a time; Esc, a click elsewhere or Tab closes it
 let cardMenu = null;    // {menu, button, group}
 
@@ -976,7 +977,10 @@ function fillCardMenu(focusKind) {
                    ["owned", t("collection_add_owned"), Boolean(mine.owned)]];
     menu.innerHTML = items.map(([kind, label, on]) => `
         <button type="button" class="dropdown-item" role="menuitemcheckbox" aria-checked="${on}" data-kind="${kind}">
-            <span class="check">${on ? "✓" : ""}</span>${esc(label)}</button>`).join("");
+            <span class="check">${on ? "✓" : ""}</span>${esc(label)}</button>`).join("") + `
+        <hr class="dropdown-divider">
+        <a class="dropdown-item" role="menuitem" href="/sell?game_id=${group.game_id}&edition_id=${group.edition_id}">
+            <span class="check"></span>${esc(t("card_sell"))}</a>`;
     menu.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => toggleCardItem(group, b.dataset.kind));
     menu.querySelector(`[data-kind="${focusKind}"]`).focus();
 }
@@ -999,7 +1003,7 @@ document.addEventListener("keydown", e => {
     if (e.key === "Tab") return closeCardMenu();
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        const items = [...cardMenu.menu.querySelectorAll("[data-kind]")];
+        const items = [...cardMenu.menu.querySelectorAll(".dropdown-item")];
         const next = items.indexOf(document.activeElement) + (e.key === "ArrowDown" ? 1 : -1);
         items[(next + items.length) % items.length].focus();
     }

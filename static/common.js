@@ -80,6 +80,7 @@ async function renderAccountArea() {
     const staff = ["moderator", "admin"].includes(currentUser.role);
     box.innerHTML = `
         ${staff ? `<a href="/admin" class="btn btn-sm btn-secondary" title="${esc(t("mod_title"))}" aria-label="${esc(t("mod_title"))}">🛡️</a>` : ""}
+        <a href="/sell" class="btn btn-sm btn-success" title="${esc(t("market_sell"))}" aria-label="${esc(t("market_sell"))}">🏷️</a>
         <a href="/collection" class="btn btn-sm btn-secondary position-relative" id="collection-link"
            title="${esc(t("collection_title"))}" aria-label="${esc(t("collection_title"))}">📚</a>
         <a href="/messages" class="btn btn-sm btn-secondary position-relative" id="messages-link"
