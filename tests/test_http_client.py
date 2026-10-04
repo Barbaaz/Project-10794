@@ -82,6 +82,30 @@ def test_disallowed_urls_are_never_fetched(clock):
     assert "https://shop.test/checkout/1" not in session.requested
 
 
+def test_robots_txt_wildcards():
+    """Rules with * and $ (Techinn's, xtralife's): Python's own parser read them as allowed."""
+    from scrapers.base.robots import RobotsRules
+
+    robots = RobotsRules.parse("\n".join([
+        "User-agent: *",
+        "Disallow: *query=*", "Disallow: */ofertas*", "Disallow: */cart$", "Disallow: /catalogo/*",
+        "Disallow: /index.php?action=*", "Allow: *utm_source=google_products&utm_medium*",
+        "Disallow: /private", "Allow: /private/open",
+        "User-agent: EtaoSpider", "Disallow: /",
+    ]), "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+    base = "https://www.tradeinn.com"
+    assert robots.allowed(f"{base}/techinn/pt/consolas-jogos-playstation/19292/s")
+    assert robots.allowed(f"{base}/techinn/pt/consolas-jogos-playstation/19292/s?page=2")
+    assert not robots.allowed(f"{base}/techinn/pt/p?query=zelda")
+    assert not robots.allowed(f"{base}/techinn/pt/ofertas/123")
+    assert not robots.allowed(f"{base}/techinn/pt/cart") and robots.allowed(f"{base}/techinn/pt/cart/help")
+    assert not robots.allowed("https://www.xtralife.com/catalogo/ps5")
+    assert not robots.allowed(f"{base}/index.php?action=login")
+    assert not robots.allowed(f"{base}/private/x") and robots.allowed(f"{base}/private/open/x")   # longest rule wins
+    # another bot's group isn't ours; an empty Disallow allows everything
+    assert RobotsRules.parse("User-agent: *\nDisallow:", "Mozilla/5.0").allowed(f"{base}/anything")
+
+
 def test_robots_txt_refused_means_crawl_nothing(clock):
     c = client(FakeSession(robots=FakeResponse(status=403)))
     with pytest.raises(RobotsDisallowed):
