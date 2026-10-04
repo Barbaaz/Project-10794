@@ -263,6 +263,13 @@ CATALOG_SORTS = {
     "price_asc": "ed.best_price, g.title, p.sort_order, e.id",
     "price_desc": "ed.best_price DESC, g.title, p.sort_order, e.id",
 }
+# Without a platform filter a page holds cards for a game's edition on every platform (the same
+# name and edition key): these sorts order those cards (the keys end the order: unique)
+CARD_SORTS = {
+    "name": "MIN(g.title), CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, MIN(e.name), g.normalized_title, e.edition_key",
+    "price_asc": "MIN(ed.best_price), MIN(g.title), g.normalized_title, e.edition_key",
+    "price_desc": "MIN(ed.best_price) DESC, MIN(g.title), g.normalized_title, e.edition_key",
+}
 
 
 def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False, q=None, store=None, genre=None,
@@ -272,6 +279,9 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
     copy for sale by a user, as card groups (same shape as /search), one page at a time; each
     group has `used` ({count, price, listing_id}) when users sell it. sort: name / price_asc /
     price_desc (the lowest price, store or used).
+    Without a platform: one card per game and edition across platforms (the same name and edition
+    key; a page is per_page cards): the cheapest platform's group, its other platforms' groups in
+    `alternatives` (the card's platform chips switch between them).
     special_only: only editions above Standard (Deluxe, Collector's, Steelbook...). Keys are
     "" for Standard and "|Game Key Card" for a Standard that only differs in format.
     q: every word must be in the game's title (the search uses this).
@@ -312,28 +322,45 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             params += chosen[1]
     filters = " AND ".join(filters)
 
-    total = fetch_one(
-        f"""{in_stock_editions}
-        SELECT COUNT(*) AS total FROM ed
+    joins = """FROM ed
         JOIN game_editions e ON e.id = ed.edition_id
         JOIN games g ON g.id = e.game_id
-        JOIN platforms p ON p.id = g.platform_id
-        WHERE {filters}""",
-        *params,
-    )["total"]
-
-    page_editions = fetch_all(
-        f"""{in_stock_editions}
-        SELECT {EDITION_CARD_COLUMNS}, g.image_url AS image
-        FROM ed
-        JOIN game_editions e ON e.id = ed.edition_id
-        JOIN games g ON g.id = e.game_id
-        JOIN platforms p ON p.id = g.platform_id
-        WHERE {filters}
-        ORDER BY {order_by}
-        OFFSET ? ROWS FETCH NEXT ? ROWS ONLY""",
-        *params, (page - 1) * per_page, per_page,
-    )
+        JOIN platforms p ON p.id = g.platform_id"""
+    by_game = not platform
+    if by_game:
+        total = fetch_one(
+            f"""{in_stock_editions}
+            SELECT COUNT(*) AS total FROM (SELECT 1 {joins} WHERE {filters}
+                                           GROUP BY g.normalized_title, e.edition_key) cards""",
+            *params,
+        )["total"]
+        keys = fetch_all(
+            f"""{in_stock_editions}
+            SELECT g.normalized_title AS game_key, e.edition_key {joins} WHERE {filters}
+            GROUP BY g.normalized_title, e.edition_key
+            ORDER BY {CARD_SORTS.get(sort, CARD_SORTS["name"])}
+            OFFSET ? ROWS FETCH NEXT ? ROWS ONLY""",
+            *params, (page - 1) * per_page, per_page,
+        )
+        page_editions = fetch_all(
+            f"""{in_stock_editions}
+            SELECT {EDITION_CARD_COLUMNS}, g.image_url AS image, g.normalized_title AS game_key, ed.best_price
+            {joins}
+            WHERE {filters} AND (g.normalized_title, e.edition_key) IN ({", ".join(["(?, ?)"] * len(keys)) or "(NULL, NULL)"})
+            ORDER BY ed.best_price, p.sort_order, e.id""",
+            *params, *[v for k in keys for v in (k["game_key"], k["edition_key"])],
+        ) if keys else []
+    else:
+        total = fetch_one(f"{in_stock_editions} SELECT COUNT(*) AS total {joins} WHERE {filters}", *params)["total"]
+        page_editions = fetch_all(
+            f"""{in_stock_editions}
+            SELECT {EDITION_CARD_COLUMNS}, g.image_url AS image
+            {joins}
+            WHERE {filters}
+            ORDER BY {order_by}
+            OFFSET ? ROWS FETCH NEXT ? ROWS ONLY""",
+            *params, (page - 1) * per_page, per_page,
+        )
 
     groups = []
     if page_editions:
@@ -373,7 +400,27 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             g["release_date"] = release.get("release_date")
             g["date_is_estimate"] = release.get("date_is_estimate", False)
 
-    return page_result(page, per_page, total, groups=mark_review_scores(mark_historical_lows(groups)))
+    groups = mark_review_scores(mark_historical_lows(groups))
+    if by_game and groups:
+        groups = one_card_per_game(groups, page_editions, keys)
+    return page_result(page, per_page, total, groups=groups)
+
+
+def one_card_per_game(groups, page_editions, keys):
+    """
+    The page's edition groups as one card per game and edition (keys: the page's cards in order):
+    its cheapest platform first (page_editions come cheapest first), the others in `alternatives`.
+    """
+    key_of = {e["edition_id"]: (e["game_key"], e["edition_key"]) for e in page_editions}
+    by_key = {}
+    for g in groups:
+        by_key.setdefault(key_of[g["edition_id"]], []).append(g)
+    cards = []
+    for k in keys:
+        found = by_key.get((k["game_key"], k["edition_key"]))
+        if found:
+            cards.append({**found[0], "alternatives": found[1:]})
+    return cards
 
 
 def game_exists(game_id):

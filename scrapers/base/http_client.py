@@ -3,7 +3,7 @@ HTTP for the scrapers, built to stay polite so the stores don't block us:
 
 - One request at a time, at least MIN_INTERVAL seconds (+ random jitter) between requests
   to the same site, retries included. A larger Crawl-delay in robots.txt wins.
-- URLs disallowed by the site's robots.txt are never fetched.
+- URLs disallowed by the site's robots.txt are never fetched (wildcard rules included: robots.py).
 - 403 / 429 (after Retry-After) stop the run: StoreBlocked. We don't keep knocking.
 - At most `max_requests` per run: RequestBudgetExceeded.
 """
@@ -16,6 +16,8 @@ from urllib.parse import urlsplit
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+from .robots import RobotsRules
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +50,8 @@ class HttpClient:
         self.max_requests = max_requests
         self.request_count = 0
         self._last_request = {}     # host → time of the last request
-        self._robots = {}           # host → RobotFileParser (or None if robots.txt couldn't be read)
+        self._robots = {}           # host → RobotFileParser, for Crawl-delay (None if robots.txt couldn't be read)
+        self._rules = {}            # host → RobotsRules, for what may be fetched
 
         self.session = requests.Session()
         self.session.headers.update(HEADERS)
@@ -128,9 +131,12 @@ class HttpClient:
                 self._last_request[host] = time.monotonic()
                 if response.status_code in (401, 403):
                     parser.disallow_all = True      # the site refuses even robots.txt: crawl nothing
+                    self._rules[host] = RobotsRules.parse("User-agent: *\nDisallow: /", HEADERS["User-Agent"])
                 else:
                     # No robots.txt (404) means everything is allowed
-                    parser.parse(response.text.splitlines() if response.ok else [])
+                    text = response.text if response.ok else ""
+                    parser.parse(text.splitlines())
+                    self._rules[host] = RobotsRules.parse(text, HEADERS["User-Agent"])
                 self._robots[host] = parser
             except requests.RequestException as e:
                 log.warning("robots.txt of %s unreadable (%s); continuing with the default delay", host, e)
@@ -138,8 +144,9 @@ class HttpClient:
         return self._robots[host]
 
     def _allowed(self, url, host):
-        robots = self._robots_for(host)
-        return robots is None or robots.can_fetch(HEADERS["User-Agent"], url)
+        self._robots_for(host)
+        rules = self._rules.get(host)
+        return rules is None or rules.allowed(url)
 
     def _crawl_delay(self, host):
         robots = self._robots_for(host)

@@ -1,12 +1,16 @@
 """
-Windows notification ("toast") for the daily run, using only what Windows ships with.
-The scheduled task runs while the user is logged on, so the notification reaches them.
-Never raises: a notification problem must not break the scraper run.
+Telling the user about a daily run's problems: a Windows notification ("toast", using only what
+Windows ships with; the scheduled task runs while the user is logged on), and on a server, where
+nobody sees one, an e-mail to ALERT_EMAIL. Never raises: a notification problem must not break
+the scraper run.
 """
 import logging
 import os
 import subprocess
 import sys
+
+from app import config
+from app.services import mail_service
 
 log = logging.getLogger(__name__)
 
@@ -26,9 +30,18 @@ $appId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershe
 
 
 def notify(title, message):
+    """A Windows notification on Windows, and an e-mail when ALERT_EMAIL is set."""
+    if config.ALERT_EMAIL:
+        try:
+            mail_service.send(config.ALERT_EMAIL, title, message)
+        except Exception as e:
+            log.warning("Could not e-mail the run's problems: %s", e)
+    if sys.platform == "win32":
+        toast(title, message)
+
+
+def toast(title, message):
     """Show a Windows notification. Returns True if it was shown."""
-    if sys.platform != "win32":
-        return False
 
     env = dict(os.environ, TOAST_TITLE=title[:100], TOAST_MESSAGE=message[:300])
     try:

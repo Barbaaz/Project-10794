@@ -52,6 +52,15 @@ def test_products_missing_from_a_full_catalogue_are_deactivated(cursor):
     assert cursor.execute("SELECT is_active FROM store_products WHERE url = 'https://shop.test/2'").fetchone()[0] is True
 
 
+def test_a_store_read_in_part_deactivates_only_what_it_no_longer_lists(cursor):
+    """Techinn reads some product pages per run: one not read this run stays, one gone from its sitemap goes."""
+    process_products("techinn", [product(1), product(2), product(3)])
+    stats = process_products("techinn", [product(1)], still_listed={"https://shop.test/1", "https://shop.test/2"})
+    assert stats["deactivated"] == 1
+    active = dict(cursor.execute("SELECT url, is_active FROM store_products ORDER BY url").fetchall())
+    assert active == {"https://shop.test/1": True, "https://shop.test/2": True, "https://shop.test/3": False}
+
+
 def test_descriptions_only_replace_when_the_page_was_read(cursor):
     process_products("press_start", [product(1, details_checked=True, description="Primeira.", details={"ean13": "1"})])
     process_products("press_start", [product(1, description="Ignorada.")])

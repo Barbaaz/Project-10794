@@ -54,6 +54,9 @@ docker compose run --rm web python -m scheduler.run_single_store cstech
 Other stores: `press_start`, `mega-mania`, `gaming_replay`, `radio_popular`. Run the tests with
 `docker compose run --rm web python -m pytest -q`.
 
+**On a server** (the real site, with HTTPS, the daily runs and nightly backups):
+[DEPLOY.md](DEPLOY.md), using `docker-compose.production.yml`.
+
 ## Setup on Windows without Docker
 
 Needs [PostgreSQL](https://www.postgresql.org/download/) 15 or newer (built with ICU, as the
@@ -107,10 +110,10 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/games/<id>/prices?days=90` | Price history per offer |
 | `GET /api/discounts?platform=&min_percent=&page=` | Offers that are really on sale, biggest discount first |
 | `GET /api/discounts/featured?limit=12&min_percent=10` | Front page: biggest real discounts, one per game edition (new, in stock) |
-| `GET /api/deals?limit=12&min_percent=15` | Editions clearly cheaper at one store than at the next cheapest (15–60% gap, a comparison, not a discount); shown while there are no real discounts |
+| `GET /api/deals?limit=12&min_percent=15` | Editions clearly cheaper at one store than at the next cheapest (15–60% gap, a comparison, not a discount), one per game, the most money saved (`savings`) first; shown while there are no real discounts |
 | `GET /api/preorders?platform=` | Games on pre-order, one group per edition, soonest release first |
 | `GET /api/releases?platform=` | Games coming out from today on, by release date (`date_is_estimate` for "31/12" dates) |
-| `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special&q=&store=&genre=&tags=&pegi=` | The whole catalogue (and the search): every edition with an offer in stock, paged; `editions=special` = only editions above Standard; `q` = words in the title; `store` = only what that store has in stock; `genre` = only games in that category; `tags=coop,horror` = only games with all those tags; `pegi=12` = PEGI up to 12 |
+| `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special&q=&store=&genre=&tags=&pegi=` | The whole catalogue (and the search): every edition with an offer in stock, paged. Without `platform`, one card per game and edition across platforms: the cheapest platform's group, the others in `alternatives`; `editions=special` = only editions above Standard; `q` = words in the title; `store` = only what that store has in stock; `genre` = only games in that category; `tags=coop,horror` = only games with all those tags; `pegi=12` = PEGI up to 12 |
 | `GET /api/genres` | Categories with games in stock (`{genre, count}`), from the IGDB genres; close genres share one (TBS / RTS / Tactical → `strategy`) |
 | `GET /api/tags` | Tags for the filter: game modes and themes from IGDB (with counts), price tags `on_sale`, `historical_low` (dropped to the lowest price ever), `used` |
 | `GET /api/games/editions?ids=12,34` | The wishlist tab (up to 200): these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
@@ -345,7 +348,7 @@ All scraper requests go through `scrapers/base/http_client.py`:
   `python -m scheduler.run_single_store <store> --force` overrides it
 
 A daily run makes about 150 requests to Press Start, 60 to Mega Mania, 16 to CSTech, ~110 to
-Gaming Replay and ~72 to Rádio Popular. Shopify stores (CSTech) answer 429 after many requests in a
+Gaming Replay, ~72 to Rádio Popular and ~155 to Techinn. Shopify stores (CSTech) answer 429 after many requests in a
 short time: avoid extra manual runs.
 
 ## Safeguard against a half-broken scraper
@@ -367,6 +370,7 @@ python -m scheduler.run_single_store <store> --accept-drop
 | CSTech      | Shopify JSON feed (`/products.json`)     |
 | Gaming Replay | HTML (PrestaShop), per platform the "Jogos" and "Seminovos" (pre-owned) category pages, 12 games per page (~110 requests a run); "(COIB)" = code in box, excluded; "(Edição Americana / Asiática / Japonesa)" = import editions |
 | Rádio Popular | JSON from its "load more" request (POST `/ajax`, 12 games per page); match-only (see below) |
+| Techinn | HTML: the 4 game category pages (only the ~96 most popular each; the rest load from Techinn's search service, not used) + the product sitemap and up to 150 product pages a run (schema.org price / stock), the longest unseen first, so each is re-read every ~4 days; only products gone from the sitemap are deactivated. Names cleaned (brand, box language, "IMP"); "CIAB" = code in a box, excluded; older platforms (PS2, PS3, Xbox 360, Wii U…) kept |
 
 Rádio Popular shortens names ("TALES OF ETERNIA REMAS", "LUIGI MANS 3"): its products are also
 matched to a known game they're a short form of (`core/close_match.py`: same numbers, same first

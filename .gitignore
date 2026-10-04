@@ -72,3 +72,7 @@ database/demo/
 
 # Notes for Claude Code sessions (local only)
 CLAUDE.md
+
+# Database backups (docker-compose.production.yml): real users' data
+backups/
+*.dump

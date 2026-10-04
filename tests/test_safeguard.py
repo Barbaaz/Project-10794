@@ -37,7 +37,7 @@ def run(monkeypatch):
         monkeypatch.setattr(jobs, "start_run", lambda slug: 1)
         monkeypatch.setattr(jobs, "previous_product_count", lambda slug: previous)
         monkeypatch.setattr(jobs, "process_products",
-                            lambda slug, products, full_catalog: calls.update(full_catalog=full_catalog) or {})
+                            lambda slug, products, full_catalog, **_: calls.update(full_catalog=full_catalog) or {})
         monkeypatch.setattr(jobs, "finish_run",
                             lambda run_id, status, **kw: calls.update(status=status, **kw))
         jobs.run_store("test_store", **kwargs)

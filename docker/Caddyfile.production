@@ -1,0 +1,5 @@
+# The public site (docker-compose.production.yml): HTTPS certificate fetched and renewed by Caddy
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:5000
+}

@@ -109,21 +109,33 @@ def _best_store_deals(limit, min_percent, max_percent, platform):
                    CAST(ROUND(100.0 * (b.price - a.price) / b.price, 0) AS integer) AS savings_percent
             FROM ranked a JOIN ranked b ON b.edition_id = a.edition_id AND b.rn = 2
             WHERE a.rn = 1
+        ),
+        -- one deal per game (its platforms and editions compete), the most money saved first: a
+        -- percentage sort put the same -60% on every card (the gaps are capped at max_percent)
+        picked AS (
+            SELECT gap.*, g.normalized_title,
+                   ROW_NUMBER() OVER (PARTITION BY g.normalized_title
+                                      ORDER BY gap.next_price - gap.price DESC, gap.offer_id) AS game_rn
+            FROM gaps gap
+            JOIN store_products sp ON sp.id = gap.offer_id
+            JOIN games g ON g.id = sp.game_id
+            JOIN platforms p ON p.id = g.platform_id
+            WHERE gap.savings_percent BETWEEN ? AND ? AND (? IS NULL OR p.code = ?)
         )
         SELECT g.title, g.title_en, g.cover_image_id, p.code AS platform, p.name AS platform_name, e.name AS edition, e.edition_key,
                sp.id AS offer_id, sp.game_id, sp.edition_id, s.slug AS store, s.name AS store_name,
                sp.condition, gap.price, true AS in_stock, sp.is_preorder, sp.url,
                sp.image_url AS image, sp.external_name,
-               gap.next_price, ns.slug AS next_store, gap.savings_percent
-        FROM gaps gap
+               gap.next_price, ns.slug AS next_store, gap.savings_percent, gap.next_price - gap.price AS savings
+        FROM picked gap
         JOIN store_products sp ON sp.id = gap.offer_id
         JOIN stores s ON s.id = sp.store_id
         JOIN stores ns ON ns.id = gap.next_store_id
         JOIN games g ON g.id = sp.game_id
         JOIN platforms p ON p.id = g.platform_id
         JOIN game_editions e ON e.id = sp.edition_id
-        WHERE gap.savings_percent BETWEEN ? AND ? AND (? IS NULL OR p.code = ?)
-        ORDER BY gap.savings_percent DESC, gap.price, gap.offer_id
+        WHERE gap.game_rn = 1
+        ORDER BY savings DESC, gap.savings_percent DESC, gap.offer_id
         LIMIT {int(limit)}
         """,
         min_percent, max_percent, platform, platform,

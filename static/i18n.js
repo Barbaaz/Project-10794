@@ -32,7 +32,8 @@ const STRINGS = {
         empty_wishlist: "A sua lista de desejos está vazia. Carregue na ☆ de um jogo e escolha ⭐ Quero para o acompanhar aqui.",
         empty_platform: "Nada para esta plataforma.",
         store_deals_intro: "<strong>Melhores preços entre lojas.</strong> Ainda não há descontos reais para mostrar (o preço tem de estar abaixo do mais baixo dos 30 dias anteriores, e o histórico começou a 1 de outubro). Entretanto, estes jogos estão bem mais baratos numa loja do que na seguinte.",
-        vs_other_stores: "-{percent}% vs outras lojas",
+        vs_other_stores: "-{saving} vs outras lojas",
+        vs_other_stores_hint: "{percent}% mais barato do que a loja seguinte",
 
         // cards
         view_at: "Ver na {store}",
@@ -41,7 +42,7 @@ const STRINGS = {
         in_stock: "Em stock",
         new: "Novo",
         preorder: "Pré-reserva",
-        card_menu: "Lista de desejos e coleção",
+        card_menu: "Lista de desejos, coleção e venda",
         see_all_stores: "Ver todas as lojas (+{count})",
         no_offers: "Sem ofertas de momento",
         back_in_stock: "🔔 De volta ao stock",
@@ -192,6 +193,7 @@ const STRINGS = {
         sell_game_search: "Escreva o nome do jogo…",
         sell_change_game: "Mudar",
         sell_edition: "Edição",
+        sell_more_editions: "Outras edições (do IGDB)",
         sell_condition: "Estado",
         sell_price: "Preço",
         sell_store_price: "Novo nas lojas: desde {price}.",
@@ -358,6 +360,21 @@ const STRINGS = {
         collection_empty_owned: "Ainda sem jogos. Na página de um jogo, use \"Tenho\" na edição que tem.",
         collection_empty_wishlist: "A lista de desejos está vazia. Na página de um jogo, use \"Quero\".",
         collection_add_owned: "📚 Tenho",
+        platforms: "Plataformas",
+        filters_button: "Filtros",
+        nav_sell: "Vender",
+        nav_collection: "Coleção",
+        my_profile: "O meu perfil público",
+        account_menu: "Menu da conta",
+        lang_other: "English",
+        store_short: "Loja",
+        show_more: "Mostrar mais ({count})",
+        chat_attach_photos: "Juntar fotografias (até 5)",
+        chat_remove_photos: "Tirar as fotografias",
+        chat_photo: "📷 Fotografia",
+        chat_photo_open: "Fotografia (abre em tamanho grande)",
+        error_message_photos_many: "No máximo 5 fotografias por mensagem.",
+        card_sell: "🏷️ Vender",
         collection_add_wishlist: "⭐ Quero",
         collection_in_owned: "✓ Na coleção",
         collection_in_wishlist: "✓ Na lista de desejos",
@@ -634,7 +651,8 @@ const STRINGS = {
         empty_wishlist: "Your wishlist is empty. Click the ☆ on a game and choose ⭐ Want to follow it here.",
         empty_platform: "Nothing for this platform.",
         store_deals_intro: "<strong>Best prices between stores.</strong> There are no real discounts to show yet (the price must be below the lowest of the previous 30 days, and price tracking started on 1 October). Meanwhile, these games are much cheaper at one store than at the next.",
-        vs_other_stores: "-{percent}% vs other stores",
+        vs_other_stores: "-{saving} vs other stores",
+        vs_other_stores_hint: "{percent}% cheaper than the next store",
 
         view_at: "View at {store}",
         used: "Used",
@@ -642,7 +660,7 @@ const STRINGS = {
         in_stock: "In stock",
         new: "New",
         preorder: "Pre-order",
-        card_menu: "Wishlist and collection",
+        card_menu: "Wishlist, collection and selling",
         see_all_stores: "See all stores (+{count})",
         no_offers: "No offers right now",
         back_in_stock: "🔔 Back in stock",
@@ -792,6 +810,7 @@ const STRINGS = {
         sell_game_search: "Type the game's name…",
         sell_change_game: "Change",
         sell_edition: "Edition",
+        sell_more_editions: "Other editions (from IGDB)",
         sell_condition: "Condition",
         sell_price: "Price",
         sell_store_price: "New at the stores: from {price}.",
@@ -958,6 +977,21 @@ const STRINGS = {
         collection_empty_owned: "No games yet. On a game's page, use \"Owned\" on the edition you have.",
         collection_empty_wishlist: "The wishlist is empty. On a game's page, use \"Want\".",
         collection_add_owned: "📚 Owned",
+        platforms: "Platforms",
+        filters_button: "Filters",
+        nav_sell: "Sell",
+        nav_collection: "Collection",
+        my_profile: "My public profile",
+        account_menu: "Account menu",
+        lang_other: "Português",
+        store_short: "Store",
+        show_more: "Show more ({count})",
+        chat_attach_photos: "Attach photos (up to 5)",
+        chat_remove_photos: "Remove the photos",
+        chat_photo: "📷 Photo",
+        chat_photo_open: "Photo (opens full size)",
+        error_message_photos_many: "At most 5 photos per message.",
+        card_sell: "🏷️ Sell",
         collection_add_wishlist: "⭐ Want",
         collection_in_owned: "✓ In collection",
         collection_in_wishlist: "✓ On wishlist",
@@ -1223,7 +1257,27 @@ const eur = new Intl.NumberFormat(LOCALE, { style: "currency", currency: "EUR" }
 // A game's (or card's) name in the page's language: item.name_en / item.title_en when the page is
 // in English and the game has an English name (IGDB's, or a moderator's), else the store's
 function localName(item, field = "name") {
-    return (LANG === "en" && item[`${field}_en`]) || item[field];
+    return calmCaps((LANG === "en" && item[`${field}_en`]) || item[field]);
+}
+
+// A store title written in capitals, in normal case: "HELLRAISER REVIVAL" → "Hellraiser Revival",
+// "KINGDOM HEARTS I-III" → "Kingdom Hearts I-III", "EA SPORTS FC 26" → "EA Sports FC 26". Titles
+// with any small letter are left alone (they're written on purpose: "eFootball", "LEGO Batman")
+const KEEP_CAPS = new Set(["FIFA", "LEGO", "UEFA", "NASCAR", "WRC", "NHL", "NFL", "NBA", "MLB", "EA", "FC", "UFC", "PGA",
+    "WWE", "DLC", "VR", "HD", "GTA", "RPG", "UK", "USA", "TT", "F1", "MX", "ATV", "PES", "DBZ", "TMNT", "WWII", "II", "XL"]);
+const SMALL_WORDS = new Set(["of", "the", "and", "a", "an", "in", "on", "to", "for", "at", "by", "or", "de", "da", "do", "das", "dos", "e", "o"]);
+
+function calmCaps(text) {
+    if (!text || /[a-zà-ÿ]/.test(text) || !/[A-ZÀ-Þ]{4}/.test(text)) return text;
+    let first = true;
+    return text.replace(/[A-Za-zÀ-ÿ0-9']+/g, word => {
+        const lower = word.toLowerCase();
+        const out = KEEP_CAPS.has(word) || /\d/.test(word) || /^[IVXLC]+$/.test(word) ? word
+            : !first && SMALL_WORDS.has(lower) ? lower
+            : lower.charAt(0).toUpperCase() + lower.slice(1);
+        first = false;
+        return out;
+    });
 }
 
 // fallback: what to show when there's no text for `key` (by default the key itself)

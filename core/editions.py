@@ -41,6 +41,7 @@ STANDARD_PHRASES = {"", "edition", "standard", "standard edition", "edicao stand
 EXCLUDED = re.compile(
     r"c[oó]digo\s+(na\s+caixa|de\s+descarga|de\s+download|digital)|code\s+in\s+(a\s+)?box|[\[\(]\s*cod\s*[\]\)]"
     r"|[\[\(]\s*coib\s*[\]\)]"                      # Gaming Replay: "(COIB)" = code in box
+    r"|\bciab\b"                                     # Techinn: "… CIAB" = code in a box
     r"|download\s+digital|digital\s+download",
     re.IGNORECASE,
 )
@@ -49,7 +50,8 @@ EXCLUDED = re.compile(
 BRACKET_TAGS = [
     ("PlayStation Hits", re.compile(r"playstation\s+hits", re.IGNORECASE)),
     ("Import JP", re.compile(r"import\s+jap|edi[cç][aã]o\s+japonesa", re.IGNORECASE)),
-    ("Import US", re.compile(r"edi[cç][aã]o\s+americana", re.IGNORECASE)),       # Gaming Replay's imports
+    # Gaming Replay's "(Edição Americana)", Techinn's "(Import USA)"
+    ("Import US", re.compile(r"edi[cç][aã]o\s+americana|import\s+usa?\b", re.IGNORECASE)),
     ("Import Asia", re.compile(r"edi[cç][aã]o\s+asi[aá]tica", re.IGNORECASE)),
 ]
 # A bonus or note written after the game: "Mortal Kombat 1 Switch - Oferta DLC" (Gaming Replay),
@@ -140,6 +142,13 @@ def edition_key_of(phrase):
     for written, same in EDITION_SYNONYMS:
         text = text.replace(f" {written} ", f" {same} ")
     return " ".join(sorted({w for w in text.split() if w not in EDITION_FILLER}))
+
+
+def key_of_edition_name(name):
+    """An edition's name on its own ("Collector's Edition", IGDB's or a moderator's) as its key;
+    "Standard Edition" is the Standard edition (key "")."""
+    phrase = normalize_name(name)
+    return "" if phrase in STANDARD_PHRASES else edition_key_of(phrase)
 
 
 def extract_tags(name):

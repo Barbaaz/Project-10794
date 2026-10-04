@@ -49,3 +49,6 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 MAIL_FROM = os.environ.get("MAIL_FROM", "")
+# Where a daily run's problems (a store failed or half-broken) are e-mailed; on a server nobody
+# sees the Windows notification. Needs SMTP_HOST too
+ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "")

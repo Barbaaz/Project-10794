@@ -20,7 +20,7 @@ NOW = func.utcnow()      # the database's clock, in UTC (database/schema.sql)
 
 
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
-MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages",
+MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages", "message_photos",
                  "user_ratings", "reports", "moderation_log", "match_overrides",
                  "collection_items", "game_reviews", "duplicate_dismissals"}
 
@@ -242,6 +242,22 @@ class Message(Base):
     sender_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))   # None: a message from the site
     body: Mapped[str | None] = mapped_column(Unicode(2000))
     event: Mapped[str | None] = mapped_column(String(20))
+    created_at = created_at()
+
+    photos: Mapped[list["MessagePhoto"]] = relationship(order_by="MessagePhoto.position", lazy="selectin",
+                                                        cascade="all, delete-orphan")
+
+
+class MessagePhoto(Base):
+    """A photo sent in a conversation (more pictures of the copy, a damaged parcel): only the two
+    sides (and moderators) see it, through /api/conversations/<id>/photos/<photo id>, never /media."""
+    __tablename__ = "message_photos"
+    __table_args__ = (Index("ix_message_photos_message", "message_id", "position"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id"))
+    position: Mapped[int] = mapped_column(Integer)
+    photo_key: Mapped[str] = mapped_column(Unicode(200))
+    thumb_key: Mapped[str] = mapped_column(Unicode(200))
     created_at = created_at()
 
 

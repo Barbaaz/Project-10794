@@ -32,6 +32,7 @@
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
         .card-platform { line-height: 1.4; height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .platform-chip { --bs-btn-padding-y: .05rem; --bs-btn-padding-x: .4rem; --bs-btn-font-size: .72rem; }
         .card-extra {
             line-height: 1.4; height: 2.8em; margin-bottom: .4rem;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -58,23 +59,36 @@
         .release-date { width: 3.2rem; }
         .release-item img { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: #000; }
         .min-w-0 { min-width: 0; }
+        /* Phones: the tabs in one row that scrolls sideways (7 buttons took 5 rows) */
+        @media (max-width: 767.98px) {
+            .front-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .25rem; scrollbar-width: thin; }
+            .front-tabs .nav-link { white-space: nowrap; }
+        }
+        /* Catalogue filters, labels above: always shown from tablet width, behind "Filtros" on a phone */
+        .catalog-filters { display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+        .catalog-filters.open { display: grid; }
+        @media (min-width: 768px) { .catalog-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 13rem)); } }
     </style>
 </head>
 
 <body class="bg-body-tertiary">
 
-<div class="container-xxl py-4">
-
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h3 mb-0"><a href="/" onclick="goHome(); return false;" class="link-body-emphasis text-decoration-none">🎮 Game Price Tracker</a></h1>
-        <div class="d-flex gap-2">
+<!-- The same header on every page (static/common.js fills the account area) -->
+<header class="site-header bg-body border-bottom mb-4">
+    <div class="container-xxl d-flex align-items-center gap-2 py-2">
+        <h1 class="site-brand m-0"><a href="/" onclick="goHome(); return false;" class="link-body-emphasis text-decoration-none">🎮 <span>Game Price Tracker</span></a></h1>
+        <div class="header-tools ms-auto d-flex align-items-center gap-1">
             <!-- Back to the front page; shown while search results are on screen -->
             <button id="home-btn" onclick="goHome()" class="btn btn-sm btn-primary d-none" data-i18n="home">🏠 Início</button>
-            <div id="account-area" class="d-flex gap-2"></div>
-            <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
-            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
+            <div id="account-area" class="d-flex gap-1 align-items-center"></div>
+            <div id="lang-switch" class="btn-group header-setting" role="group" data-i18n-aria-label="language"></div>
+            <button type="button" onclick="toggleDark()" class="btn btn-sm btn-secondary header-setting"
+                    data-i18n-aria-label="dark_mode" data-i18n-title="dark_mode">🌙</button>
         </div>
     </div>
+</header>
+
+<div class="container-xxl pb-4">
 
     <form class="row g-2 mb-4" onsubmit="handleSearch(event)">
         <div class="col-md-6">
@@ -95,14 +109,14 @@
 
     <!-- Front page: the visitor picks what to see; the choice is remembered in this browser -->
     <section id="front" class="mb-4">
-        <ul class="nav nav-pills mb-3 gap-1" role="tablist">
-            <li class="nav-item"><button class="nav-link" data-tab="discounts" role="tab" data-i18n="tab_discounts"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="preorders" role="tab" data-i18n="tab_preorders"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="releases" role="tab" data-i18n="tab_releases"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="catalog" role="tab" data-i18n="tab_catalog"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="special" role="tab" data-i18n="tab_special"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="market" role="tab" data-i18n="tab_market"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="wishlist" role="tab" data-i18n="tab_wishlist"></button></li>
+        <ul class="nav nav-pills mb-3 gap-1 front-tabs" role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="discounts" role="tab" data-i18n="tab_discounts"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="preorders" role="tab" data-i18n="tab_preorders"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="releases" role="tab" data-i18n="tab_releases"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="catalog" role="tab" data-i18n="tab_catalog"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="special" role="tab" data-i18n="tab_special"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="market" role="tab" data-i18n="tab_market"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="wishlist" role="tab" data-i18n="tab_wishlist"></button></li>
         </ul>
         <div id="front-loading" class="text-center my-4 d-none"><div class="spinner-border text-primary"></div></div>
         <div id="front-content"></div>
@@ -138,7 +152,14 @@ function handleSearch(event) {
 // A card: cover, title, platform and up to MAX_OFFERS store prices.
 // group = {name, console, platform_name, game_id, edition_id, offers: [...]}
 // extraLine: null = no extra line; "" = keep the space, so cards in the same grid line up
-function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
+// Short platform names for the cards' chips (three fit on a phone's card)
+const PLATFORM_SHORT = { PS5: "PS5", PS4: "PS4", PS3: "PS3", Switch2: "Switch 2", Switch: "Switch",
+                         XboxSeries: "Xbox X|S", XboxOne: "Xbox One", Xbox360: "Xbox 360", PC: "PC" };
+
+// A game on several platforms is one card (the catalogue's `alternatives`): its platforms as chips,
+// pressing one shows that platform's offers, cover and ☆ menu. again(group): the card for another
+// platform, made the way the caller made this one (its badges)
+function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {}) {
     // in stock first, then cheapest
     const offers = [...group.offers].sort((a, b) => (b.in_stock - a.in_stock) || (a.price - b.price));
     const best = offers[0];
@@ -170,7 +191,7 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
     col.innerHTML = `
         <div class="card h-100 shadow-sm overflow-hidden game-card">
             <div class="position-relative">
-                <a href="${gameUrl}" class="cover-link"><img src="${esc(group.cover || best?.image || group.image || "")}"
+                <a href="${gameUrl}" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(group.cover || best?.image || group.image || "")}"
                     class="${group.cover ? "" : "store-photo"}" alt="" loading="lazy"></a>
                 ${coverBadge}
                 ${group.at_historical_low ? `<span class="badge text-bg-success low-price-badge"
@@ -180,14 +201,42 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
             </div>
             <div class="card-body d-flex flex-column">
                 <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(localName(group))}">${esc(localName(group))}</a>
-                <div class="text-body-secondary small card-platform">${esc(group.platform_name || group.console)}${group.review_count
-                    ? ` · <span title="${esc(t("review_score_hint", { count: group.review_count }))}">${fmtNumber(group.review_score)}/10 (${group.review_count})</span>` : ""}</div>
+                ${platformLine(group)}
                 ${extraLine === null ? '<div class="mb-2"></div>' : `<div class="small card-extra">${extraLine}</div>`}
                 <div class="mt-auto">${rows}${more}</div>
             </div>
         </div>`;
     col.querySelector(".fav-btn").onclick = e => toggleCardMenu(e.currentTarget, group);
+    col.querySelectorAll("[data-platform-index]").forEach(chip => chip.onclick = () => {
+        const all = platformsOf(group);
+        const i = Number(chip.dataset.platformIndex);
+        const next = { ...all[i], alternatives: [], _all: all };
+        const card = again ? again(next) : makeCard(next, { coverBadge, extraLine });
+        col.replaceWith(card);
+        card.querySelector(`[data-platform-index="${i}"]`)?.focus();
+    });
     return col;
+}
+
+// The card's platforms in a fixed order (the cheapest first, as the catalogue sent them)
+function platformsOf(group) {
+    return group._all || (group.alternatives?.length ? [group, ...group.alternatives] : null);
+}
+
+function platformLine(group) {
+    const reviews = group.review_count
+        ? `<span title="${esc(t("review_score_hint", { count: group.review_count }))}">${fmtNumber(group.review_score)}/10 (${group.review_count})</span>` : "";
+    const all = platformsOf(group);
+    if (!all) {
+        return `<div class="text-body-secondary small card-platform">${esc(group.platform_name || group.console)}${reviews ? ` · ${reviews}` : ""}</div>`;
+    }
+    const chips = all.map((g, i) => {
+        const on = g.edition_id === group.edition_id;
+        return `<button type="button" class="btn btn-sm platform-chip ${on ? "btn-primary" : "btn-secondary"}" data-platform-index="${i}"
+            aria-pressed="${on}" title="${esc(g.platform_name)}">${esc(PLATFORM_SHORT[g.console] || g.platform_name)}</button>`;
+    }).join("");
+    return `<div class="platform-chips d-flex flex-wrap gap-1" role="group" aria-label="${esc(t("platforms"))}">${chips}</div>
+        ${reviews ? `<div class="text-body-secondary small">${reviews}</div>` : ""}`;
 }
 
 // "👤 Usados (2) · 18,99 €": the copies users sell; one → that listing, several → the game page's list
@@ -219,7 +268,7 @@ function marketCard(group) {
     col.className = "col";
     col.innerHTML = `
         <div class="card h-100 shadow-sm overflow-hidden game-card">
-            <a href="/game/${group.game_id}#market" class="cover-link"><img src="${esc(cover)}" alt="" loading="lazy"></a>
+            <a href="/game/${group.game_id}#market" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(cover)}" alt="" loading="lazy"></a>
             <div class="card-body d-flex flex-column">
                 <a href="/game/${group.game_id}#market" class="link-body-emphasis text-decoration-none game-title"
                    title="${esc(localName(group))}">${esc(localName(group))}</a>
@@ -253,6 +302,9 @@ const PEGI_AGES = [3, 7, 12, 16, 18];
 const MAX_TAGS = 5;      // as many as /api/games/catalog takes
 
 // The filters other than platform and sort: [address / API parameter, current value]
+// The catalogue filters' panel on a phone: closed until "Filtros" is pressed (kept open while paging)
+let filtersOpen = false;
+
 function extraFilters() {
     return [["store", catalogStore], ["genre", catalogGenre], ["tags", catalogTag], ["pegi", catalogPegi]];
 }
@@ -412,35 +464,46 @@ function renderCatalog(data, showPage = showCatalogPage) {
                     aria-label="${esc(t("remove_tag", { tag: t(`tag_${tag}`) }))}"></button></span>`).join("");
     const pegiOptions = PEGI_AGES.map(age => `<option value="${age}">${esc(t("pegi_up_to", { age }))}</option>`).join("");
     const wrap = document.createElement("div");
+    const activeFilters = [catalogGenre, catalogPegi, catalogStore].filter(Boolean).length + chosenTags.length;
     wrap.innerHTML = `
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
             <span class="small text-body-secondary me-auto">${esc(t(data.query ? "search_count"
                 : data.special ? "special_count" : "catalog_count", count))}</span>
-            <label class="small text-body-secondary" for="catalog-genre">${t("genre_filter")}</label>
-            <select id="catalog-genre" class="form-select form-select-sm w-auto">
-                <option value="">${t("all_genres")}</option>${genreOptions}
-            </select>
-            <label class="small text-body-secondary" for="catalog-tag">${t("tag_filter")}</label>
-            <select id="catalog-tag" class="form-select form-select-sm w-auto" ${chosenTags.length >= MAX_TAGS ? "disabled" : ""}>
-                <option value="">${t(chosenTags.length ? "add_tag" : "all_tags")}</option>${tagOptions}
-            </select>
-            <label class="small text-body-secondary" for="catalog-pegi">${t("pegi_filter")}</label>
-            <select id="catalog-pegi" class="form-select form-select-sm w-auto">
-                <option value="">${t("all_ages")}</option>${pegiOptions}
-            </select>
-            <label class="small text-body-secondary" for="catalog-store">${t("store_filter")}</label>
-            <select id="catalog-store" class="form-select form-select-sm w-auto">
-                <option value="">${t("all_stores")}</option>${storeOptions}
-            </select>
-            <label class="small text-body-secondary" for="catalog-sort">${t("sort")}</label>
-            <select id="catalog-sort" class="form-select form-select-sm w-auto">
+            <button type="button" class="btn btn-sm ${activeFilters ? "btn-primary" : "btn-secondary"} d-md-none" id="filters-toggle"
+                    aria-expanded="${filtersOpen}" aria-controls="catalog-filters">${t("filters_button")}${activeFilters ? ` (${activeFilters})` : ""}</button>
+            <label class="small text-body-secondary d-none d-sm-inline" for="catalog-sort">${t("sort")}</label>
+            <select id="catalog-sort" class="form-select form-select-sm w-auto" aria-label="${esc(t("sort"))}">
                 <option value="name">${t("sort_name")}</option>
                 <option value="price_asc">${t("sort_price_asc")}</option>
                 <option value="price_desc">${t("sort_price_desc")}</option>
             </select>
         </div>
+        <div id="catalog-filters" class="catalog-filters mb-3 ${filtersOpen ? "open" : ""}">
+            <div><label class="form-label small text-body-secondary mb-1" for="catalog-genre">${t("genre_filter")}</label>
+                <select id="catalog-genre" class="form-select form-select-sm">
+                    <option value="">${t("all_genres")}</option>${genreOptions}
+                </select></div>
+            <div><label class="form-label small text-body-secondary mb-1" for="catalog-tag">${t("tag_filter")}</label>
+                <select id="catalog-tag" class="form-select form-select-sm" ${chosenTags.length >= MAX_TAGS ? "disabled" : ""}>
+                    <option value="">${t(chosenTags.length ? "add_tag" : "all_tags")}</option>${tagOptions}
+                </select></div>
+            <div><label class="form-label small text-body-secondary mb-1" for="catalog-pegi">${t("pegi_filter")}</label>
+                <select id="catalog-pegi" class="form-select form-select-sm">
+                    <option value="">${t("all_ages")}</option>${pegiOptions}
+                </select></div>
+            <div><label class="form-label small text-body-secondary mb-1" for="catalog-store">${t("store_filter")}</label>
+                <select id="catalog-store" class="form-select form-select-sm">
+                    <option value="">${t("all_stores")}</option>${storeOptions}
+                </select></div>
+        </div>
         ${chosenTags.length ? `<div class="d-flex flex-wrap gap-1 mb-3" aria-label="${esc(t("chosen_tags"))}">${tagChips}</div>` : ""}`;
 
+    const toggle = wrap.querySelector("#filters-toggle");
+    toggle.onclick = () => {
+        filtersOpen = !filtersOpen;
+        toggle.setAttribute("aria-expanded", filtersOpen);
+        wrap.querySelector("#catalog-filters").classList.toggle("open", filtersOpen);
+    };
     const select = wrap.querySelector("#catalog-sort");
     select.value = catalogSort;
     select.onchange = async () => {
@@ -468,16 +531,20 @@ function renderCatalog(data, showPage = showCatalogPage) {
 
     // Games not out yet: "Pré-reserva" on the cover, release date next to the platform
     const grid = cardGrid();
-    data.groups.forEach(g => {
-        if (!g.is_preorder) return grid.appendChild(makeCard(g));
-        const card = { ...g, platform_name: `${g.platform_name} · 📅 ${releaseLabel(g.release_date, g.date_is_estimate)}` };
-        grid.appendChild(makeCard(card, {
-            coverBadge: `<span class="badge text-bg-primary discount-badge">${t("preorder")}</span>`,
-        }));
-    });
+    data.groups.forEach(g => grid.appendChild(catalogCard(g)));
     wrap.appendChild(grid);
     wrap.appendChild(pagination(data.page, data.pages, showPage));
     return wrap;
+}
+
+// A catalogue card; games not out yet: "Pré-reserva" on the cover and the release date under the name
+function catalogCard(g) {
+    if (!g.is_preorder) return makeCard(g, { again: catalogCard });
+    return makeCard(g, {
+        coverBadge: `<span class="badge text-bg-primary discount-badge">${t("preorder")}</span>`,
+        extraLine: `<span class="text-body-secondary">📅 ${esc(releaseLabel(g.release_date, g.date_is_estimate))}</span>`,
+        again: catalogCard,
+    });
 }
 
 const FRONT_TABS = {
@@ -522,6 +589,8 @@ const FRONT_TABS = {
     },
 };
 const frontData = {};      // tab → data, loaded once per visit
+const SHOW_STEP = 48;      // items drawn at a time on the long tabs ("Mostrar mais" for the next ones)
+const frontShown = {};     // tab → how many are drawn now
 const frontDataPlatform = {};   // tab → platform its data was loaded for (platform-aware tabs)
 // The favourites tab became the wishlist (favourites were folded into it): old links and choices go there
 const tabName = tab => tab === "favorites" ? "wishlist" : tab;
@@ -556,10 +625,13 @@ function setPageUrl(url) {
 
 async function selectFrontTab(tab) {
     frontTab = tab;
+    frontShown[tab] = SHOW_STEP;
     save("frontTab", tab);
     document.querySelectorAll("[data-tab]").forEach(b => {
         b.classList.toggle("active", b.dataset.tab === tab);
         b.setAttribute("aria-selected", b.dataset.tab === tab);
+        // the tab row scrolls sideways on a phone: keep the chosen tab in view
+        if (b.dataset.tab === tab) b.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
 
     const config = FRONT_TABS[tab];
@@ -617,7 +689,21 @@ function renderFront() {
     const selected = document.getElementById("consoleFilter").value;
     const items = (frontData[frontTab] || []).filter(i => !selected || (i.console || i.platform) === selected);
 
-    if (items.length) content.appendChild(config.render(items));
+    // ~540 pre-orders at once made the page 65,000 px tall on a phone: SHOW_STEP at a time
+    const shown = frontShown[frontTab] || SHOW_STEP;
+    if (items.length) content.appendChild(config.render(items.slice(0, shown)));
+    if (items.length > shown) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "btn btn-secondary d-block mx-auto mt-3 show-more";
+        more.textContent = t("show_more", { count: items.length - shown });
+        more.onclick = () => {
+            frontShown[frontTab] = shown + SHOW_STEP;
+            renderFront();
+            content.querySelector(".show-more")?.focus();     // keyboard users carry on from here
+        };
+        content.appendChild(more);
+    }
 
     empty.textContent = selected && frontData[frontTab]?.length ? t("empty_platform") : t(FRONT_TABS[frontTab].empty);
     empty.classList.toggle("d-none", items.length > 0);
@@ -725,7 +811,8 @@ function renderDiscounts(offers) {
                         edition_id: o.edition_id, offers: o.offers || [o] };
         grid.appendChild(makeCard(group, {
             coverBadge: storeDeals
-                ? `<span class="badge text-bg-success discount-badge">${t("vs_other_stores", { percent: o.savings_percent })}</span>`
+                ? `<span class="badge text-bg-success discount-badge" title="${esc(t("vs_other_stores_hint", { percent: o.savings_percent }))}">${
+                    t("vs_other_stores", { saving: eur.format(o.savings ?? (o.next_price - o.price)) })}</span>`
                 : `<span class="badge text-bg-danger discount-badge">-${o.discount_percent}%</span>`,
         }));
     });
@@ -770,7 +857,7 @@ function renderReleases(games) {
                     <div class="small text-body-secondary">${weekdayName(day)}</div>
                     ${isToday ? `<span class="badge text-bg-success">${t("today")}</span>` : ""}
                 </div>
-                <div class="release-games flex-grow-1 row row-cols-1 row-cols-md-2 row-cols-xl-3 g-2"></div>`;
+                <div class="release-games flex-grow-1 min-w-0 row row-cols-1 row-cols-md-2 row-cols-xl-3 g-2"></div>`;
             wrap.appendChild(row);
             dayList = row.querySelector(".release-games");
         }
@@ -794,7 +881,7 @@ function releaseItem(g, note = "") {
     const editions = g.editions > 1 ? ` · ${t("editions_count", { count: g.editions })}` : "";
     col.innerHTML = `
         <div class="d-flex gap-2 align-items-center release-item">
-            <a href="${gameUrl}" class="flex-shrink-0"><img src="${esc(g.image || "")}" alt="" loading="lazy"></a>
+            <a href="${gameUrl}" class="flex-shrink-0" tabindex="-1" aria-hidden="true"><img src="${esc(g.image || "")}" alt="" loading="lazy"></a>
             <div class="flex-grow-1 min-w-0">
                 <a href="${gameUrl}" class="link-body-emphasis text-decoration-none fw-semibold d-block text-truncate"
                    title="${esc(localName(g, "title"))}">${esc(localName(g, "title"))}</a>
@@ -952,7 +1039,8 @@ function starButton(group) {
     return `${mine.wishlist ? "★" : "☆"}${mine.owned ? `<span class="fav-mark" aria-hidden="true">📚</span>` : ""}`;
 }
 
-// The star opens a menu for the card's edition: ⭐ Quero, 📚 Tenho, each on / off.
+// The star opens a menu for the card's edition: ⭐ Quero, 📚 Tenho, each on / off, and 🏷️ Vender
+// (the sell form on this edition, without going through the game page).
 // One menu open at a time; Esc, a click elsewhere or Tab closes it
 let cardMenu = null;    // {menu, button, group}
 
@@ -976,7 +1064,10 @@ function fillCardMenu(focusKind) {
                    ["owned", t("collection_add_owned"), Boolean(mine.owned)]];
     menu.innerHTML = items.map(([kind, label, on]) => `
         <button type="button" class="dropdown-item" role="menuitemcheckbox" aria-checked="${on}" data-kind="${kind}">
-            <span class="check">${on ? "✓" : ""}</span>${esc(label)}</button>`).join("");
+            <span class="check">${on ? "✓" : ""}</span>${esc(label)}</button>`).join("") + `
+        <hr class="dropdown-divider">
+        <a class="dropdown-item" role="menuitem" href="/sell?game_id=${group.game_id}&edition_id=${group.edition_id}">
+            <span class="check"></span>${esc(t("card_sell"))}</a>`;
     menu.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => toggleCardItem(group, b.dataset.kind));
     menu.querySelector(`[data-kind="${focusKind}"]`).focus();
 }
@@ -999,7 +1090,7 @@ document.addEventListener("keydown", e => {
     if (e.key === "Tab") return closeCardMenu();
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        const items = [...cardMenu.menu.querySelectorAll("[data-kind]")];
+        const items = [...cardMenu.menu.querySelectorAll(".dropdown-item")];
         const next = items.indexOf(document.activeElement) + (e.key === "ArrowDown" ? 1 : -1);
         items[(next + items.length) % items.length].focus();
     }

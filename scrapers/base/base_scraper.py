@@ -36,8 +36,12 @@ class BaseScraper:
     product_page_parser = None
     # The pause between requests is enforced by HttpClient (see http_client.py)
 
-    def __init__(self, http=None, fresh_release_urls=(), known_detail_urls=()):
+    def __init__(self, http=None, fresh_release_urls=(), known_detail_urls=(), last_seen=None):
         self.http = http or HttpClient()
+        # {url: when a run last saw it}, for stores that read part of their catalogue per run
+        self.last_seen = last_seen or {}
+        # Those stores set the URLs still on sale (seen or not this run); None: the run saw everything
+        self.still_listed = None
         # Pre-orders whose release date was read recently; their product page isn't fetched again
         self.fresh_release_urls = set(fresh_release_urls)
         # Products whose description was already read (read once)

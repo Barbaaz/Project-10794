@@ -1,5 +1,10 @@
 /* Shared by every page (each page keeps its own styles in <style>). */
 
+/* Text contrast at least 4.5:1 (WCAG AA): Bootstrap's grey secondary text on the dark page
+   background is 4.33:1, its link blue on the light page background 4.26:1 */
+[data-bs-theme="dark"] { --bs-secondary-color: #a7aeb5; --bs-secondary-color-rgb: 167, 174, 181; }
+[data-bs-theme="light"] { --bs-link-color: #0a58ca; --bs-link-color-rgb: 10, 88, 202; }
+
 /* Tabs are solid buttons too (no outline-only buttons): the selected one blue, the others grey */
 .nav-pills .nav-link:not(.active) { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); }
 .nav-pills .nav-link:not(.active):hover { background: var(--bs-tertiary-bg); }
@@ -16,9 +21,18 @@
                                line-height: 1.25; min-height: 2.5em; }
 /* Used tab: seller (and rating) on one line, the copy's condition under it */
 .offer-btn .seller-lines { display: flex; flex-direction: column; line-height: 1.15; text-align: left; min-width: 0; }
-.offer-btn .seller-lines small { font-weight: 400; opacity: .85; overflow: hidden; text-overflow: ellipsis; }
+.offer-btn .seller-lines small { font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
 
-/* The header's buttons (account, language, theme) wrap onto a second line on narrow screens
-   instead of making the page scroll sideways */
-div:has(> #account-area) { flex-wrap: wrap; justify-content: flex-end; }
-div:has(> div > #account-area) { flex-wrap: wrap; gap: .5rem; }
+/* The header, the same on every page: the site's name on the left, the account's buttons, language
+   and theme on the right. On a phone, logged in, language and theme are in the account menu */
+.site-header .site-brand { font-size: 1.25rem; font-weight: 600; white-space: nowrap; }
+.site-header .site-brand a { color: inherit; }
+.site-header .header-tools { flex-wrap: wrap; justify-content: flex-end; }
+.site-header .account-menu .dropdown-menu { right: 0; left: auto; top: calc(100% + .25rem); min-width: 13rem; }
+@media (max-width: 575.98px) {
+    .site-header .site-brand { font-size: 1.05rem; }
+    .logged-in .site-header .header-setting { display: none !important; }
+}
+@media (max-width: 359.98px) {
+    .site-header .site-brand span { display: none; }      /* only 🎮 on the narrowest phones */
+}

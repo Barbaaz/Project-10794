@@ -187,6 +187,7 @@ def problem_purchases():
 def conversation_messages(conversation_id):
     """A conversation's messages, read-only, for a moderator looking into a problem or a report."""
     from app.models import Message
+    from app.services.chat_service import message_dicts
     with session() as s:
         conversation = s.get(Conversation, conversation_id)
         if not conversation:
@@ -195,8 +196,8 @@ def conversation_messages(conversation_id):
             "buyer": conversation.buyer.username, "seller": conversation.seller.username,
             "buyer_id": conversation.buyer_id, "title": conversation.listing.game.title,
             "deal_status": conversation.deal_status,
-            "messages": [fields(m, "id", "sender_id", "body", "event", "created_at") for m in s.scalars(
-                select(Message).where(Message.conversation_id == conversation_id).order_by(Message.id))],
+            "messages": message_dicts(conversation_id, s.scalars(
+                select(Message).where(Message.conversation_id == conversation_id).order_by(Message.id))),
         }
 
 

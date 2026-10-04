@@ -10,6 +10,7 @@ from scrapers.gaming_replay.scraper import GamingReplayScraper
 from scrapers.mega_mania.scraper import MegaManiaScraper
 from scrapers.press_start.scraper import PressStartScraper
 from scrapers.radio_popular.scraper import RadioPopularScraper
+from scrapers.techinn.scraper import TechinnScraper
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ SCRAPERS = {
     "cstech": CSTechScraper,
     "radio_popular": RadioPopularScraper,
     "gaming_replay": GamingReplayScraper,
+    "techinn": TechinnScraper,
 }
 
 
@@ -86,7 +88,8 @@ def run_store(slug, accept_drop=False, force=False, light=False):
     run_id = start_run(slug)
 
     try:
-        scraper = SCRAPERS[slug](fresh_release_urls=fresh_release_urls(slug), known_detail_urls=known_detail_urls(slug))
+        scraper = SCRAPERS[slug](fresh_release_urls=fresh_release_urls(slug), known_detail_urls=known_detail_urls(slug),
+                                 last_seen=last_seen(slug))
         if light:
             scraper.max_product_pages = 0
         products = scraper.scrape_catalog()
@@ -99,7 +102,9 @@ def run_store(slug, accept_drop=False, force=False, light=False):
 
         # A half-broken scraper (e.g. prices no longer found) returns only part of the
         # catalogue. Prices are still saved, but nothing is deactivated until someone checks.
-        stats = process_products(slug, products, full_catalog=not suspicious)
+        # A store read in part each run (Techinn) says which products it still lists
+        stats = process_products(slug, products, full_catalog=not suspicious,
+                                   still_listed=getattr(scraper, "still_listed", None))
 
         if suspicious:
             message = (
@@ -153,6 +158,15 @@ def fresh_release_urls(slug):
     """Pre-orders whose release date was read in the last RELEASE_DATE_RECHECK_DAYS days."""
     return store_urls(slug, "sp.release_date_checked_at > utcnow() + make_interval(days => ?)",
                       -RELEASE_DATE_RECHECK_DAYS)
+
+
+def last_seen(slug):
+    """{url: when a run last saw it}: a store reading part of its catalogue per run (Techinn) reads the oldest first."""
+    with connection() as conn:
+        rows = conn.cursor().execute(
+            "SELECT sp.url, MAX(sp.last_seen_at) FROM store_products sp JOIN stores s ON s.id = sp.store_id "
+            "WHERE s.slug = ? GROUP BY sp.url", slug).fetchall()
+    return {url: seen for url, seen in rows}
 
 
 def known_detail_urls(slug):

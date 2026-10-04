@@ -105,7 +105,10 @@ def admin_page():
 
 @app.route("/media/<path:key>")
 def media(key):
-    """Uploaded photos kept on this computer (app/services/photo_storage.py); no paths outside it."""
+    """Uploaded photos kept on this computer (app/services/photo_storage.py); no paths outside it.
+    Not the photos sent in conversations: those only through /api/conversations/<id>/photos/."""
+    if key.startswith("chats/"):
+        abort(404)
     return send_from_directory(storage.root, key, max_age=7 * 24 * 3600)
 
 

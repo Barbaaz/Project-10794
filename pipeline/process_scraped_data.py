@@ -15,13 +15,14 @@ log = logging.getLogger(__name__)
 CENT = Decimal("0.01")
 
 
-def process_products(store_slug, products, full_catalog=True):
+def process_products(store_slug, products, full_catalog=True, still_listed=None):
     """
     Save one store's scraped products: link each to a game, add or update it in
     store_products and record its price. Everything is one transaction.
 
     full_catalog=True means `products` is the store's whole catalogue, so
-    products not seen in this run are marked inactive (removed from the store).
+    products not seen in this run are marked inactive (removed from the store). A store read in
+    part per run (Techinn) passes still_listed, the URLs it still sells: only the others are.
     "Código na caixa" products are skipped (core.editions.is_excluded). A MATCH_ONLY_STORES
     store's products only link to games and editions that already exist.
     """
@@ -83,9 +84,11 @@ def process_products(store_slug, products, full_catalog=True):
 
         if full_catalog and products:
             s.flush()
+            gone = (StoreProduct.url.not_in(still_listed) if still_listed is not None
+                    else StoreProduct.last_seen_at < run_started_at)
             stats["deactivated"] = s.execute(
                 update(StoreProduct)
-                .where(StoreProduct.store_id == store.id, StoreProduct.is_active, StoreProduct.last_seen_at < run_started_at)
+                .where(StoreProduct.store_id == store.id, StoreProduct.is_active, gone)
                 .values(is_active=False)
                 .execution_options(synchronize_session=False)
             ).rowcount
