@@ -150,6 +150,22 @@ def test_roman_numerals_are_numbers(a, b):
     assert normalize_name(a) == normalize_name(b)
 
 
+@pytest.mark.parametrize("a, b", [
+    ("Tony Hawk's Pro Skater 3+4 PS5", "TONY HAWKS PRO SKATER 3 + 4 PS5"),
+    ("Patapon 1+2 Replay Switch", "PATAPON 1 + 2 Replay Switch"),
+])
+def test_plus_between_numbers_is_a_space(a, b):
+    assert normalize_name(a) == normalize_name(b)
+    assert normalize_name("Pro Skater 3+4") == "pro skater 3 4"
+
+
+def test_keys_stored_before_the_plus_rule():
+    from core.normalizer import split_plus_numbers
+
+    assert split_plus_numbers("tony hawks pro skater 34", "Tony Hawk's Pro Skater 3+4") == "tony hawks pro skater 3 4"
+    assert split_plus_numbers("fifa 34", "FIFA 34") == "fifa 34"              # no "+" in the title: a number
+
+
 @pytest.mark.parametrize("name", ["Mega Man X Legacy Collection PS4", "Octopath Traveler I PS4", "I Am Bread PS4"])
 def test_i_and_x_stay_letters(name):
     assert normalize_name(name).split()[-1] in ("collection", "i", "bread")
