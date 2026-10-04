@@ -1,0 +1,79 @@
+# The real site on a server (DEPLOY.md): docker-compose.yml plus Caddy for HTTPS, the daily
+# scraper runs (06:00 and 18:00 Lisbon time, IGDB after the morning one) and a nightly backup.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
+#   (or COMPOSE_FILE=docker-compose.yml:docker-compose.production.yml in .env, as DEPLOY.md does)
+#
+# Needs in .env, besides DB_PASSWORD and SECRET_KEY: DOMAIN; IGDB_* for new games' information;
+# SMTP_* and ALERT_EMAIL for e-mails. Photos, logs and backups are folders next to this file.
+services:
+  db:
+    restart: unless-stopped
+
+  web:
+    restart: unless-stopped
+    # Only Caddy reaches the site: no port on the server itself
+    ports: !reset []
+    environment:
+      COOKIE_SECURE: "1"
+      BEHIND_PROXY: "1"
+      SITE_URL: https://${DOMAIN:?Set DOMAIN in .env (see DEPLOY.md)}
+    volumes:
+      # Folders on the server instead of Docker volumes: easy to copy in, back up and look at
+      - ./instance/uploads:/app/instance/uploads
+      - ./logs:/app/logs
+
+  scheduler:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    command: ["python", "-m", "scheduler.daemon"]
+    environment:
+      DB_CONNECTION_STRING: "host=db port=5432 dbname=project10794 user=project10794 password=${DB_PASSWORD}"
+      SECRET_KEY: ${SECRET_KEY}
+      IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
+      IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}
+      SITE_URL: https://${DOMAIN}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      # A store failing or half-broken is e-mailed here (needs SMTP_HOST)
+      ALERT_EMAIL: ${ALERT_EMAIL:-}
+    volumes:
+      - ./instance/uploads:/app/instance/uploads
+      - ./logs:/app/logs
+
+  backup:
+    image: postgres:18
+    restart: unless-stopped
+    depends_on:
+      - db
+    entrypoint: ["sh", "/backup.sh"]
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+      TZ: Europe/Lisbon
+    volumes:
+      - ./docker/backup.sh:/backup.sh:ro
+      - ./instance/uploads:/uploads:ro
+      - ./backups:/backups
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./docker/Caddyfile.production:/etc/caddy/Caddyfile:ro
+      # The HTTPS certificate, kept so it isn't requested again at every start
+      - caddydata:/data
+
+volumes:
+  caddydata:

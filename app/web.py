@@ -10,8 +10,9 @@ from pathlib import Path
 
 from flask import Flask, abort, request, jsonify, redirect, render_template, send_from_directory
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-from app.config import COOKIE_SECURE, SECRET_KEY
+from app.config import BEHIND_PROXY, COOKIE_SECURE, SECRET_KEY
 from app.routes import auth, chat, collection, games, igdb_games, listings, moderation, prices, ratings, reviews, stores
 from app.services.game_service import game_exists, merged_into
 from app.services.photo_storage import MAX_UPLOAD_BYTES, storage
@@ -27,6 +28,8 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(days=30),
     MAX_CONTENT_LENGTH=11 * MAX_UPLOAD_BYTES,  # a listing's photos (up to 10) in one request
 )
+if BEHIND_PROXY:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 for blueprint in (auth.bp, chat.bp, collection.bp, games.bp, igdb_games.bp, listings.bp, moderation.bp, prices.bp,
                   ratings.bp, reviews.bp, stores.bp):
     app.register_blueprint(blueprint)

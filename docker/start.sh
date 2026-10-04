@@ -8,7 +8,7 @@ if [ -f "$DEMO" ]; then
     python -m database.setup --wait 120 --demo "$DEMO"
 else
     python -m database.setup --wait 120
-    echo "No demo data ($DEMO): the site starts empty. See README.md, 'Try it with Docker'."
+    echo "No demo data file ($DEMO): nothing loaded. A new database starts empty (README.md, 'Try it with Docker')."
 fi
 
 exec waitress-serve --host=0.0.0.0 --port=5000 app.web:app

@@ -42,6 +42,9 @@ docker compose run --rm web python -m scheduler.run_single_store cstech
 Other stores: `press_start`, `mega-mania`, `gaming_replay`, `radio_popular`. Run the tests with
 `docker compose run --rm web python -m pytest -q`.
 
+**On a server** (the real site, with HTTPS, the daily runs and nightly backups):
+[DEPLOY.md](DEPLOY.md), using `docker-compose.production.yml`.
+
 ## Setup on Windows without Docker
 
 Needs [PostgreSQL](https://www.postgresql.org/download/) 15 or newer (built with ICU, as the

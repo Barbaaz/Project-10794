@@ -30,6 +30,10 @@ def _secret_key():
 SECRET_KEY = _secret_key()
 # Only send the login cookie over HTTPS: set COOKIE_SECURE=1 once the site is served with HTTPS
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE") == "1"
+# Served through one reverse proxy (Caddy, docker-compose.hosting.yml): trust its X-Forwarded-For /
+# -Proto, so the login lockout counts each visitor's address, not the proxy's. Never set it when
+# the site is reachable without the proxy: anyone could then pick the address they appear from.
+BEHIND_PROXY = os.environ.get("BEHIND_PROXY") == "1"
 
 # The site's own address, for links in e-mails (never taken from the request: its Host header
 # could point a password-reset link at another site)
@@ -42,3 +46,6 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 MAIL_FROM = os.environ.get("MAIL_FROM", "")
+# Where a daily run's problems (a store failed or half-broken) are e-mailed; on a server nobody
+# sees the Windows notification. Needs SMTP_HOST too
+ALERT_EMAIL = os.environ.get("ALERT_EMAIL", "")

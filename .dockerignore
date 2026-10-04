@@ -11,3 +11,6 @@ logs
 *.bak
 # mounted at run time instead (see docker-compose.yml), never baked into the image
 database/demo
+# secret key, uploaded photos, database backups: never in the image
+instance
+backups
