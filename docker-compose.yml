@@ -2,7 +2,8 @@
 # Needs a .env file (copy .env.example). See "Try it with Docker" in README.md.
 services:
   db:
-    # PostgreSQL 18. Its data stays in the "dbdata" volume between runs.
+    # PostgreSQL 18. Its data stays in the "pgdata" volume between runs ("dbdata" was SQL Server's:
+    # PostgreSQL can't start on its files)
     image: postgres:18
     environment:
       POSTGRES_USER: project10794
@@ -10,7 +11,7 @@ services:
       # The app's database is made by database/setup.py (with Portuguese sorting), not here
       POSTGRES_DB: postgres
     volumes:
-      - dbdata:/var/lib/postgresql
+      - pgdata:/var/lib/postgresql
 
   web:
     build: .
@@ -42,5 +43,5 @@ services:
       - uploads:/app/instance/uploads
 
 volumes:
-  dbdata:
+  pgdata:
   uploads:

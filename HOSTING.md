@@ -147,6 +147,20 @@ It starts again by itself if the server restarts. Ubuntu installs security updat
 
 ## Updating the site
 
+> **A copy set up before 2026-10-04 runs on SQL Server.** Its first update after that date
+> moves it to PostgreSQL, which starts on a new, empty database (`pgdata`): **testers' accounts,
+> listings and messages are lost** (tell the testers before); the demo data and demo users are
+> loaded again. Do the steps below as usual, then remove the old SQL Server database and image
+> (about 2 GB), once:
+>
+> ```bash
+> docker volume rm project-10794_dbdata
+> docker image prune -a -f
+> ```
+>
+> `.env` stays as it is: the same database password works for PostgreSQL. The server no longer
+> needs to be x86: a later copy can use an Arm server (CAX).
+
 The server takes its code from the `testers` branch on GitHub, so newer code must be **pushed to
 `testers` first** (from the PC). Then:
 
@@ -184,25 +198,6 @@ affected: git ignores it).
 If the site doesn't come back, `docker compose logs --tail 100 web` shows why. To go back to the
 code that worked: `git log --oneline -5`, then `git checkout <the commit before>` and
 `docker compose up -d --build` (`git checkout testers` returns to the newest code afterwards).
-
-### Once: from SQL Server to PostgreSQL
-
-A copy set up before 2026-10-04 runs on SQL Server. Its first update after that date moves it to
-PostgreSQL: instead of step 2 above, run the lines below. They delete the old database, so
-**testers' accounts, listings and messages are lost**; the demo data and demo users are loaded
-again. Tell the testers before.
-
-```bash
-cd ~/Project-10794
-git pull
-docker compose down -v           # stops it and deletes the old SQL Server database
-docker compose up -d --build     # PostgreSQL, the demo data and the demo users
-docker compose logs -f web       # wait for "Serving on http://0.0.0.0:5000", then Ctrl+C
-docker image prune -a -f         # removes the old SQL Server image (2 GB)
-```
-
-Then steps 3 and 4 as usual. `.env` stays as it is: the same database password works for
-PostgreSQL. The server no longer needs to be x86: a later copy can use an Arm server (CAX).
 
 ## When testing is over
 
