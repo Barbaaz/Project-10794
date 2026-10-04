@@ -130,7 +130,9 @@ o que fez e anote tudo o que lhe pareça estranho, confuso, lento ou errado, mes
 - [ ] Crie uma conta (**Entrar** → **Criar conta**). Pode usar um e-mail inventado: não é enviado nenhum e-mail
 - [ ] Saia e volte a entrar
 - [ ] Na estrela ☆ de um jogo, escolha **⭐ Quero** (lista de desejos) e **📚 Tenho** (coleção)
-- [ ] Abra a sua coleção (botão 📚): mude o estado de um jogo, as horas jogadas, as notas
+- [ ] Abra a sua coleção (botão 📚 Coleção, no topo): mude o estado de um jogo, as horas jogadas, as notas
+- [ ] Num jogo que existe em várias plataformas, carregue nos botões das plataformas no cartão
+      (PS5, Switch 2...): os preços mudam para essa plataforma
 - [ ] Veja o separador **⭐ Lista de desejos** na página inicial
 - [ ] Escreva uma **crítica** de um jogo (nota de 1 a 10) na página do jogo
 
@@ -142,7 +144,8 @@ Já existem utilizadores de demonstração, com anúncios e conversas: entre com
 
 - [ ] Veja o separador **👤 Usados** e abra um anúncio
 - [ ] Com a sua conta, envie uma mensagem a um vendedor e carregue em **Comprar**
-- [ ] Ponha um jogo seu à venda (**Vender um jogo** no separador Usados, ou **Vender este jogo** na página de um jogo): são precisas pelo menos 3 fotografias (servem
+- [ ] Na conversa, peça mais fotografias; como vendedor, envie-as com o botão **📷** (do telemóvel também)
+- [ ] Ponha um jogo seu à venda (botão **🏷️ Vender** no topo, **🏷️ Vender** na estrela ☆ de um jogo, ou **Vender este jogo** na página de um jogo; se a sua edição não aparecer, veja "Outras edições (do IGDB)"): são precisas pelo menos 3 fotografias (servem
       quaisquer fotografias do computador ou do telemóvel)
 - [ ] Faça uma compra completa, do pedido à avaliação. Para fazer de comprador e de vendedor ao
       mesmo tempo, abra uma **janela anónima / privada** do navegador (Ctrl+Shift+N no Chrome e no
@@ -154,7 +157,7 @@ Já existem utilizadores de demonstração, com anúncios e conversas: entre com
 
 ### D. Moderação
 
-- [ ] Entre como **demo_eva** (é moderadora) e carregue no botão **🛡️** no topo: veja as denúncias
+- [ ] Entre como **demo_eva** (é moderadora) e, no menu da conta (o botão com o nome, no topo), escolha **🛡️ Moderação**: veja as denúncias
       (incluindo a que fez em C), as compras com problemas e o registo
 
 ---
