@@ -12,8 +12,30 @@ PLATFORM_PATTERNS = [
     ("PS3", r"\bps3\b|\bplaystation\s*3\b"),
     ("XboxSeries", r"\bxbox\s+series\b|\bseries\s+[xs]\b|\bx\s*\|\s*s\b|\bxsx\b"),
     ("XboxOne", r"\bxbox\s+one\b"),
+    ("Xbox360", r"\bxbox\s*360\b|\bx360\b"),
     ("Xbox", r"\bxbox\b"),     # generic, resolved by detetar_plataforma()
     ("PC", r"\bpc\b"),
+    # Older platforms (stores that sell old games, e.g. Techinn's PS2 / 3DS titles), after the current
+    # ones: "Sega Mega Drive Classics PS5" is a PS5 game
+    ("PS2", r"\bps2\b|\bplaystation\s*2\b"),
+    ("PSVita", r"\bps\s*vita\b|\bplaystation\s+vita\b"),
+    ("PSP", r"\bpsp\b|\bplaystation\s+portable\b"),
+    ("PS1", r"\bps1\b|\bpsx\b|\bps\s*one\b|\bplaystation\s*1\b"),
+    ("3DS", r"\b[23]ds\b"),
+    ("DS", r"\bnintendo\s+dsi?\b|\bnds\b"),
+    ("WiiU", r"\bwii\s*u\b"),
+    ("Wii", r"\bwii\b"),
+    ("GameCube", r"\bgame\s*cube\b"),
+    ("N64", r"\bn64\b|\bnintendo\s*64\b"),
+    ("GBA", r"\bgba\b|\bgame\s*boy\s+advance\b"),
+    ("GBC", r"\bgbc\b|\bgame\s*boy\s+colou?r\b"),
+    ("GB", r"\bgame\s*boy\b"),
+    ("SNES", r"\bsnes\b|\bsuper\s+nintendo\b"),
+    ("NES", r"\bnes\b"),
+    ("Dreamcast", r"\bdreamcast\b"),
+    ("Saturn", r"\bsega\s+saturn\b"),
+    ("MegaDrive", r"\bmega\s*drive\b"),
+    ("MasterSystem", r"\bmaster\s+system\b"),
 ]
 
 XBOX_PLATFORMS = {"XboxSeries", "XboxOne"}

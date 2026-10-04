@@ -42,7 +42,9 @@ INSERT INTO stores (slug, name, base_url, is_active) VALUES
     ('cstech',        'CSTech',        'https://cstech.store',         true),
     -- match-only (pipeline/matcher.py MATCH_ONLY_STORES): links to games other stores made; on since 2026-10-03
     ('radio_popular', 'Rádio Popular', 'https://www.radiopopular.pt',  true),
-    ('gaming_replay', 'Gaming Replay', 'https://www.gamingreplay.com/pt/', true)  -- since 2026-10-03
+    ('gaming_replay', 'Gaming Replay', 'https://www.gamingreplay.com/pt/', true),  -- since 2026-10-03
+    -- off until its first run is checked (added 2026-10-04)
+    ('techinn',       'Techinn',       'https://www.tradeinn.com/techinn/pt', false)
 -- is_active is not updated, so a store switched off in the database stays off
 ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, base_url = EXCLUDED.base_url
     WHERE stores.name <> EXCLUDED.name OR stores.base_url <> EXCLUDED.base_url;

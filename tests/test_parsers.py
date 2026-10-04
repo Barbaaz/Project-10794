@@ -42,7 +42,7 @@ def test_press_start_platform_from_name_when_no_category(fixture_text):
     products = parse_press_start(fixture_text("press_start_listing.html"))
     assert by_name(products, "Naruto")["console"] == "PS5"
     assert by_name(products, "Far Cry 3")["console"] == "PS3"
-    assert by_name(products, "Dance Dance")["console"] is None   # Wii: not tracked yet
+    assert by_name(products, "Dance Dance")["console"] == "Wii"   # older platforms too (user, 2026-10-04)
 
 
 def test_press_start_uses_image_alt_for_cut_names():
