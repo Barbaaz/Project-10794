@@ -58,23 +58,36 @@
         .release-date { width: 3.2rem; }
         .release-item img { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: #000; }
         .min-w-0 { min-width: 0; }
+        /* Phones: the tabs in one row that scrolls sideways (7 buttons took 5 rows) */
+        @media (max-width: 767.98px) {
+            .front-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .25rem; scrollbar-width: thin; }
+            .front-tabs .nav-link { white-space: nowrap; }
+        }
+        /* Catalogue filters, labels above: always shown from tablet width, behind "Filtros" on a phone */
+        .catalog-filters { display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+        .catalog-filters.open { display: grid; }
+        @media (min-width: 768px) { .catalog-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 13rem)); } }
     </style>
 </head>
 
 <body class="bg-body-tertiary">
 
-<div class="container-xxl py-4">
-
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h3 mb-0"><a href="/" onclick="goHome(); return false;" class="link-body-emphasis text-decoration-none">🎮 Game Price Tracker</a></h1>
-        <div class="d-flex gap-2">
+<!-- The same header on every page (static/common.js fills the account area) -->
+<header class="site-header bg-body border-bottom mb-4">
+    <div class="container-xxl d-flex align-items-center gap-2 py-2">
+        <h1 class="site-brand m-0"><a href="/" onclick="goHome(); return false;" class="link-body-emphasis text-decoration-none">🎮 <span>Game Price Tracker</span></a></h1>
+        <div class="header-tools ms-auto d-flex align-items-center gap-1">
             <!-- Back to the front page; shown while search results are on screen -->
             <button id="home-btn" onclick="goHome()" class="btn btn-sm btn-primary d-none" data-i18n="home">🏠 Início</button>
-            <div id="account-area" class="d-flex gap-2"></div>
-            <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
-            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
+            <div id="account-area" class="d-flex gap-1 align-items-center"></div>
+            <div id="lang-switch" class="btn-group header-setting" role="group" data-i18n-aria-label="language"></div>
+            <button type="button" onclick="toggleDark()" class="btn btn-sm btn-secondary header-setting"
+                    data-i18n-aria-label="dark_mode" data-i18n-title="dark_mode">🌙</button>
         </div>
     </div>
+</header>
+
+<div class="container-xxl pb-4">
 
     <form class="row g-2 mb-4" onsubmit="handleSearch(event)">
         <div class="col-md-6">
@@ -95,7 +108,7 @@
 
     <!-- Front page: the visitor picks what to see; the choice is remembered in this browser -->
     <section id="front" class="mb-4">
-        <ul class="nav nav-pills mb-3 gap-1" role="tablist">
+        <ul class="nav nav-pills mb-3 gap-1 front-tabs" role="tablist">
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="discounts" role="tab" data-i18n="tab_discounts"></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="preorders" role="tab" data-i18n="tab_preorders"></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="releases" role="tab" data-i18n="tab_releases"></button></li>
@@ -253,6 +266,9 @@ const PEGI_AGES = [3, 7, 12, 16, 18];
 const MAX_TAGS = 5;      // as many as /api/games/catalog takes
 
 // The filters other than platform and sort: [address / API parameter, current value]
+// The catalogue filters' panel on a phone: closed until "Filtros" is pressed (kept open while paging)
+let filtersOpen = false;
+
 function extraFilters() {
     return [["store", catalogStore], ["genre", catalogGenre], ["tags", catalogTag], ["pegi", catalogPegi]];
 }
@@ -412,35 +428,46 @@ function renderCatalog(data, showPage = showCatalogPage) {
                     aria-label="${esc(t("remove_tag", { tag: t(`tag_${tag}`) }))}"></button></span>`).join("");
     const pegiOptions = PEGI_AGES.map(age => `<option value="${age}">${esc(t("pegi_up_to", { age }))}</option>`).join("");
     const wrap = document.createElement("div");
+    const activeFilters = [catalogGenre, catalogPegi, catalogStore].filter(Boolean).length + chosenTags.length;
     wrap.innerHTML = `
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
             <span class="small text-body-secondary me-auto">${esc(t(data.query ? "search_count"
                 : data.special ? "special_count" : "catalog_count", count))}</span>
-            <label class="small text-body-secondary" for="catalog-genre">${t("genre_filter")}</label>
-            <select id="catalog-genre" class="form-select form-select-sm w-auto">
-                <option value="">${t("all_genres")}</option>${genreOptions}
-            </select>
-            <label class="small text-body-secondary" for="catalog-tag">${t("tag_filter")}</label>
-            <select id="catalog-tag" class="form-select form-select-sm w-auto" ${chosenTags.length >= MAX_TAGS ? "disabled" : ""}>
-                <option value="">${t(chosenTags.length ? "add_tag" : "all_tags")}</option>${tagOptions}
-            </select>
-            <label class="small text-body-secondary" for="catalog-pegi">${t("pegi_filter")}</label>
-            <select id="catalog-pegi" class="form-select form-select-sm w-auto">
-                <option value="">${t("all_ages")}</option>${pegiOptions}
-            </select>
-            <label class="small text-body-secondary" for="catalog-store">${t("store_filter")}</label>
-            <select id="catalog-store" class="form-select form-select-sm w-auto">
-                <option value="">${t("all_stores")}</option>${storeOptions}
-            </select>
-            <label class="small text-body-secondary" for="catalog-sort">${t("sort")}</label>
-            <select id="catalog-sort" class="form-select form-select-sm w-auto">
+            <button type="button" class="btn btn-sm ${activeFilters ? "btn-primary" : "btn-secondary"} d-md-none" id="filters-toggle"
+                    aria-expanded="${filtersOpen}" aria-controls="catalog-filters">${t("filters_button")}${activeFilters ? ` (${activeFilters})` : ""}</button>
+            <label class="small text-body-secondary d-none d-sm-inline" for="catalog-sort">${t("sort")}</label>
+            <select id="catalog-sort" class="form-select form-select-sm w-auto" aria-label="${esc(t("sort"))}">
                 <option value="name">${t("sort_name")}</option>
                 <option value="price_asc">${t("sort_price_asc")}</option>
                 <option value="price_desc">${t("sort_price_desc")}</option>
             </select>
         </div>
+        <div id="catalog-filters" class="catalog-filters mb-3 ${filtersOpen ? "open" : ""}">
+            <div><label class="form-label small text-body-secondary mb-1" for="catalog-genre">${t("genre_filter")}</label>
+                <select id="catalog-genre" class="form-select form-select-sm">
+                    <option value="">${t("all_genres")}</option>${genreOptions}
+                </select></div>
+            <div><label class="form-label small text-body-secondary mb-1" for="catalog-tag">${t("tag_filter")}</label>
+                <select id="catalog-tag" class="form-select form-select-sm" ${chosenTags.length >= MAX_TAGS ? "disabled" : ""}>
+                    <option value="">${t(chosenTags.length ? "add_tag" : "all_tags")}</option>${tagOptions}
+                </select></div>
+            <div><label class="form-label small text-body-secondary mb-1" for="catalog-pegi">${t("pegi_filter")}</label>
+                <select id="catalog-pegi" class="form-select form-select-sm">
+                    <option value="">${t("all_ages")}</option>${pegiOptions}
+                </select></div>
+            <div><label class="form-label small text-body-secondary mb-1" for="catalog-store">${t("store_filter")}</label>
+                <select id="catalog-store" class="form-select form-select-sm">
+                    <option value="">${t("all_stores")}</option>${storeOptions}
+                </select></div>
+        </div>
         ${chosenTags.length ? `<div class="d-flex flex-wrap gap-1 mb-3" aria-label="${esc(t("chosen_tags"))}">${tagChips}</div>` : ""}`;
 
+    const toggle = wrap.querySelector("#filters-toggle");
+    toggle.onclick = () => {
+        filtersOpen = !filtersOpen;
+        toggle.setAttribute("aria-expanded", filtersOpen);
+        wrap.querySelector("#catalog-filters").classList.toggle("open", filtersOpen);
+    };
     const select = wrap.querySelector("#catalog-sort");
     select.value = catalogSort;
     select.onchange = async () => {
@@ -563,6 +590,8 @@ async function selectFrontTab(tab) {
     document.querySelectorAll("[data-tab]").forEach(b => {
         b.classList.toggle("active", b.dataset.tab === tab);
         b.setAttribute("aria-selected", b.dataset.tab === tab);
+        // the tab row scrolls sideways on a phone: keep the chosen tab in view
+        if (b.dataset.tab === tab) b.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
 
     const config = FRONT_TABS[tab];

@@ -23,7 +23,16 @@
 .offer-btn .seller-lines { display: flex; flex-direction: column; line-height: 1.15; text-align: left; min-width: 0; }
 .offer-btn .seller-lines small { font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
 
-/* The header's buttons (account, language, theme) wrap onto a second line on narrow screens
-   instead of making the page scroll sideways */
-div:has(> #account-area) { flex-wrap: wrap; justify-content: flex-end; }
-div:has(> div > #account-area) { flex-wrap: wrap; gap: .5rem; }
+/* The header, the same on every page: the site's name on the left, the account's buttons, language
+   and theme on the right. On a phone, logged in, language and theme are in the account menu */
+.site-header .site-brand { font-size: 1.25rem; font-weight: 600; white-space: nowrap; }
+.site-header .site-brand a { color: inherit; }
+.site-header .header-tools { flex-wrap: wrap; justify-content: flex-end; }
+.site-header .account-menu .dropdown-menu { right: 0; left: auto; top: calc(100% + .25rem); min-width: 13rem; }
+@media (max-width: 575.98px) {
+    .site-header .site-brand { font-size: 1.05rem; }
+    .logged-in .site-header .header-setting { display: none !important; }
+}
+@media (max-width: 359.98px) {
+    .site-header .site-brand span { display: none; }      /* only 🎮 on the narrowest phones */
+}

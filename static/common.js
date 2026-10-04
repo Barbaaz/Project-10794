@@ -64,7 +64,9 @@ async function api(path, { method = "POST", body } = {}) {
     return { ok: response.ok, status: response.status, data };
 }
 
-// The account part of the header: "Entrar" when logged out, the username and "Sair" when logged in.
+// The account part of the header (the same on every page): "Entrar" when logged out; logged in,
+// Vender / Mensagens / Coleção (named from large width up, icons on a phone) and the account
+// menu (my account, profile, moderation, language and theme on a phone, log out).
 // After logging in / out, the page reloads so everything shows the right state.
 let currentUser = null;
 
@@ -72,28 +74,77 @@ async function renderAccountArea() {
     const box = document.getElementById("account-area");
     if (!box) return;
     try { currentUser = await fetch("/api/auth/me").then(r => r.json()); } catch (e) { currentUser = null; }
+    document.body.classList.toggle("logged-in", Boolean(currentUser));
     if (!currentUser) {
         const next = encodeURIComponent(location.pathname + location.search);
         box.innerHTML = `<a href="/account?next=${next}" class="btn btn-sm btn-primary">${t("log_in")}</a>`;
         return;
     }
     const staff = ["moderator", "admin"].includes(currentUser.role);
+    const name = currentUser.username || currentUser.display_name;
+    const navButton = (href, icon, label, extra = "", style = "btn-secondary") => `
+        <a href="${href}" class="btn btn-sm ${style} position-relative" ${extra}
+           title="${esc(label)}" aria-label="${esc(label)}">${icon}<span class="d-none d-lg-inline ms-1">${esc(label)}</span></a>`;
     box.innerHTML = `
-        ${staff ? `<a href="/admin" class="btn btn-sm btn-secondary" title="${esc(t("mod_title"))}" aria-label="${esc(t("mod_title"))}">🛡️</a>` : ""}
-        <a href="/sell" class="btn btn-sm btn-success" title="${esc(t("market_sell"))}" aria-label="${esc(t("market_sell"))}">🏷️</a>
-        <a href="/collection" class="btn btn-sm btn-secondary position-relative" id="collection-link"
-           title="${esc(t("collection_title"))}" aria-label="${esc(t("collection_title"))}">📚</a>
-        <a href="/messages" class="btn btn-sm btn-secondary position-relative" id="messages-link"
-           title="${esc(t("messages"))}" aria-label="${esc(t("messages"))}">💬</a>
-        <a href="/account" class="btn btn-sm btn-secondary" title="${esc(t("my_account"))}">👤 ${esc(currentUser.username || currentUser.display_name)}</a>
-        <button type="button" class="btn btn-sm btn-secondary" id="logout-btn">${t("log_out")}</button>`;
+        ${navButton("/sell", "🏷️", t("nav_sell"), "", "btn-success")}
+        ${navButton("/messages", "💬", t("messages"), 'id="messages-link"')}
+        ${navButton("/collection", "📚", t("nav_collection"), 'id="collection-link"')}
+        <div class="account-menu position-relative">
+            <button type="button" class="btn btn-sm btn-secondary" id="account-menu-btn" aria-haspopup="menu" aria-expanded="false"
+                    aria-controls="account-menu" title="${esc(t("account_menu"))}">👤<span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
+            <div class="dropdown-menu shadow" id="account-menu" role="menu">
+                <span class="dropdown-header">@${esc(name)}</span>
+                <a class="dropdown-item" role="menuitem" href="/account">${t("my_account")}</a>
+                <a class="dropdown-item" role="menuitem" href="/user/${encodeURIComponent(currentUser.username || "")}">${t("my_profile")}</a>
+                ${staff ? `<a class="dropdown-item" role="menuitem" href="/admin">🛡️ ${t("mod_title")}</a>` : ""}
+                <div class="d-sm-none">
+                    <hr class="dropdown-divider">
+                    <button type="button" class="dropdown-item" role="menuitem" data-switch-lang>${t("lang_other")}</button>
+                    <button type="button" class="dropdown-item" role="menuitem" data-toggle-dark>🌙 ${t("dark_mode")}</button>
+                </div>
+                <hr class="dropdown-divider">
+                <button type="button" class="dropdown-item" role="menuitem" id="logout-btn">${t("log_out")}</button>
+            </div>
+        </div>`;
     showUnreadCount();
     showPendingRatings();
     showWishlistDeals();
+    bindAccountMenu(box);
     box.querySelector("#logout-btn").onclick = async () => {
         await api("/api/auth/logout");
         location.reload();
     };
+    box.querySelector("[data-switch-lang]").onclick = () => {
+        save("lang", LANG === "pt" ? "en" : "pt");
+        location.reload();
+    };
+    box.querySelector("[data-toggle-dark]").onclick = () => toggleDark();
+}
+
+// The account menu: opens on click; Esc, Tab out or a click elsewhere closes it; arrows move
+function bindAccountMenu(box) {
+    const wrap = box.querySelector(".account-menu");
+    const button = box.querySelector("#account-menu-btn");
+    const menu = box.querySelector("#account-menu");
+    const items = () => [...menu.querySelectorAll(".dropdown-item")].filter(i => i.offsetParent !== null);
+    const setOpen = (open, focus) => {
+        menu.classList.toggle("show", open);
+        button.setAttribute("aria-expanded", open);
+        if (open && focus) items()[0]?.focus();
+        if (!open && focus) button.focus();
+    };
+    button.onclick = () => setOpen(!menu.classList.contains("show"), true);
+    document.addEventListener("click", e => { if (!wrap.contains(e.target)) setOpen(false); });
+    menu.addEventListener("keydown", e => {
+        if (e.key === "Escape") return setOpen(false, true);
+        if (e.key === "Tab") return setOpen(false);
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            const list = items();
+            const next = list.indexOf(document.activeElement) + (e.key === "ArrowDown" ? 1 : -1);
+            list[(next + list.length) % list.length].focus();
+        }
+    });
 }
 
 // The number of unread messages on the 💬 button (the messages page calls it again as it reads)

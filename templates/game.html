@@ -83,19 +83,21 @@
 </head>
 <body class="bg-body-tertiary">
 
-<div class="container py-4" style="max-width: 1000px;">
-
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div class="d-flex gap-2">
-            <a href="/" id="back-link" class="btn btn-sm btn-secondary" data-i18n="back"></a>
-            <a href="/" class="btn btn-sm btn-primary" data-i18n="home"></a>
-        </div>
-        <div class="d-flex gap-2">
-            <div id="account-area" class="d-flex gap-2"></div>
-            <div id="lang-switch" class="btn-group" role="group" data-i18n-aria-label="language"></div>
-            <button onclick="toggleDark()" class="btn btn-sm btn-secondary" data-i18n-aria-label="dark_mode">🌙</button>
+<!-- The same header on every page (static/common.js fills the account area) -->
+<header class="site-header bg-body border-bottom mb-4">
+    <div class="container-xxl d-flex align-items-center gap-2 py-2">
+        <a href="/" class="site-brand link-body-emphasis text-decoration-none">🎮 <span>Game Price Tracker</span></a>
+        <div class="header-tools ms-auto d-flex align-items-center gap-1">
+            <div id="account-area" class="d-flex gap-1 align-items-center"></div>
+            <div id="lang-switch" class="btn-group header-setting" role="group" data-i18n-aria-label="language"></div>
+            <button type="button" onclick="toggleDark()" class="btn btn-sm btn-secondary header-setting"
+                    data-i18n-aria-label="dark_mode" data-i18n-title="dark_mode">🌙</button>
         </div>
     </div>
+</header>
+
+<div class="container pb-4" style="max-width: 1000px;">
+    <div class="mb-3"><a href="/" id="back-link" class="btn btn-sm btn-secondary" data-i18n="back"></a></div>
 
     <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
     <div id="error" class="alert alert-warning d-none"></div>
