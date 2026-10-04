@@ -49,6 +49,8 @@ def test_db():
         import db
         for engine in db._engines.values():
             engine.dispose()           # the app's pooled connections to it
+        for pool in db._pools.values():
+            pool.close()
         admin.execute(f"DROP DATABASE {name} WITH (FORCE)")
         admin.close()
 

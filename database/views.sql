@@ -11,48 +11,37 @@
 --
 -- We also need to have watched the product for those whole 30 days;
 -- otherwise we can't know whether it was cheaper before, so is_discount = false.
+--
+-- Everything is worked out per product in one pass (window functions, then GROUP BY), with no
+-- join of the price history to itself: such a join was planned as a loop over every product
+-- (6 s for 10,000 snapshots on 2026-10-04), slowing every page that reads this view.
 -- ============================================================
 BEGIN;
 DROP VIEW IF EXISTS current_offers;   -- re-made whole: CREATE OR REPLACE can't change its columns
 CREATE VIEW current_offers AS
 WITH snapshots AS (
-    SELECT store_product_id, price, scraped_at, id,
-           LAG(price) OVER (PARTITION BY store_product_id ORDER BY scraped_at, id) AS previous_price
-    FROM price_snapshots
-),
--- A snapshot can be a stock-only change; keep the rows where the price changed
-price_changes AS (
-    SELECT store_product_id, price, scraped_at, id
-    FROM snapshots
-    WHERE previous_price IS NULL OR previous_price <> price
-),
--- Each price is valid from its change until the next one (valid_to NULL = current price)
-price_periods AS (
-    SELECT store_product_id, price,
-           scraped_at AS valid_from,
-           LEAD(scraped_at) OVER (PARTITION BY store_product_id ORDER BY scraped_at, id) AS valid_to
-    FROM price_changes
-),
-current_period AS (
-    SELECT store_product_id, valid_from
-    FROM price_periods
-    WHERE valid_to IS NULL
-),
--- Lowest price in effect during the 30 days before the current price started
-reference AS (
-    SELECT c.store_product_id, MIN(p.price) AS reference_price
-    FROM current_period c
-    JOIN price_periods p
-      ON p.store_product_id = c.store_product_id
-     AND p.valid_to IS NOT NULL
-     AND p.valid_to > c.valid_from - interval '30 days'
-    GROUP BY c.store_product_id
-),
-latest AS (
-    SELECT store_product_id, price, old_price, in_stock,
+    SELECT store_product_id, price, old_price, in_stock, scraped_at, id,
+           LAG(price) OVER (PARTITION BY store_product_id ORDER BY scraped_at, id) AS previous_price,
            ROW_NUMBER() OVER (PARTITION BY store_product_id ORDER BY scraped_at DESC, id DESC) AS rn,
            MIN(scraped_at) OVER (PARTITION BY store_product_id) AS tracked_since
     FROM price_snapshots
+),
+-- A snapshot can be a stock-only change; keep the rows where the price changed. Each price is
+-- valid from its change until the next one (valid_to NULL = current price, from price_since)
+price_periods AS (
+    SELECT store_product_id, price,
+           LEAD(scraped_at) OVER (PARTITION BY store_product_id ORDER BY scraped_at, id) AS valid_to,
+           MAX(scraped_at) OVER (PARTITION BY store_product_id) AS price_since
+    FROM snapshots
+    WHERE previous_price IS NULL OR previous_price <> price
+),
+-- Lowest price in effect during the 30 days before the current price started
+per_product AS (
+    SELECT store_product_id, MAX(price_since) AS price_since,
+           MIN(price) FILTER (WHERE valid_to IS NOT NULL
+                                AND valid_to > price_since - interval '30 days') AS reference_price
+    FROM price_periods
+    GROUP BY store_product_id
 ),
 offers AS (
     SELECT
@@ -73,12 +62,11 @@ offers AS (
         l.in_stock,
         l.old_price AS store_claimed_old_price,   -- what the store shows crossed out; for reference only
         l.tracked_since,
-        cur.valid_from AS price_since,
-        ref.reference_price                       -- lowest price in the 30 days before price_since
+        pp.price_since,
+        pp.reference_price                        -- lowest price in the 30 days before price_since
     FROM store_products sp
-    JOIN latest l ON l.store_product_id = sp.id AND l.rn = 1
-    JOIN current_period cur ON cur.store_product_id = sp.id
-    LEFT JOIN reference ref ON ref.store_product_id = sp.id
+    JOIN snapshots l ON l.store_product_id = sp.id AND l.rn = 1
+    JOIN per_product pp ON pp.store_product_id = sp.id
 )
 SELECT
     o.*,

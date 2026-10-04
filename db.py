@@ -112,10 +112,29 @@ def json_or_none(value):
     return json.dumps(value, ensure_ascii=False) if value else None
 
 
+_pools = {}
+
+
+def get_pool():
+    """
+    Open connections kept for fetch_all, one pool per connection string (as get_engine).
+    A new PostgreSQL connection costs ~60 ms (the password exchange), and a page runs
+    several queries; SQL Server's driver pooled them without being asked, psycopg doesn't.
+    """
+    if DB_CONNECTION_STRING not in _pools:
+        from psycopg_pool import ConnectionPool
+
+        _pools[DB_CONNECTION_STRING] = ConnectionPool(
+            DB_CONNECTION_STRING, min_size=1, max_size=10, open=True,
+            check=ConnectionPool.check_connection,   # one dropped by the server is replaced, not used
+        )
+    return _pools[DB_CONNECTION_STRING]
+
+
 def fetch_all(sql, *params):
     """Rows as dicts with JSON-friendly values (Decimal → float, datetime → ISO string)."""
-    with connection() as conn:
-        cursor = conn.cursor(row_factory=tuple_row)    # a query may repeat a column name (the last one wins)
+    with get_pool().connection() as conn:              # committed, or rolled back on an error
+        cursor = Cursor(conn, row_factory=tuple_row)   # a query may repeat a column name (the last one wins)
         cursor.execute(sql, *params)
         columns = [c[0] for c in cursor.description]
         return [dict(zip(columns, map(_json_value, row))) for row in cursor.fetchall()]

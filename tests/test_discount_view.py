@@ -13,6 +13,7 @@ SCENARIOS = {
     "too new to judge":        ([(59.99, None, 1, 5), (39.99, 59.99, 1, 2)], (False, None)),
     "sale ended":              ([(59.99, None, 1, 60), (39.99, 59.99, 1, 20), (59.99, None, 1, 5)], (False, None)),
     "stock change keeps it":   ([(59.99, None, 1, 40), (39.99, 59.99, 1, 2), (39.99, 59.99, 0, 1)], (True, 33)),
+    "older low price ignored": ([(29.99, None, 1, 90), (59.99, None, 1, 60), (44.99, 59.99, 1, 0)], (True, 25)),
 }
 
 
