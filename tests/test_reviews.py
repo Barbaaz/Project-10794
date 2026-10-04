@@ -48,6 +48,30 @@ def test_review_rules(market):
     assert client.get("/api/games/999999/reviews").status_code == 404
 
 
+def test_score_from_the_collection(market):
+    """The collection page sets only the score: it's the review's, and a review's text is kept."""
+    client, game = market["client"], market["game"]
+    score = lambda value: client.put(f"/api/games/{game}/reviews/mine/score", json={"score": value}, headers=HEADERS)
+    assert score(8).status_code == 401                                     # logged out
+    sign_up(client, "ana")
+    client.post("/api/collection", json={"edition_id": market["edition"], "kind": "owned"}, headers=HEADERS)
+    owned = lambda: next(i for i in client.get("/api/collection").get_json()["items"] if i["game_id"] == game)
+    assert owned()["score"] is None
+
+    assert score(8).get_json() == {"score": 8}
+    assert owned()["score"] == 8 and reviews(client, game)["summary"]["count"] == 1
+    save(client, game, 8, "Muito bom", "Gostei.")
+    assert score(9).get_json() == {"score": 9}
+    mine = reviews(client, game)["mine"]
+    assert (mine["score"], mine["title"], mine["body"]) == (9, "Muito bom", "Gostei.")    # text kept
+    assert score("").get_json()["error"] == "review_has_text"            # text: deleted on the game page
+    assert score(11).get_json()["error"] == "score_invalid"
+
+    save(client, game, 9)                                                   # no text: "" takes it away
+    assert score("").get_json() == {"score": None}
+    assert reviews(client, game)["mine"] is None and owned()["score"] is None
+
+
 def test_owners_are_marked(market):
     client, game = market["client"], market["game"]
     sign_up(client, "ana")

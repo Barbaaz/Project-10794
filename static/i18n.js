@@ -332,6 +332,10 @@ const STRINGS = {
         collection_no_status: "Sem estado",
         collection_format: "Formato",
         collection_notes: "Notas (só para si)",
+        collection_score: "Avaliação",
+        collection_no_score: "Sem avaliação",
+        collection_score_hint: "A sua avaliação do jogo, de 1 a 10: aparece na página do jogo, com as dos outros jogadores",
+        collection_score_saved: "Avaliação guardada.",
         collection_best_now: "Melhor preço:",
         collection_no_store_price: "Sem preço nas lojas agora",
         used_from: "usado desde {price}",
@@ -592,6 +596,7 @@ const STRINGS = {
         error_review_title_long: "Título demasiado longo (máximo 120 caracteres).",
         error_review_text_long: "Texto demasiado longo (máximo 4000 caracteres).",
         error_review_hidden: "Um moderador escondeu esta avaliação; já não a pode alterar nem apagar.",
+        error_review_has_text: "A sua avaliação tem texto: para a apagar, use a página do jogo.",
     },
     en: {
         home: "🏠 Home",
@@ -915,6 +920,10 @@ const STRINGS = {
         collection_no_status: "No status",
         collection_format: "Format",
         collection_notes: "Notes (only for you)",
+        collection_score: "Rating",
+        collection_no_score: "Not rated",
+        collection_score_hint: "Your rating of the game, 1 to 10: shown on the game's page with other players'",
+        collection_score_saved: "Rating saved.",
         collection_best_now: "Best price:",
         collection_no_store_price: "No store price right now",
         used_from: "used from {price}",
@@ -1173,6 +1182,7 @@ const STRINGS = {
         error_review_title_long: "Title too long (at most 120 characters).",
         error_review_text_long: "Text too long (at most 4000 characters).",
         error_review_hidden: "A moderator hid this review; it can't be changed or deleted.",
+        error_review_has_text: "Your review has text: delete it on the game's page.",
     },
 };
 

@@ -121,6 +121,27 @@ def save(user_id, game_id, score, title=None, body=None):
     return reviews(game_id, user_id)
 
 
+def set_score(user_id, game_id, score):
+    """
+    Only the score, from the collection page: a review's title and text stay as written on the
+    game page. No score ("") takes the review away, unless it has text (deleted on the game
+    page then, where the text shows). {score}
+    """
+    with session() as s:
+        review = s.scalars(select(GameReview).where(GameReview.user_id == user_id,
+                                                    GameReview.game_id == game_id)).first()
+        title, body = (review.title, review.body) if review else (None, None)
+    if score in (None, ""):
+        if review is None:
+            return {"score": None}
+        if title or body:
+            raise ReviewError("review_has_text")
+        delete(user_id, game_id)
+        return {"score": None}
+    save(user_id, game_id, score, title, body)
+    return {"score": int(score)}
+
+
 def delete(user_id, game_id):
     with session() as s:
         review = s.scalars(select(GameReview).where(GameReview.user_id == user_id,

@@ -13,7 +13,9 @@ from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import select
 
-from app.models import COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, GameEdition, User, fields
+from app.models import (
+    COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, GameEdition, GameReview, User, fields,
+)
 from db import session
 
 MAX_ITEMS = 2000
@@ -37,6 +39,11 @@ def collection(user_id):
         rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "achievements", "achievements_total",
                        "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
         public = user.collection_public
+        # the user's review score of each game (one per game, as on the game page); a hidden one can't change
+        reviews = {game_id: (score, hidden) for game_id, score, hidden in s.execute(
+            select(GameReview.game_id, GameReview.score, GameReview.hidden).where(GameReview.user_id == user_id))}
+    for r in rows:
+        r["score"], r["score_locked"] = reviews.get(r["game_id"], (None, False))
     rows = with_prices(rows)                       # stats() needs the prices
     return {"items": rows, "stats": stats(rows), "public": public}
 
