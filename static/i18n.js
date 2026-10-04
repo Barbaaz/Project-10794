@@ -323,6 +323,10 @@ const STRINGS = {
         // game collection
         collection_title: "A minha coleção",
         collection_public: "Mostrar no meu perfil",
+        collection_wish_alerts: "Avisos da lista de desejos por email",
+        collection_wish_alerts_hint: "Um email por dia, no máximo, quando um jogo que quer volta a estar em stock ou desce de preço.",
+        collection_alerts_off_done: "Deixou de receber os avisos da lista de desejos por email. Pode voltar a ligá-los na sua coleção.",
+        error_link_invalid: "Esta ligação não é válida.",
         collection_public_at: "Visível no seu perfil:",
         collection_tab_owned: "📚 Tenho",
         collection_tab_wishlist: "⭐ Quero",
@@ -941,6 +945,10 @@ const STRINGS = {
         // game collection
         collection_title: "My collection",
         collection_public: "Show on my profile",
+        collection_wish_alerts: "Wishlist alerts by email",
+        collection_wish_alerts_hint: "At most one email a day, when a game you want is back in stock or its price drops.",
+        collection_alerts_off_done: "You'll no longer get wishlist emails. You can switch them back on in your collection.",
+        error_link_invalid: "This link isn't valid.",
         collection_public_at: "Visible on your profile:",
         collection_tab_owned: "📚 Owned",
         collection_tab_wishlist: "⭐ Wishlist",

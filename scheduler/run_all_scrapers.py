@@ -14,6 +14,7 @@ from scheduler.jobs import LIGHT_STORES, SCRAPERS, RanRecently, active_store_slu
 from scheduler.notify import notify, run_summary
 from pipeline.igdb import enrich_games, fill_names, fill_tags, fill_time_to_beat, fill_videos
 from app.services.chat_service import complete_overdue
+from app.services.wish_alert_service import check_all as wish_alerts
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +59,14 @@ def main(light=False):
             log.info("Marketplace: %d purchases completed after 7 days", completed)
     except Exception as e:
         log.warning("Marketplace auto-complete skipped: %s", e)
+
+    # Wishlist alerts by e-mail (back in stock, price drops), after the morning run's new prices:
+    # at most one message a day per user
+    if not light:
+        try:
+            log.info("Wishlist alerts: %s", wish_alerts())
+        except Exception as e:
+            log.warning("Wishlist alerts skipped: %s", e)
 
     # Tell the user on their desktop, so a broken store doesn't go unnoticed
     summary = run_summary(failed, warnings)

@@ -107,8 +107,8 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/games/editions?ids=12,34` | The wishlist tab (up to 200): these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
 | `GET /api/stores` | Active stores with `last_updated`, `last_status` / `last_error` of the latest run and `is_stale` (no update in 36 h) |
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |
-| `POST /api/auth/register` `{username, email, password, display_name?}` | Create an account and log in (the session cookie) |
-| `POST /api/auth/login` `{login, password}` | Log in with username or email; locked for 15 min after 5 wrong passwords |
+| `POST /api/auth/register` `{username, email, password, display_name?, lang?}` | Create an account and log in (the session cookie); `lang` (pt / en) is kept for e-mails |
+| `POST /api/auth/login` `{login, password, lang?}` | Log in with username or email; locked for 15 min after 5 wrong passwords |
 | `POST /api/auth/forgot` `{email, lang}` | E-mail a link to choose a new password (valid 1 hour, works once); the same answer whether or not the email has an account. Sent by SMTP once `SMTP_HOST` is set (`.env.example`), else only logged |
 | `POST /api/auth/reset` `{token, password}` | The new password from that link; logs in |
 | `POST /api/auth/logout` · `GET /api/auth/me` | Log out · the logged-in user (or `null`) |
@@ -132,7 +132,8 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/users/<username>` | Public profile: average rating, ratings received, listings, game reviews (never the email) |
 | `GET /api/collection` · `GET /api/collection/editions` | The user's collection and wishlist with current prices and statistics (per platform / status, hours, worth new / used) · which editions they have (for the game page's Tenho / Quero) |
 | `POST /api/collection` `{edition_id, kind: owned\|wishlist, format?, status?, hours?, notes?}` · `PATCH` / `DELETE /api/collection/<id>` | Add (owning one takes it off the wishlist) · edit (`kind: owned` = bought it) / remove |
-| `PUT /api/collection/settings` `{public}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown) · a public collection |
+| `PUT /api/collection/settings` `{public?, wish_alerts?, lang?}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown); wishlist alerts by e-mail on / off · a public collection |
+| `POST /api/collection/alerts-off` `{token}` | The link in a wishlist alert switches the alerts off (no log-in needed) |
 | `GET /api/games/<id>/reviews?page=` | Players' reviews of a game on that platform: average, count and how many gave each score 1–10, the user's own review, 20 shown reviews per page (newest first; hidden ones and blocked users' left out; `owner` = has the game in their collection). Catalogue / deals / wishlist cards carry `review_score` and `review_count` |
 | `PUT /api/games/<id>/reviews/mine` `{score: 1–10, title?, body?}` · `DELETE` | Write or change one's review (one per user and game) · delete it (not once a moderator hid it) |
 | `PUT /api/games/<id>/reviews/mine/score` `{score: 1–10 or ""}` | Only the review's score (the collection page's rating); its text is kept |
@@ -264,6 +265,12 @@ it runs as soon as it is on again.
 When a store fails or looks half-broken, the daily run shows a **Windows notification**, and
 the front page footer shows ⚠ next to that store (also when a store hasn't updated for 36 h). A full run takes about 8 minutes. A new price row is
 only stored when a price or stock status changes.
+
+After the morning run, **wishlist alerts** (`app/services/wish_alert_service.py`): each user with
+alerts on gets at most one e-mail listing the wishes that came back in stock or dropped in price
+(by at least 1 € and 5%; a new historical low says so) since the last check. Each wish remembers the
+price at that check, so nothing is sent twice. Switched off on /collection or with the link in the
+message; logged instead of sent until `SMTP_HOST` is set.
 
 ## Database code
 

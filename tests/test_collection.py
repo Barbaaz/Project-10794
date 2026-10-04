@@ -76,7 +76,7 @@ def test_private_unless_made_public(market):
     sign_up(client, "shower")
     add(client, market["edition"], status="completed", notes="Só para mim.")
     assert client.get("/api/users/shower/collection").status_code == 404
-    assert client.put("/api/collection/settings", json={"public": True}, headers=HEADERS).get_json() == {"public": True}
+    assert client.put("/api/collection/settings", json={"public": True}, headers=HEADERS).get_json()["public"] is True
 
     sign_up(client, "visitor")
     public = client.get("/api/users/shower/collection").get_json()

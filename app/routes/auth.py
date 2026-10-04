@@ -66,7 +66,7 @@ def register():
     data = request.get_json(silent=True) or {}
     try:
         user = auth_service.register(data.get("username"), data.get("email"), data.get("password"),
-                                     data.get("display_name"))
+                                     data.get("display_name"), data.get("lang"))
     except AccountError as e:
         return account_error(e)
     log_in(user)
@@ -77,7 +77,8 @@ def register():
 def login():
     data = request.get_json(silent=True) or {}
     try:
-        user = auth_service.authenticate(data.get("login"), data.get("password"), request.remote_addr or "?")
+        user = auth_service.authenticate(data.get("login"), data.get("password"), request.remote_addr or "?",
+                                         data.get("lang"))
     except AccountError as e:
         return account_error(e)
     log_in(user)

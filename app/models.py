@@ -160,6 +160,8 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=true())      # False: blocked
     role: Mapped[str] = mapped_column(String(10), server_default="user")
     collection_public: Mapped[bool] = mapped_column(Boolean, server_default=false())   # shown on their profile
+    wish_alerts: Mapped[bool] = mapped_column(Boolean, server_default=true(), nullable=False)   # wishlist e-mails
+    lang: Mapped[str] = mapped_column(String(2), server_default="pt", nullable=False)   # pt / en, for e-mails
     last_login_at = mapped_column(DateTime)
     created_at = created_at()
 
@@ -369,6 +371,9 @@ class CollectionItem(Base):
     achievements: Mapped[int | None] = mapped_column(Integer)          # done (owned)
     achievements_total: Mapped[int | None] = mapped_column(Integer)
     wish_price = mapped_column(Numeric(10, 2))                         # best new price when wished (wishlist)
+    # wishlist alerts: the best new price at the last check (None: none in stock), and when
+    alert_price = mapped_column(Numeric(10, 2))
+    alert_checked_at = mapped_column(DateTime)
     created_at = created_at()
     updated_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 

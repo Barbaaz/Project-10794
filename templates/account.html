@@ -170,8 +170,8 @@ function handleForm(id, path, { extra = {}, done = () => location.assign(nextPag
     };
 }
 
-handleForm("login-form", "/api/auth/login");
-handleForm("register-form", "/api/auth/register");
+handleForm("login-form", "/api/auth/login", { extra: { lang: LANG } });
+handleForm("register-form", "/api/auth/register", { extra: { lang: LANG } });
 handleForm("forgot-form", "/api/auth/forgot", { extra: { lang: LANG }, done: message => {
     message.className = "alert alert-success py-2";
     message.textContent = t("forgot_sent");

@@ -20,6 +20,7 @@ from db import session
 USERNAME = re.compile(r"^[A-Za-z0-9_.-]{3,30}$")
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD = 8
+LANGS = ("pt", "en")      # the page's languages; the user's is kept for e-mails (wishlist alerts)
 
 # After this many wrong passwords for one login (username / email) from one address,
 # that pair is locked for LOCK_SECONDS: slows down password guessing
@@ -40,7 +41,7 @@ class AccountError(Exception):
         self.code = code
 
 
-def register(username, email, password, display_name=None):
+def register(username, email, password, display_name=None, lang=None):
     username, email = (username or "").strip(), (email or "").strip().lower()
     display_name = (display_name or "").strip() or username
     if not USERNAME.match(username):
@@ -58,14 +59,14 @@ def register(username, email, password, display_name=None):
         if taken:
             raise AccountError("username_taken" if (taken.username or "").lower() == username.lower() else "email_taken")
         user = User(username=username, email=email, password_hash=generate_password_hash(password),
-                    display_name=display_name)
+                    display_name=display_name, lang=lang if lang in LANGS else "pt")
         s.add(user)
         s.flush()
         user_id = user.id
     return get_user(user_id)
 
 
-def authenticate(login, password, ip="?"):
+def authenticate(login, password, ip="?", lang=None):
     """The user for this username / email and password; AccountError("login_failed" / "login_locked")."""
     login = (login or "").strip()
     key = (ip, login.lower())
@@ -80,6 +81,8 @@ def authenticate(login, password, ip="?"):
             _failures.setdefault(key, []).append(time.monotonic())
             raise AccountError("login_failed")
         user.last_login_at = NOW
+        if lang in LANGS:
+            user.lang = lang
         user_id = user.id
 
     _failures.pop(key, None)

@@ -2,7 +2,7 @@
 from flask import Blueprint, abort, jsonify, request
 
 from app.routes.auth import current_user, login_required
-from app.services import collection_service
+from app.services import collection_service, wish_alert_service
 from app.services.collection_service import CollectionError
 
 bp = Blueprint("collection", __name__, url_prefix="/api")
@@ -76,8 +76,18 @@ def remove(item_id):
 @bp.put("/collection/settings")
 @login_required
 def settings():
-    """{public: true | false}: show the collection on the user's profile"""
-    return jsonify(collection_service.set_public(current_user()["id"], body().get("public")))
+    """{public?, wish_alerts?, lang?}: show the collection on the user's profile; wishlist alerts by e-mail"""
+    data = body()
+    changes = {k: data[k] for k in ("public", "wish_alerts", "lang") if k in data}
+    return jsonify(collection_service.set_settings(current_user()["id"], changes))
+
+
+@bp.post("/collection/alerts-off")
+def alerts_off():
+    """{token}: the link in a wishlist alert e-mail switches them off, logged in or not"""
+    if not wish_alert_service.switch_off(body().get("token")):
+        return jsonify(error="link_invalid"), 400
+    return jsonify(ok=True)
 
 
 @bp.get("/users/<username>/collection")

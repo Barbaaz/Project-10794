@@ -38,9 +38,18 @@
 
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h1 class="h3 mb-0" data-i18n="collection_title"></h1>
-        <div class="form-check form-switch mb-0">
-            <input class="form-check-input" type="checkbox" role="switch" id="public-switch">
-            <label class="form-check-label small" for="public-switch" data-i18n="collection_public"></label>
+        <div class="d-flex flex-wrap gap-3">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="public-switch">
+                <label class="form-check-label small" for="public-switch" data-i18n="collection_public"></label>
+            </div>
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="alerts-switch"
+                       aria-describedby="alerts-hint">
+                <label class="form-check-label small" for="alerts-switch" data-i18n="collection_wish_alerts"
+                       data-i18n-title="collection_wish_alerts_hint"></label>
+                <span id="alerts-hint" class="visually-hidden" data-i18n="collection_wish_alerts_hint"></span>
+            </div>
         </div>
     </div>
     <div id="public-link" class="small mb-3 d-none"></div>
@@ -267,15 +276,28 @@ async function load() {
     if (!response.ok) return showMessage(false, t("error_unknown"));
     data = await response.json();
     document.getElementById("public-switch").checked = data.public;
+    document.getElementById("alerts-switch").checked = data.wish_alerts;
     renderPublicLink();
     renderStats();
     renderItems();
     document.getElementById("content").classList.remove("d-none");
 }
 
+// The link in a wishlist alert e-mail (?alerts_off=…) works without logging in
+async function alertsOffFromLink() {
+    const token = new URLSearchParams(location.search).get("alerts_off");
+    if (!token) return false;
+    history.replaceState(null, "", location.pathname);
+    const { ok, data: answer } = await api("/api/collection/alerts-off", { body: { token } });
+    showMessage(ok, ok ? t("collection_alerts_off_done") : t(`error_${answer?.error || "unknown"}`));
+    return true;
+}
+
 async function start() {
     applyI18n();
+    const fromLink = await alertsOffFromLink();
     await renderAccountArea();
+    if (!currentUser && fromLink) return document.getElementById("loading").classList.add("d-none");
     if (!currentUser) return location.replace(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
     document.getElementById("filter-status").innerHTML = `<option value="">${t("collection_all_statuses")}</option>`
         + STATUSES.map(x => `<option value="${x}">${t(`status_play_${x}`)}</option>`).join("");
@@ -289,6 +311,12 @@ async function start() {
     document.getElementById("public-switch").onchange = async e => {
         const { ok } = await api("/api/collection/settings", { method: "PUT", body: { public: e.target.checked } });
         if (ok) { data.public = e.target.checked; renderPublicLink(); }
+    };
+    document.getElementById("alerts-switch").onchange = async e => {
+        const { ok } = await api("/api/collection/settings", { method: "PUT",
+                                                               body: { wish_alerts: e.target.checked, lang: LANG } });
+        if (ok) data.wish_alerts = e.target.checked;
+        else e.target.checked = !e.target.checked;
     };
     load();
 }
