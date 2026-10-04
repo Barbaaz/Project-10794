@@ -49,7 +49,7 @@ if [ ! -f .env ]; then
 fi
 
 echo
-echo "A preparar o site. Da primeira vez demora alguns minutos (descarrega cerca de 1 GB);"
+echo "A preparar o site. Da primeira vez demora alguns minutos (descarrega cerca de 300 MB);"
 echo "depois é rápido. Não feche esta janela."
 echo
 if ! DEMO_MODE=1 WEB_PORT=8010 docker compose up --build -d; then

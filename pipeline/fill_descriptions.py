@@ -26,7 +26,7 @@ def fill_descriptions(slug, limit):
         cursor = conn.cursor()
         rows = cursor.execute(
             "SELECT sp.id, sp.url, sp.external_name FROM store_products sp JOIN stores s ON s.id = sp.store_id "
-            "WHERE s.slug = ? AND sp.is_active = 1 AND sp.details_checked_at IS NULL",
+            "WHERE s.slug = ? AND sp.is_active AND sp.details_checked_at IS NULL",
             slug,
         ).fetchall()
         rows.sort(key=lambda r: parse_title(r[2]).phrase == "")   # special editions first
@@ -42,7 +42,7 @@ def fill_descriptions(slug, limit):
                 continue
             cursor.execute(
                 "UPDATE store_products SET description = ?, details = ?, image_urls = ?, "
-                "details_checked_at = SYSUTCDATETIME() WHERE id = ?",
+                "details_checked_at = utcnow() WHERE id = ?",
                 page.get("description"), json_or_none(page.get("details")), json_or_none(page.get("images")), sp_id,
             )
             conn.commit()   # each page as it's read: a block halfway keeps what was read

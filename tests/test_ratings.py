@@ -57,7 +57,7 @@ def test_an_overdue_rating_blocks_buying_and_selling(market):
     # not overdue yet: still free to sell
     assert new_listing(market).status_code == 201
 
-    market["db"].execute("UPDATE conversations SET completed_at = DATEADD(DAY, -15, SYSUTCDATETIME()) WHERE id = ?",
+    market["db"].execute("UPDATE conversations SET completed_at = utcnow() - interval '15 days' WHERE id = ?",
                          conversation_id)
     assert client.get("/api/ratings/pending").get_json()[0]["overdue"] is True
     response = new_listing(market)
@@ -90,7 +90,7 @@ def test_replies_and_the_edit_window(market):
                          headers=HEADERS).get_json()
     assert answer["reply"] == "Os CTT atrasaram, desculpe."
 
-    market["db"].execute("UPDATE user_ratings SET created_at = DATEADD(DAY, -15, SYSUTCDATETIME()) WHERE id = ?", rating["id"])
+    market["db"].execute("UPDATE user_ratings SET created_at = utcnow() - interval '15 days' WHERE id = ?", rating["id"])
     log_in(client, "buyer")
     response = rate(client, conversation_id, 5)
     assert (response.status_code, response.get_json()["error"]) == (409, "rating_locked")

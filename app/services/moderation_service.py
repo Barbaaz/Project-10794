@@ -221,7 +221,7 @@ def set_role(admin_id, username, role):
     if role not in ("user", "moderator"):
         raise ModerationError("role_invalid")
     with session() as s:
-        user = s.scalars(select(User).where(User.username == username)).first()
+        user = s.scalars(select(User).where(User.named(username))).first()
         if not user:
             raise ModerationError("not_found", 404)
         if user.role == "admin":

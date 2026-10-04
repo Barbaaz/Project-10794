@@ -13,7 +13,9 @@ from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import select
 
-from app.models import COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, GameEdition, User, fields
+from app.models import (
+    COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, GameEdition, GameReview, User, fields,
+)
 from db import session
 
 MAX_ITEMS = 2000
@@ -33,10 +35,15 @@ def collection(user_id):
     with session() as s:
         user = s.get(User, user_id)
         items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
-                          .order_by(CollectionItem.kind, CollectionItem.updated_at.desc())).all()
+                          .order_by(CollectionItem.kind, CollectionItem.updated_at.desc(), CollectionItem.id.desc())).all()
         rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "achievements", "achievements_total",
                        "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
         public = user.collection_public
+        # the user's review score of each game (one per game, as on the game page); a hidden one can't change
+        reviews = {game_id: (score, hidden) for game_id, score, hidden in s.execute(
+            select(GameReview.game_id, GameReview.score, GameReview.hidden).where(GameReview.user_id == user_id))}
+    for r in rows:
+        r["score"], r["score_locked"] = reviews.get(r["game_id"], (None, False))
     rows = with_prices(rows)                       # stats() needs the prices
     return {"items": rows, "stats": stats(rows), "public": public}
 
@@ -190,7 +197,7 @@ def set_public(user_id, public):
 def public_collection(username):
     """A user's collection as their profile shows it, or None when it's private (or no such user)."""
     with session() as s:
-        user = s.scalars(select(User).where(User.username == username, User.is_active)).first()
+        user = s.scalars(select(User).where(User.named(username), User.is_active)).first()
         if not user or not user.collection_public:
             return None
         user_id = user.id

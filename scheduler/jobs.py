@@ -60,7 +60,7 @@ def setup_logging():
 
 def active_store_slugs():
     with connection() as conn:
-        rows = conn.cursor().execute("SELECT slug FROM stores WHERE is_active = 1 ORDER BY id").fetchall()
+        rows = conn.cursor().execute("SELECT slug FROM stores WHERE is_active ORDER BY id").fetchall()
     return [r[0] for r in rows]
 
 
@@ -131,8 +131,8 @@ def previous_product_count(slug):
     """products_found of the store's last successful run ('warning' runs don't count)."""
     with connection() as conn:
         row = conn.cursor().execute(
-            "SELECT TOP 1 r.products_found FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
-            "WHERE s.slug = ? AND r.status = 'success' ORDER BY r.id DESC",
+            "SELECT r.products_found FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
+            "WHERE s.slug = ? AND r.status = 'success' ORDER BY r.id DESC LIMIT 1",
             slug,
         ).fetchone()
     return row[0] if row else None
@@ -141,7 +141,7 @@ def previous_product_count(slug):
 def hours_since_last_success(slug):
     with connection() as conn:
         row = conn.cursor().execute(
-            "SELECT DATEDIFF(MINUTE, MAX(r.finished_at), SYSUTCDATETIME()) / 60.0 "
+            "SELECT EXTRACT(EPOCH FROM utcnow() - MAX(r.finished_at)) / 3600 "
             "FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
             "WHERE s.slug = ? AND r.status IN ('success', 'warning')",
             slug,
@@ -151,7 +151,7 @@ def hours_since_last_success(slug):
 
 def fresh_release_urls(slug):
     """Pre-orders whose release date was read in the last RELEASE_DATE_RECHECK_DAYS days."""
-    return store_urls(slug, "sp.release_date_checked_at > DATEADD(DAY, ?, SYSUTCDATETIME())",
+    return store_urls(slug, "sp.release_date_checked_at > utcnow() + make_interval(days => ?)",
                       -RELEASE_DATE_RECHECK_DAYS)
 
 
@@ -174,8 +174,7 @@ def store_urls(slug, condition, *params):
 def start_run(slug):
     with connection() as conn:
         run_id = conn.cursor().execute(
-            "INSERT INTO scrape_runs (store_id) OUTPUT INSERTED.id "
-            "SELECT id FROM stores WHERE slug = ?",
+            "INSERT INTO scrape_runs (store_id) SELECT id FROM stores WHERE slug = ? RETURNING id",
             slug,
         ).fetchone()
     if not run_id:
@@ -186,7 +185,7 @@ def start_run(slug):
 def finish_run(run_id, status, products_found=None, error_message=None):
     with connection() as conn:
         conn.cursor().execute(
-            "UPDATE scrape_runs SET finished_at = SYSUTCDATETIME(), status = ?, "
+            "UPDATE scrape_runs SET finished_at = utcnow(), status = ?, "
             "products_found = ?, error_message = ? WHERE id = ?",
             status, products_found, error_message, run_id,
         )

@@ -4,7 +4,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select, update
 
-from app.models import NOW, GameEdition, MatchOverride, Platform, PriceSnapshot, Store, StoreProduct
+from app.models import NOW, Game, GameEdition, MatchOverride, Platform, PriceSnapshot, Store, StoreProduct
 from core.editions import is_excluded
 from db import json_or_none, session
 from pipeline.deduplicator import deduplicate
@@ -56,14 +56,20 @@ def process_products(store_slug, products, full_catalog=True):
                 continue
 
             sp = known.get(product_key(p["url"], p["condition"]))
-            # a product a moderator pinned to an edition stays there (app/services/match_service.py)
-            game_id, edition_id = pinned[sp.id] if sp is not None and sp.id in pinned else matcher.match(p, create)
+            # a product a moderator pinned to an edition stays there (app/services/match_service.py),
+            # on its game's platform (the store may list it on another platform's page)
+            if sp is not None and sp.id in pinned:
+                game_id, edition_id = pinned[sp.id]
+                platform_id = s.get(Game, game_id).platform_id
+            else:
+                game_id, edition_id = matcher.match(p, create)
+                platform_id = platform_ids.get(p["console"])
             if sp is None:
                 sp = StoreProduct(store_id=store.id, url=p["url"], condition=p["condition"])
                 s.add(sp)
                 known[product_key(p["url"], p["condition"])] = sp
                 stats["new_products"] += 1
-            update_product(sp, p, game_id, edition_id, platform_ids.get(p["console"]))
+            update_product(sp, p, game_id, edition_id, platform_id)
             if sp.id is None:
                 s.flush()       # its id, for the price snapshot
 
@@ -136,8 +142,8 @@ def product_key(url, condition):
 
 
 def to_cents(price):
-    """A price as the DECIMAL(10,2) column keeps it: the exact value rounded half up, as SQL Server does
-    (1.005 as a float is 1.00499…, so 1.00)."""
+    """A price in cents, as the numeric(10,2) column keeps it: the float's exact value rounded half up
+    (1.005 as a float is 1.00499…, so 1.00), as SQL Server stored prices before the move to PostgreSQL."""
     return None if price is None else Decimal(price).quantize(CENT, ROUND_HALF_UP)
 
 

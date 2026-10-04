@@ -111,9 +111,9 @@ def test_sent_purchases_complete_by_themselves_after_7_days(deal):
     step(client, conversation_id, "accept")
     step(client, conversation_id, "sent")
 
-    deal["db"].execute("UPDATE conversations SET sent_at = DATEADD(DAY, -6, SYSUTCDATETIME()) WHERE id = ?", conversation_id)
+    deal["db"].execute("UPDATE conversations SET sent_at = utcnow() - interval '6 days' WHERE id = ?", conversation_id)
     assert chat_service.complete_overdue() == 0
-    deal["db"].execute("UPDATE conversations SET sent_at = DATEADD(DAY, -8, SYSUTCDATETIME()) WHERE id = ?", conversation_id)
+    deal["db"].execute("UPDATE conversations SET sent_at = utcnow() - interval '8 days' WHERE id = ?", conversation_id)
     assert chat_service.complete_overdue() == 1
     assert client.get(f"/api/conversations/{conversation_id}").get_json()["deal_status"] == "completed"
     assert listing_status(deal) == "sold"
@@ -127,7 +127,7 @@ def test_a_reported_problem_stops_the_automatic_completion(deal):
     step(client, conversation_id, "sent")
     log_in(client, "buyer")
     assert step(client, conversation_id, "problem").get_json()["deal_status"] == "problem"
-    deal["db"].execute("UPDATE conversations SET sent_at = DATEADD(DAY, -30, SYSUTCDATETIME()) WHERE id = ?", conversation_id)
+    deal["db"].execute("UPDATE conversations SET sent_at = utcnow() - interval '30 days' WHERE id = ?", conversation_id)
     assert chat_service.complete_overdue() == 0
 
 

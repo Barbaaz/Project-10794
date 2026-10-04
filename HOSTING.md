@@ -7,7 +7,7 @@ install). It runs the same Docker setup as `teste/`, in demo mode (the demo data
 sign up or upload photos).
 
 ```
-tester's browser ──HTTPS + password──> Caddy ──> site (web) ──> SQL Server (db)      all on one server
+tester's browser ──HTTPS + password──> Caddy ──> site (web) ──> PostgreSQL (db)      all on one server
 ```
 
 **Cost:** about €5 a month at Hetzner, billed by the hour until the server is **deleted** (a server
@@ -39,8 +39,7 @@ If you already have `id_ed25519.pub`, skip `ssh-keygen` and only show it.
 2. **New project** → open it → **Add Server**:
    - **Location:** any in Europe (Nuremberg, Falkenstein or Helsinki)
    - **Image:** Ubuntu 24.04
-   - **Type:** Shared vCPU → **x86** (Intel / AMD), the smallest with **4 GB of memory** (CX22 or the
-     type that replaced it). **Not Arm (CAX)**: SQL Server only runs on x86
+   - **Type:** Shared vCPU, the smallest with **4 GB of memory** (x86 CX23 or Arm CAX11; either works)
    - **Networking:** Public IPv4 on (IPv6 too)
    - **SSH keys:** **Add SSH key** → paste the line from step 1
    - **Firewalls:** **Create Firewall** with these inbound rules: TCP **22**, TCP **80**, TCP **443**
@@ -111,7 +110,7 @@ docker compose up -d --build
 docker compose logs -f web     # wait for "Serving on http://0.0.0.0:5000", then Ctrl+C
 ```
 
-The first start takes a few minutes (building, SQL Server, loading the demo data and demo users).
+The first start takes a few minutes (building, PostgreSQL, loading the demo data and demo users).
 Open **https://203-0-113-5.sslip.io** (your `DOMAIN`): the browser asks for a user name and
 password → `teste` and the password from step 5. The blue "Versão de teste" banner should show.
 
@@ -138,13 +137,72 @@ All on the **server**, in `~/Project-10794` (`ssh root@203.0.113.5`, then `cd Pr
 |-------|-----|
 | See whether it's running | `docker compose ps` |
 | Read the site's log | `docker compose logs --tail 100 web` |
-| Update to newer code pushed to `testers` | `git pull && docker compose up -d --build` |
+| Update to newer code | see "Updating the site" below |
 | Load a newer demo data file | copy it with `scp` (step 4), then the "start over" line below |
 | Start over (deletes testers' accounts, listings, messages) | `docker compose down -v && docker compose up -d --build` |
 | Change the testers' password | step 5 again (it rewrites `.env`, **including the database password**, so follow it with "start over") |
 | Stop it for a while | `docker compose stop` (`docker compose start` to resume; still billed) |
 
 It starts again by itself if the server restarts. Ubuntu installs security updates by itself.
+
+## Updating the site
+
+The server takes its code from the `testers` branch on GitHub, so newer code must be **pushed to
+`testers` first** (from the PC). Then:
+
+1. **PC:** connect to the server
+
+   ```powershell
+   ssh root@203.0.113.5
+   ```
+
+2. **Server:** get the new code and rebuild (testers' accounts, listings and messages are kept)
+
+   ```bash
+   cd ~/Project-10794
+   git pull
+   docker compose up -d --build
+   docker compose logs -f web     # wait for "Serving on http://0.0.0.0:5000", then Ctrl+C
+   ```
+
+   The database is brought up to date by itself at each start (`database.setup`), so nothing else
+   is needed for new tables or columns.
+
+3. Open the site (your `DOMAIN`), log in with `teste` and the password, and check that the blue
+   "Versão de teste" banner shows and a game page opens.
+
+4. **Server:** remove the old images the rebuild left behind (they only take disk space)
+
+   ```bash
+   docker image prune -f
+   ```
+
+If `git pull` stops with "Your local changes … would be overwritten", a file was edited on the
+server: `git stash && git pull` keeps a copy of the change aside and goes ahead (`.env` isn't
+affected: git ignores it).
+
+If the site doesn't come back, `docker compose logs --tail 100 web` shows why. To go back to the
+code that worked: `git log --oneline -5`, then `git checkout <the commit before>` and
+`docker compose up -d --build` (`git checkout testers` returns to the newest code afterwards).
+
+### Once: from SQL Server to PostgreSQL
+
+A copy set up before 2026-10-04 runs on SQL Server. Its first update after that date moves it to
+PostgreSQL: instead of step 2 above, run the lines below. They delete the old database, so
+**testers' accounts, listings and messages are lost**; the demo data and demo users are loaded
+again. Tell the testers before.
+
+```bash
+cd ~/Project-10794
+git pull
+docker compose down -v           # stops it and deletes the old SQL Server database
+docker compose up -d --build     # PostgreSQL, the demo data and the demo users
+docker compose logs -f web       # wait for "Serving on http://0.0.0.0:5000", then Ctrl+C
+docker image prune -a -f         # removes the old SQL Server image (2 GB)
+```
+
+Then steps 3 and 4 as usual. `.env` stays as it is: the same database password works for
+PostgreSQL. The server no longer needs to be x86: a later copy can use an Arm server (CAX).
 
 ## When testing is over
 

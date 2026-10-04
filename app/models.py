@@ -8,16 +8,15 @@ The tables as SQLAlchemy models:
 
 The price analysis queries (the current_offers view, windows, "latest price per product")
 stay SQL: they're reports that read better as SQL.
-Times are UTC, set by the database (SYSUTCDATETIME()).
+Times are UTC, without a time zone, set by the database (utcnow(), database/schema.sql).
 """
 from sqlalchemy import (
-    BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Unicode, UnicodeText, func,
-    text,
+    BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Unicode, UnicodeText,
+    UniqueConstraint, false, func, text, true,
 )
-from sqlalchemy.dialects.mssql import DATETIME2, TINYINT
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-NOW = func.sysutcdatetime()      # the database's clock, in UTC
+NOW = func.utcnow()      # the database's clock, in UTC (database/schema.sql)
 
 
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
@@ -30,11 +29,11 @@ ROLES = ("user", "moderator", "admin")
 
 
 class Base(DeclarativeBase):
-    type_annotation_map = {DateTime: DATETIME2}
+    pass
 
 
 def created_at():
-    return mapped_column(DATETIME2, server_default=NOW, nullable=False)
+    return mapped_column(DateTime, server_default=NOW, nullable=False)
 
 
 # --- catalogue and prices (database/schema.sql; written by pipeline/) ----------------------
@@ -51,7 +50,7 @@ class Store(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(50))
     name: Mapped[str] = mapped_column(Unicode(200))
-    is_active: Mapped[bool] = mapped_column(Boolean, server_default="1")
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=true())
 
 
 class Game(Base):
@@ -61,12 +60,13 @@ class Game(Base):
     title: Mapped[str] = mapped_column(Unicode(300))
     normalized_title: Mapped[str] = mapped_column(Unicode(300))     # the game key (core/editions.py)
     title_en: Mapped[str | None] = mapped_column(Unicode(300))      # English name (IGDB / moderators)
+    title_fixed: Mapped[bool] = mapped_column(Boolean, default=False)  # title corrected by a moderator: kept
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))
     created_at = created_at()
     created_by: Mapped[int | None] = mapped_column(Integer)   # a user who created it from IGDB (no store sells it)
     # From IGDB (pipeline/igdb.py, IGDB_COLUMNS)
     igdb_id: Mapped[int | None] = mapped_column(Integer)
-    igdb_checked_at = mapped_column(DATETIME2)
+    igdb_checked_at = mapped_column(DateTime)
     summary: Mapped[str | None] = mapped_column(UnicodeText)
     genres: Mapped[str | None] = mapped_column(Unicode(500))
     publishers: Mapped[str | None] = mapped_column(Unicode(500))
@@ -84,7 +84,7 @@ class Game(Base):
     ttb_normally: Mapped[int | None] = mapped_column(Integer)
     ttb_completely: Mapped[int | None] = mapped_column(Integer)
     ttb_count: Mapped[int | None] = mapped_column(Integer)
-    ttb_checked_at = mapped_column(DATETIME2)
+    ttb_checked_at = mapped_column(DateTime)
 
     platform: Mapped[Platform] = relationship(lazy="joined")
 
@@ -111,16 +111,16 @@ class StoreProduct(Base):
     url: Mapped[str] = mapped_column(Unicode(800))
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))
     condition: Mapped[str] = mapped_column(String(10), server_default="new")
-    first_seen_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
-    last_seen_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, server_default="1")
-    is_preorder: Mapped[bool] = mapped_column(Boolean, server_default="0")
+    first_seen_at = mapped_column(DateTime, server_default=NOW, nullable=False)
+    last_seen_at = mapped_column(DateTime, server_default=NOW, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=true())
+    is_preorder: Mapped[bool] = mapped_column(Boolean, server_default=false())
     release_date = mapped_column(Date)
-    release_date_checked_at = mapped_column(DATETIME2)
+    release_date_checked_at = mapped_column(DateTime)
     description: Mapped[str | None] = mapped_column(UnicodeText)
     details: Mapped[str | None] = mapped_column(UnicodeText)        # JSON
     image_urls: Mapped[str | None] = mapped_column(UnicodeText)     # JSON list
-    details_checked_at = mapped_column(DATETIME2)
+    details_checked_at = mapped_column(DateTime)
 
 
 class PriceSnapshot(Base):
@@ -131,7 +131,7 @@ class PriceSnapshot(Base):
     price = mapped_column(Numeric(10, 2), nullable=False)
     old_price = mapped_column(Numeric(10, 2))
     in_stock: Mapped[bool] = mapped_column(Boolean)
-    scraped_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+    scraped_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 
 
 class MergedId(Base):
@@ -140,7 +140,7 @@ class MergedId(Base):
     kind: Mapped[str] = mapped_column(String(10), primary_key=True)      # game / edition
     old_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     new_id: Mapped[int] = mapped_column(Integer)
-    merged_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+    merged_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 
 
 # --- marketplace -------------------------------------------------------------------------
@@ -148,30 +148,35 @@ class MergedId(Base):
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
-        # unique, but only among those who have one (Google / Microsoft accounts may not)
-        Index("ux_users_username", "username", unique=True, mssql_where=text("username IS NOT NULL")),
+        # unique without case ("Paulo" is taken by "paulo"); NULLs don't clash (Google / Microsoft accounts may have none)
+        Index("ux_users_username", text("lower(username)"), unique=True),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str | None] = mapped_column(Unicode(30))
-    email: Mapped[str] = mapped_column(Unicode(255))
+    email: Mapped[str] = mapped_column(Unicode(255), unique=True)       # stored in lower case
     password_hash: Mapped[str | None] = mapped_column(Unicode(255))      # None: Google / Microsoft only
     display_name: Mapped[str] = mapped_column(Unicode(100))
     location: Mapped[str | None] = mapped_column(Unicode(100))
-    is_active: Mapped[bool] = mapped_column(Boolean, server_default="1")      # False: blocked
+    is_active: Mapped[bool] = mapped_column(Boolean, server_default=true())      # False: blocked
     role: Mapped[str] = mapped_column(String(10), server_default="user")
-    collection_public: Mapped[bool] = mapped_column(Boolean, server_default="0")   # shown on their profile
-    last_login_at = mapped_column(DATETIME2)
+    collection_public: Mapped[bool] = mapped_column(Boolean, server_default=false())   # shown on their profile
+    last_login_at = mapped_column(DateTime)
     created_at = created_at()
 
     @property
     def is_moderator(self):
         return self.role in ("moderator", "admin")
 
+    @staticmethod
+    def named(username):
+        """The condition "this user's username is `username`", without case (as the unique index)."""
+        return func.lower(User.username) == (username or "").lower()
+
 
 class Listing(Base):
     __tablename__ = "user_listings"
     __table_args__ = (
-        Index("ix_user_listings_game_status", "game_id", "status", mssql_include=["price", "condition"]),
+        Index("ix_user_listings_game_status", "game_id", "status", postgresql_include=["price", "condition"]),
         Index("ix_user_listings_user", "user_id"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -182,10 +187,10 @@ class Listing(Base):
     condition: Mapped[str] = mapped_column(String(10))
     description: Mapped[str | None] = mapped_column(Unicode(2000))
     status: Mapped[str] = mapped_column(String(10), server_default="active")
-    removed_by_moderator: Mapped[bool] = mapped_column(Boolean, server_default="0")   # the seller can't undo it
+    removed_by_moderator: Mapped[bool] = mapped_column(Boolean, server_default=false())   # the seller can't undo it
     created_at = created_at()
-    updated_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
-    sold_at = mapped_column(DATETIME2)
+    updated_at = mapped_column(DateTime, server_default=NOW, nullable=False)
+    sold_at = mapped_column(DateTime)
 
     seller: Mapped[User] = relationship(lazy="joined")
     game: Mapped[Game] = relationship(lazy="joined")
@@ -208,6 +213,7 @@ class ListingPhoto(Base):
 class Conversation(Base):
     __tablename__ = "conversations"
     __table_args__ = (
+        UniqueConstraint("listing_id", "buyer_id", name="uq_conversations_listing_buyer"),
         Index("ix_conversations_buyer", "buyer_id", "last_message_at"),
         Index("ix_conversations_seller", "seller_id", "last_message_at"),
     )
@@ -216,11 +222,11 @@ class Conversation(Base):
     buyer_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     seller_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     deal_status: Mapped[str] = mapped_column(String(12), server_default="none")
-    sent_at = mapped_column(DATETIME2)
-    completed_at = mapped_column(DATETIME2)
-    buyer_read_at = mapped_column(DATETIME2)
-    seller_read_at = mapped_column(DATETIME2)
-    last_message_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+    sent_at = mapped_column(DateTime)
+    completed_at = mapped_column(DateTime)
+    buyer_read_at = mapped_column(DateTime)
+    seller_read_at = mapped_column(DateTime)
+    last_message_at = mapped_column(DateTime, server_default=NOW, nullable=False)
     created_at = created_at()
 
     listing: Mapped[Listing] = relationship(lazy="joined")
@@ -241,17 +247,20 @@ class Message(Base):
 
 class Rating(Base):
     __tablename__ = "user_ratings"
-    __table_args__ = (Index("ix_user_ratings_rated", "rated_id", mssql_include=["stars"]),)
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "rater_id", name="uq_user_ratings"),
+        Index("ix_user_ratings_rated", "rated_id", postgresql_include=["stars"]),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id"))
     rater_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     rated_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    stars: Mapped[int] = mapped_column(TINYINT)
+    stars: Mapped[int] = mapped_column(SmallInteger)
     comment: Mapped[str | None] = mapped_column(Unicode(500))
     reply: Mapped[str | None] = mapped_column(Unicode(500))
-    hidden: Mapped[bool] = mapped_column(Boolean, server_default="0")   # by a moderator: not shown, not counted
+    hidden: Mapped[bool] = mapped_column(Boolean, server_default=false())   # by a moderator: not shown, not counted
     created_at = created_at()
-    updated_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+    updated_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 
     rater: Mapped[User] = relationship(foreign_keys=[rater_id], lazy="joined")
     conversation: Mapped[Conversation] = relationship(lazy="joined")
@@ -277,7 +286,7 @@ class Report(Base):
     status: Mapped[str] = mapped_column(String(10), server_default="open")   # open / resolved / dismissed
     created_at = created_at()
     resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
-    resolved_at = mapped_column(DATETIME2)
+    resolved_at = mapped_column(DateTime)
     resolution: Mapped[str | None] = mapped_column(Unicode(500))
 
     reporter: Mapped[User] = relationship(foreign_keys=[reporter_id], lazy="joined")
@@ -345,7 +354,7 @@ class CollectionItem(Base):
     achievements_total: Mapped[int | None] = mapped_column(Integer)
     wish_price = mapped_column(Numeric(10, 2))                         # best new price when wished (wishlist)
     created_at = created_at()
-    updated_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+    updated_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 
     game: Mapped[Game] = relationship(lazy="joined")
     edition: Mapped[GameEdition] = relationship(lazy="joined")
@@ -358,17 +367,17 @@ class GameReview(Base):
     __tablename__ = "game_reviews"
     __table_args__ = (
         Index("ux_game_reviews", "user_id", "game_id", unique=True),
-        Index("ix_game_reviews_game", "game_id", "hidden", mssql_include=["score"]),
+        Index("ix_game_reviews_game", "game_id", "hidden", postgresql_include=["score"]),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id"))
-    score: Mapped[int] = mapped_column(TINYINT)
+    score: Mapped[int] = mapped_column(SmallInteger)
     title: Mapped[str | None] = mapped_column(Unicode(120))
     body: Mapped[str | None] = mapped_column(Unicode(4000))
-    hidden: Mapped[bool] = mapped_column(Boolean, server_default="0")    # by a moderator: not shown, not counted
+    hidden: Mapped[bool] = mapped_column(Boolean, server_default=false())    # by a moderator: not shown, not counted
     created_at = created_at()
-    updated_at = mapped_column(DATETIME2, server_default=NOW, nullable=False)
+    updated_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 
     user: Mapped[User] = relationship(lazy="joined")
     game: Mapped[Game] = relationship(lazy="joined")

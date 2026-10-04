@@ -2,17 +2,19 @@
 Create the database if it doesn't exist and bring it up to date: the price side's tables,
 indexes, views, platforms and stores (database/*.sql), then the marketplace's tables (Alembic
 migrations, migrations/). Safe to re-run: every step only adds what's missing.
-Uses DB_CONNECTION_STRING (app/config.py) — its DATABASE= is the one created.
+Uses DB_CONNECTION_STRING (app/config.py) — its database (dbname) is the one created; the login
+needs the CREATEDB right for that.
 
     python -m database.setup
     python -m database.setup --demo database/demo/demo.json.gz   # and load demo data (see database/demo.py)
 """
 import argparse
-import re
 import time
 from pathlib import Path
 
-import pyodbc
+import psycopg
+from psycopg import sql
+from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 from app.config import DB_CONNECTION_STRING
 
@@ -20,30 +22,30 @@ DATABASE_DIR = Path(__file__).resolve().parent
 ROOT = DATABASE_DIR.parent
 SCRIPTS = ("schema.sql", "indexes.sql", "views.sql", "seed_stores.sql")
 
+# Sorting and comparing text the Portuguese way, the same on Windows and Linux (ICU)
+CREATE_DATABASE = "CREATE DATABASE {} TEMPLATE template0 ENCODING 'UTF8' LOCALE_PROVIDER icu ICU_LOCALE 'pt-PT' LOCALE 'C'"
+
 
 def database_name(connection_string):
-    return re.search(r"DATABASE=([^;]*)", connection_string, re.IGNORECASE).group(1)
+    return conninfo_to_dict(connection_string)["dbname"]
 
 
 def with_database(connection_string, name):
-    return re.sub(r"DATABASE=[^;]*", f"DATABASE={name}", connection_string, flags=re.IGNORECASE)
+    return make_conninfo(connection_string, dbname=name)
 
 
-def run_sql_script(cursor, path, database):
-    """Run a .sql file from database/ against `database` (scripts are split on GO lines)."""
-    sql = (DATABASE_DIR / path).read_text(encoding="utf-8").replace("USE Project10794;", f"USE {database};")
-    for batch in re.split(r"^\s*GO\s*$", sql, flags=re.MULTILINE | re.IGNORECASE):
-        if batch.strip():
-            cursor.execute(batch)
+def run_sql_script(conn, path):
+    """Run a .sql file from database/ (a whole script at once: no parameters in it)."""
+    conn.execute((DATABASE_DIR / path).read_text(encoding="utf-8"))
 
 
-def connect_master(connection_string, wait_seconds=0):
-    """A connection to the server's master database; waits for a server that is still starting."""
+def connect_server(connection_string, wait_seconds=0):
+    """A connection to the server's postgres database; waits for a server that is still starting."""
     deadline = time.monotonic() + wait_seconds
     while True:
         try:
-            return pyodbc.connect(with_database(connection_string, "master"), autocommit=True, timeout=5)
-        except pyodbc.Error:
+            return psycopg.connect(with_database(connection_string, "postgres"), autocommit=True, connect_timeout=5)
+        except psycopg.OperationalError:
             if time.monotonic() > deadline:
                 raise
             time.sleep(3)
@@ -51,20 +53,14 @@ def connect_master(connection_string, wait_seconds=0):
 
 def setup(connection_string=DB_CONNECTION_STRING, wait_seconds=0):
     name = database_name(connection_string)
-    master = connect_master(connection_string, wait_seconds)
-    try:
-        if not master.cursor().execute("SELECT 1 FROM sys.databases WHERE name = ?", name).fetchone():
-            master.cursor().execute(f"CREATE DATABASE [{name}]")
+    with connect_server(connection_string, wait_seconds) as server:
+        if not server.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,)).fetchone():
+            server.execute(sql.SQL(CREATE_DATABASE).format(sql.Identifier(name)))
             print(f"Database {name} created")
-    finally:
-        master.close()
 
-    conn = pyodbc.connect(connection_string, autocommit=True)
-    try:
+    with psycopg.connect(connection_string, autocommit=True) as conn:
         for script in SCRIPTS:
-            run_sql_script(conn.cursor(), script, name)
-    finally:
-        conn.close()
+            run_sql_script(conn, script)
     migrate(connection_string)
     print(f"Database {name} is up to date")
 
@@ -97,4 +93,7 @@ if __name__ == "__main__":
     setup(wait_seconds=args.wait)
     if args.demo:
         from database.demo import import_demo
-        import_demo(args.demo)
+        if import_demo(args.demo):
+            # platforms / stores added since the demo file was exported
+            with psycopg.connect(DB_CONNECTION_STRING, autocommit=True) as conn:
+                run_sql_script(conn, "seed_stores.sql")

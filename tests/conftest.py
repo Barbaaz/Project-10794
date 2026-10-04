@@ -26,26 +26,32 @@ def test_db():
     """
     A throwaway database with the real schema, indexes and views; dropped at the end.
     Yields .conn (autocommit connection) and .url (its connection string).
-    Tests using it are skipped when SQL Server isn't reachable.
+    Tests using it are skipped when PostgreSQL isn't reachable.
     """
-    pyodbc = pytest.importorskip("pyodbc")
+    import psycopg
     from app.config import DB_CONNECTION_STRING
-    from database.setup import connect_master, setup, with_database
+    from database.setup import connect_server, setup, with_database
+    from db import connect
 
-    name = f"Project10794_Test_{uuid.uuid4().hex[:8]}"
+    name = f"project10794_test_{uuid.uuid4().hex[:8]}"
     url = with_database(DB_CONNECTION_STRING, name)
     try:
-        admin = connect_master(DB_CONNECTION_STRING)
-    except pyodbc.Error as e:
-        pytest.skip(f"SQL Server not available: {e}")
+        admin = connect_server(DB_CONNECTION_STRING)
+    except psycopg.OperationalError as e:
+        pytest.skip(f"PostgreSQL not available: {e}")
 
     setup(url)     # creates the database and runs the real scripts, like on a new machine
-    conn = pyodbc.connect(url, autocommit=True)
+    conn = connect(url, autocommit=True)
     try:
         yield SimpleNamespace(conn=conn, url=url)
     finally:
         conn.close()
-        admin.cursor().execute(f"ALTER DATABASE {name} SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE {name}")
+        import db
+        for engine in db._engines.values():
+            engine.dispose()           # the app's pooled connections to it
+        for pool in db._pools.values():
+            pool.close()
+        admin.execute(f"DROP DATABASE {name} WITH (FORCE)")
         admin.close()
 
 
@@ -83,10 +89,10 @@ def market(web_client, test_db, tmp_path, monkeypatch):
     ps5 = c.execute("SELECT id FROM platforms WHERE code = 'PS5'").fetchone()[0]
 
     def game(title):
-        game_id = c.execute("INSERT INTO games (platform_id, title, normalized_title) OUTPUT INSERTED.id "
-                            "VALUES (?, ?, ?)", ps5, title, title.lower()).fetchone()[0]
-        edition_id = c.execute("INSERT INTO game_editions (game_id, edition_key, name) OUTPUT INSERTED.id "
-                               "VALUES (?, '', 'Standard')", game_id).fetchone()[0]
+        game_id = c.execute("INSERT INTO games (platform_id, title, normalized_title) "
+                            "VALUES (?, ?, ?) RETURNING id", ps5, title, title.lower()).fetchone()[0]
+        edition_id = c.execute("INSERT INTO game_editions (game_id, edition_key, name) "
+                               "VALUES (?, '', 'Standard') RETURNING id", game_id).fetchone()[0]
         return game_id, edition_id
 
     game_id, edition_id = game("Market Test Game")

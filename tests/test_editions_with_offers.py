@@ -20,31 +20,31 @@ def edition_id(app_on_test_db):
     cursor = app_on_test_db.conn.cursor()
     platform_id = cursor.execute("SELECT id FROM platforms WHERE code = 'PS5'").fetchone()[0]
     game_id = cursor.execute(
-        "INSERT INTO games (platform_id, title, normalized_title) OUTPUT INSERTED.id VALUES (?, 'Fav Game', 'fav game')",
+        "INSERT INTO games (platform_id, title, normalized_title) VALUES (?, 'Fav Game', 'fav game') RETURNING id",
         platform_id,
     ).fetchone()[0]
     edition_id = cursor.execute(
-        "INSERT INTO game_editions (game_id, edition_key, name) OUTPUT INSERTED.id VALUES (?, '', 'Standard')",
+        "INSERT INTO game_editions (game_id, edition_key, name) VALUES (?, '', 'Standard') RETURNING id",
         game_id,
     ).fetchone()[0]
 
     for name, history in HISTORIES.items():
         sp_id = cursor.execute(
             "INSERT INTO store_products (store_id, game_id, edition_id, platform_id, url, external_name) "
-            "OUTPUT INSERTED.id SELECT TOP 1 id, ?, ?, ?, ?, ? FROM stores ORDER BY id",
+            "SELECT id, ?, ?, ?, ?, ? FROM stores ORDER BY id LIMIT 1 RETURNING id",
             game_id, edition_id, platform_id, f"https://example.test/{name}", name,
         ).fetchone()[0]
         for price, in_stock, days_ago in history:
             cursor.execute(
                 "INSERT INTO price_snapshots (store_product_id, price, in_stock, scraped_at) "
-                "VALUES (?, ?, ?, DATEADD(DAY, ?, SYSUTCDATETIME()))",
-                sp_id, price, in_stock, -days_ago,
+                "VALUES (?, ?, ?, utcnow() - make_interval(days => ?))",
+                sp_id, price, bool(in_stock), days_ago,
             )
 
     yield edition_id
 
-    cursor.execute("DELETE ps FROM price_snapshots ps JOIN store_products sp ON sp.id = ps.store_product_id "
-                   "WHERE sp.edition_id = ?", edition_id)
+    cursor.execute("DELETE FROM price_snapshots ps USING store_products sp "
+                   "WHERE sp.id = ps.store_product_id AND sp.edition_id = ?", edition_id)
     cursor.execute("DELETE FROM store_products WHERE edition_id = ?", edition_id)
     cursor.execute("DELETE FROM game_editions WHERE id = ?", edition_id)
     cursor.execute("DELETE FROM games WHERE id = ?", game_id)

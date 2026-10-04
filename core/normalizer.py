@@ -25,6 +25,19 @@ def numerals(key):
     return " ".join(NUMERALS.get(w, w) for w in key.split())
 
 
+PLUS_BETWEEN_NUMBERS = re.compile(r"(?<=\d)\s*\+\s*(?=\d)")
+
+
+def split_plus_numbers(key, title):
+    """
+    A key stored before "+" between numbers became a space: "pro skater 34" → "pro skater 3 4"
+    when its title says "3+4" (the key alone can't tell "3+4" from 34).
+    """
+    for a, b in re.findall(r"(\d+)\s*\+\s*(\d+)", title or ""):
+        key = re.sub(rf"\b{a}{b}\b", f"{a} {b}", key)
+    return key
+
+
 def clean_name(name):
     """
     Removes brackets, platform and condition but keeps case and punctuation, for display:
@@ -50,6 +63,9 @@ def normalize_name(name):
     # remover acentos: "Pokémon" → "pokemon"
     name = unicodedata.normalize("NFKD", name)
     name = "".join(c for c in name if not unicodedata.combining(c))
+
+    # "+" between numbers is a space: "Pro Skater 3+4" = "Pro Skater 3 + 4" → "3 4", not "34"
+    name = PLUS_BETWEEN_NUMBERS.sub(" ", name)
 
     # remover símbolos: "Spider-Man" → "spiderman", "Assassin's" → "assassins"
     name = re.sub(r"[^a-z0-9\s]", "", name)

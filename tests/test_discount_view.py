@@ -13,6 +13,7 @@ SCENARIOS = {
     "too new to judge":        ([(59.99, None, 1, 5), (39.99, 59.99, 1, 2)], (False, None)),
     "sale ended":              ([(59.99, None, 1, 60), (39.99, 59.99, 1, 20), (59.99, None, 1, 5)], (False, None)),
     "stock change keeps it":   ([(59.99, None, 1, 40), (39.99, 59.99, 1, 2), (39.99, 59.99, 0, 1)], (True, 33)),
+    "older low price ignored": ([(29.99, None, 1, 90), (59.99, None, 1, 60), (44.99, 59.99, 1, 0)], (True, 25)),
 }
 
 
@@ -21,15 +22,15 @@ def offers(test_db):
     cursor = test_db.conn.cursor()
     for name, (history, _) in SCENARIOS.items():
         sp_id = cursor.execute(
-            "INSERT INTO store_products (store_id, url, external_name) OUTPUT INSERTED.id "
-            "SELECT TOP 1 id, ?, ? FROM stores ORDER BY id",
+            "INSERT INTO store_products (store_id, url, external_name) "
+            "SELECT id, ?, ? FROM stores ORDER BY id LIMIT 1 RETURNING id",
             f"https://example.test/{name}", name,
         ).fetchone()[0]
         for price, old_price, in_stock, days_ago in history:
             cursor.execute(
                 "INSERT INTO price_snapshots (store_product_id, price, old_price, in_stock, scraped_at) "
-                "VALUES (?, ?, ?, ?, DATEADD(DAY, ?, SYSUTCDATETIME()))",
-                sp_id, price, old_price, in_stock, -days_ago,
+                "VALUES (?, ?, ?, ?, utcnow() - make_interval(days => ?))",
+                sp_id, price, old_price, bool(in_stock), days_ago,
             )
 
     rows = cursor.execute("SELECT external_name, is_discount, discount_percent FROM current_offers").fetchall()

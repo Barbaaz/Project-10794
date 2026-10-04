@@ -66,7 +66,7 @@ def _listings(*conditions, order_by):
 def listings_for_game(game_id):
     """The game's listings everyone can see (active first, cheapest first), each with its photos."""
     return _listings(Listing.game_id == game_id, Listing.status.in_(VISIBLE), SELLER_ACTIVE,
-                     order_by=(case((Listing.status == "active", 0), else_=1), Listing.price))
+                     order_by=(case((Listing.status == "active", 0), else_=1), Listing.price, Listing.id))
 
 
 def listings_of_user(user_id):
@@ -114,8 +114,9 @@ def browse(platform=None, sort="newest", page=1, per_page=48):
                 .join(Game, Game.id == GameEdition.game_id).join(Platform, Platform.id == Game.platform_id))
     if platform:
         editions = editions.where(Platform.code == platform)
-    order = {"newest": (used.c.newest.desc(), Game.title), "price_asc": (used.c.min_price, Game.title),
-             "price_desc": (used.c.min_price.desc(), Game.title)}[sort if sort in BROWSE_SORTS else "newest"]
+    order = {"newest": (used.c.newest.desc(), Game.title, used.c.edition_id),
+             "price_asc": (used.c.min_price, Game.title, used.c.edition_id),
+             "price_desc": (used.c.min_price.desc(), Game.title, used.c.edition_id)}[sort if sort in BROWSE_SORTS else "newest"]
 
     with session() as s:
         total = s.scalar(select(func.count()).select_from(editions.subquery()))
@@ -123,7 +124,7 @@ def browse(platform=None, sort="newest", page=1, per_page=48):
         ids = [edition.id for edition, _, _ in rows]
         listings = as_dicts(s.scalars(select(Listing).where(Listing.status == "active", Listing.edition_id.in_(ids),
                                                           SELLER_ACTIVE)
-                                      .order_by(Listing.price, Listing.created_at)).unique().all()) if ids else []
+                                      .order_by(Listing.price, Listing.created_at, Listing.id)).unique().all()) if ids else []
     groups = [card_group({"edition_id": edition.id, "game_id": game.id, "title": game.title,
                           "edition_key": edition.edition_key, "edition": edition.name,
                           "console": platform_.code, "platform_name": platform_.name},

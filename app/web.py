@@ -115,6 +115,21 @@ def favicon():
     return redirect("/static/favicon.svg", code=301)
 
 
+@app.route("/sw.js")
+def service_worker():
+    """The service worker (static/sw.js), served from the root so it covers every page; checked on
+    every visit, so a new version is picked up at once."""
+    response = send_from_directory(app.static_folder, "sw.js", mimetype="text/javascript", max_age=0)
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.route("/manifest.webmanifest")
+def manifest():
+    """What a phone needs to install the site as an app (name, icons, colours)."""
+    return send_from_directory(app.static_folder, "manifest.webmanifest", mimetype="application/manifest+json")
+
+
 @app.route("/game/<int:game_id>")
 def game_page(game_id):
     """Editions, offers and price history; the page loads its data from /api/games/<id>."""

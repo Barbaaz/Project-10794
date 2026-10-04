@@ -11,13 +11,13 @@ the purchase steps (deal_status) in the same conversation:
   a problem reported; the listing is then sold and other open requests for it are declined.
 Each step also adds a message from the site (sender None, `event`), so both see the history.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import case, func, or_, select
 
 from app.models import NOW, Conversation, Listing, Message, fields
 from app.services.photo_storage import storage
-from app.services.rating_service import DAY, check_not_blocked, ratings_of_conversation
+from app.services.rating_service import check_not_blocked, ratings_of_conversation
 from db import session
 
 MAX_MESSAGE = 2000
@@ -95,7 +95,7 @@ def deal_step(user_id, conversation_id, action):
         status = "cancelled" if action == "cancel" else STEPS[action][2]
 
         # locked until the end: two buyers can't both get the same copy
-        listing = s.get(Listing, conversation.listing_id, with_for_update=True, populate_existing=True)
+        listing = s.get(Listing, conversation.listing_id, with_for_update={"of": Listing}, populate_existing=True)
         if action in ("request", "accept") and listing.status != "active":
             raise ChatError("listing_unavailable", 409)
 
@@ -129,10 +129,10 @@ def complete_overdue():
     with session() as s:
         overdue = s.scalars(select(Conversation.id).where(
             Conversation.deal_status == "sent",
-            Conversation.sent_at < func.dateadd(DAY, -SENT_AUTO_COMPLETE_DAYS, NOW))).all()
+            Conversation.sent_at < NOW - timedelta(days=SENT_AUTO_COMPLETE_DAYS))).all()
     for conversation_id in overdue:
         with session() as s:
-            conversation = s.get(Conversation, conversation_id, with_for_update=True)
+            conversation = s.get(Conversation, conversation_id, with_for_update={"of": Conversation})
             if conversation.deal_status != "sent":       # completed meanwhile by the buyer
                 continue
             conversation.deal_status = "completed"

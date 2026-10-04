@@ -91,24 +91,24 @@ def import_demo(path, replace=False):
         for table in reversed(TABLES):
             cursor.execute(f"DELETE FROM {table}")
 
-        cursor.fast_executemany = True
         for table in TABLES:
             columns, rows = data["tables"][table]["columns"], data["tables"][table]["rows"]
-            identity = cursor.execute(
-                "SELECT COUNT(*) FROM sys.identity_columns WHERE object_id = OBJECT_ID(?)", table).fetchone()[0]
-            if identity:
-                cursor.execute(f"SET IDENTITY_INSERT {table} ON")
-            if rows:
-                cursor.executemany(
-                    f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({', '.join('?' * len(columns))})",
-                    [[decode(v) for v in row] for row in rows],
-                )
-            if identity:
-                cursor.execute(f"SET IDENTITY_INSERT {table} OFF")
+            insert_rows(cursor, table, columns, [[decode(v) for v in row] for row in rows])
             log.info("%s: %d rows", table, len(rows))
 
     log.info("Demo data from %s loaded (exported %s)", path, data["exported_at"])
     return True
+
+
+def insert_rows(cursor, table, columns, rows):
+    """Insert rows with their own ids, then make the table's next new id follow the highest one."""
+    if rows:
+        with cursor.copy(f"COPY {table} ({', '.join(columns)}) FROM STDIN") as copy:
+            for row in rows:
+                copy.write_row(row)
+    if "id" in columns:
+        sequence = cursor.execute("SELECT pg_get_serial_sequence(?, 'id')", table).fetchone()[0]
+        cursor.execute(f"SELECT setval(?, COALESCE(MAX(id), 0) + 1, false) FROM {table}", sequence)
 
 
 if __name__ == "__main__":

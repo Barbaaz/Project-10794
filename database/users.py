@@ -18,7 +18,7 @@ def set_role(username, role):
     if role not in ROLES:
         raise SystemExit(f"Role must be one of: {', '.join(ROLES)}")
     with session() as s:
-        user = s.scalars(select(User).where(User.username == username)).first()
+        user = s.scalars(select(User).where(User.named(username))).first()
         if not user:
             raise SystemExit(f"No user called {username!r}")
         user.role = role

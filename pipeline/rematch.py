@@ -22,7 +22,7 @@ from app.models import (
     CollectionItem, Game, GameEdition, GameReview, Listing, MergedId, Platform, Store, StoreProduct,
 )
 from core.editions import edition_key_of, is_excluded
-from core.normalizer import numerals
+from core.normalizer import numerals, split_plus_numbers
 from db import session
 from pipeline.igdb import IGDB_COLUMNS
 from pipeline.matcher import MATCH_ONLY_STORES, GameMatcher
@@ -78,7 +78,8 @@ def rematch_all(dry_run=False):
                 if old_edition and edition_id and old_edition != edition_id:
                     moves["edition"][old_edition][edition_id] += 1
 
-        renamed = refresh_names(s, Game, "title", 300, game_titles)
+        fixed = set(s.scalars(select(Game.id).where(Game.title_fixed)))     # corrected by a moderator: kept
+        renamed = refresh_names(s, Game, "title", 300, {g: t for g, t in game_titles.items() if g not in fixed})
         renamed += refresh_names(s, GameEdition, "name", 200, edition_names)
         merged = record_merges(s, moves)
         if dry_run:
@@ -96,7 +97,8 @@ def rematch_all(dry_run=False):
 
 def rekey_games(s):
     """
-    Bring stored game keys to the current key rules in place ("dark souls iii" → "dark souls 3"),
+    Bring stored game keys to the current key rules in place ("dark souls iii" → "dark souls 3",
+    "pro skater 34" for "3+4" → "pro skater 3 4"),
     so a game keeps its id. Where the new key is already taken on that platform (both spellings
     were separate games), the rematch merges the two (and records it).
     """
@@ -104,7 +106,7 @@ def rekey_games(s):
     taken = {(g.platform_id, g.normalized_title) for g in games}
     updated = 0
     for g in games:
-        new = numerals(g.normalized_title)
+        new = numerals(split_plus_numbers(g.normalized_title, g.title))
         if new != g.normalized_title and (g.platform_id, new) not in taken:
             taken.discard((g.platform_id, g.normalized_title))
             taken.add((g.platform_id, new))

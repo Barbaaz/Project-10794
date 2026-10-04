@@ -119,6 +119,13 @@ def dismiss_duplicate():
     return jsonify(match_service.dismiss_duplicate(current_user()["id"], data.get("a"), data.get("b")))
 
 
+@bp.put("/mod/games/<int:game_id>/title")
+@moderator_required
+def set_title(game_id):
+    """{title}: the game's title corrected by hand ("" = the stores' title again)."""
+    return jsonify(match_service.set_title(current_user()["id"], game_id, body().get("title")))
+
+
 @bp.put("/mod/games/<int:game_id>/title-en")
 @moderator_required
 def set_title_en(game_id):

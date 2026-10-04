@@ -1,4 +1,5 @@
 """Accounts: sign up, log in / out, lock-out, and the protection against requests from other sites."""
+import psycopg
 import pytest
 
 from app.services import auth_service
@@ -45,11 +46,14 @@ def test_sign_up_rules(client, fields, error):
     assert (response.status_code, response.get_json()["error"]) == (400, error)
 
 
-def test_username_and_email_are_unique(client):
+def test_username_and_email_are_unique(client, test_db):
     register(client)
     assert register(client, email="other@example.pt").get_json()["error"] == "username_taken"
     assert register(client, username="ANA_92", email="x@example.pt").get_json()["error"] == "username_taken"
     assert register(client, username="other").get_json()["error"] == "email_taken"     # case doesn't matter
+    # the database refuses it too (two sign-ups at the same moment)
+    with pytest.raises(psycopg.errors.UniqueViolation):
+        test_db.conn.cursor().execute("INSERT INTO users (username, email, display_name) VALUES ('Ana_92', 'y@x.pt', 'A')")
 
 
 def test_log_in_with_username_or_email_and_log_out(client):
@@ -60,6 +64,8 @@ def test_log_in_with_username_or_email_and_log_out(client):
     assert post(client, "login", login="ana_92", password="segredo123").status_code == 200
     post(client, "logout")
     assert post(client, "login", login="ANA@example.pt", password="segredo123").get_json()["username"] == "ana_92"
+    post(client, "logout")
+    assert post(client, "login", login="Ana_92", password="segredo123").get_json()["username"] == "ana_92"
 
 
 def test_wrong_password_and_lock_out(client):
@@ -75,9 +81,57 @@ def test_wrong_password_and_lock_out(client):
     assert post(client, "login", login="nobody", password="segredo123").get_json()["error"] == "login_failed"
 
 
+@pytest.fixture
+def mails(monkeypatch):
+    """E-mails the app sends, as (to, subject, text), instead of sending them."""
+    sent = []
+    monkeypatch.setattr(auth_service.mail_service, "send", lambda *mail: sent.append(mail) or False)
+    return sent
+
+
+def reset_token(mail):
+    return mail[2].split("/account?reset=")[1].split()[0]
+
+
+def test_forgotten_password(client, mails):
+    register(client)
+    for _ in range(auth_service.MAX_FAILURES):                             # locked out by wrong passwords
+        post(client, "login", login="ana_92", password="wrong-password")
+    post(client, "logout")
+
+    # an unknown email gets the same answer, and no mail
+    assert post(client, "forgot", email="nobody@example.pt").get_json() == {"ok": True}
+    assert post(client, "forgot", email=" ANA@example.pt ", lang="en").get_json() == {"ok": True}
+    [mail] = mails
+    assert mail[0] == "ana@example.pt" and mail[1] == "New password" and "ana_92" in mail[2]
+    token = reset_token(mail)
+
+    assert post(client, "reset", token=token, password="curta").get_json()["error"] == "password_short"
+    assert post(client, "reset", token=token + "x", password="nova-senha-1").get_json()["error"] == "reset_invalid"
+    assert post(client, "reset", token=token, password="nova-senha-1").get_json()["username"] == "ana_92"
+    assert client.get("/api/auth/me").get_json()["username"] == "ana_92"   # logged in
+
+    # the link worked once; the new password works, the lock-out is gone
+    assert post(client, "reset", token=token, password="outra-senha-2").get_json()["error"] == "reset_invalid"
+    post(client, "logout")
+    assert post(client, "login", login="ana_92", password="nova-senha-1").status_code == 200
+
+
+def test_reset_link_expires_and_requests_are_limited(client, mails, monkeypatch):
+    register(client)
+    post(client, "forgot", email="ana@example.pt")
+    monkeypatch.setattr(auth_service, "RESET_SECONDS", -1)                  # an hour later
+    assert post(client, "reset", token=reset_token(mails[0]), password="nova-senha-1").get_json()["error"] == "reset_invalid"
+
+    for _ in range(auth_service.MAX_FAILURES - 1):
+        post(client, "forgot", email="ana@example.pt")
+    response = post(client, "forgot", email="ana@example.pt")
+    assert (response.status_code, response.get_json()["error"]) == (429, "reset_locked")
+
+
 def test_blocked_account_is_logged_out(client, test_db):
     register(client)
-    test_db.conn.cursor().execute("UPDATE users SET is_active = 0")
+    test_db.conn.cursor().execute("UPDATE users SET is_active = false")
     assert client.get("/api/auth/me").get_json() is None
     assert post(client, "login", login="ana_92", password="segredo123").get_json()["error"] == "login_failed"
 

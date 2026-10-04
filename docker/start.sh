@@ -1,5 +1,5 @@
 #!/bin/sh
-# Container start: create / update the database (waiting for SQL Server to be up), load the
+# Container start: create / update the database (waiting for PostgreSQL to be up), load the
 # demo data the first time if the file is there, then serve the site on port 5000.
 # DEMO_MODE=1 (the teste/ launchers): also the made-up marketplace users the first time, with
 # demo_eva as a moderator so testers can see the moderators' page.

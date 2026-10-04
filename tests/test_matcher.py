@@ -95,15 +95,15 @@ def test_rematch_merges_duplicates_and_records_redirects(cursor):
     cursor.execute("UPDATE games SET igdb_id = 77, summary = 'Fight.' WHERE id = ?", short_game)
     assert short_game != full_game
     # a user's listing and collection item on the copy that will be merged
-    user = cursor.execute("INSERT INTO users (username, email, display_name) OUTPUT INSERTED.id "
-                          "VALUES ('fan', 'fan@x.pt', 'Fan')").fetchone()[0]
+    user = cursor.execute("INSERT INTO users (username, email, display_name) "
+                          "VALUES ('fan', 'fan@x.pt', 'Fan') RETURNING id").fetchone()[0]
     cursor.execute("INSERT INTO user_listings (user_id, game_id, edition_id, price, condition) VALUES (?, ?, ?, 20, 'good')",
                    user, short_game, short_edition)
     cursor.execute("INSERT INTO collection_items (user_id, game_id, edition_id, kind) VALUES (?, ?, ?, 'owned')",
                    user, short_game, short_edition)
     # reviews: the fan's moves; a user who reviewed both keeps the one on the game that stays
-    both = cursor.execute("INSERT INTO users (username, email, display_name) OUTPUT INSERTED.id "
-                          "VALUES ('both', 'both@x.pt', 'Both')").fetchone()[0]
+    both = cursor.execute("INSERT INTO users (username, email, display_name) "
+                          "VALUES ('both', 'both@x.pt', 'Both') RETURNING id").fetchone()[0]
     cursor.execute("INSERT INTO game_reviews (user_id, game_id, score) VALUES (?, ?, 9), (?, ?, 3), (?, ?, 7)",
                    user, short_game, both, short_game, both, full_game)
 

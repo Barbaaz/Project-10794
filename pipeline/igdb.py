@@ -241,18 +241,21 @@ def enrich_games(limit=300):
         cursor = conn.cursor()
         games = cursor.execute(
             f"""
-            SELECT TOP ({int(limit)}) g.id, g.title, g.normalized_title, p.code
+            SELECT g.id, g.title, g.normalized_title, p.code, g.title_fixed
             FROM games g JOIN platforms p ON p.id = g.platform_id
             WHERE g.igdb_checked_at IS NULL
-               OR (g.igdb_id IS NULL AND g.igdb_checked_at < DATEADD(DAY, ?, SYSUTCDATETIME()))
-            ORDER BY CASE WHEN EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active = 1)
+               OR (g.igdb_id IS NULL AND g.igdb_checked_at < utcnow() + make_interval(days => ?))
+            ORDER BY CASE WHEN EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active)
                           THEN 0 ELSE 1 END, g.id DESC
+            LIMIT {int(limit)}
             """,
             -RETRY_UNMATCHED_DAYS,
         ).fetchall()
 
         matched = 0
-        for game_id, title, game_key, platform in games:
+        for game_id, title, game_key, platform, title_fixed in games:
+            if title_fixed:              # a moderator's spelling, not the store's typo in the key
+                game_key = normalize_name(title)
             try:
                 g = best_match(game_key, client.search(title, platform))
             except requests.RequestException as e:
@@ -263,12 +266,12 @@ def enrich_games(limit=300):
                 info = game_info(g)
                 cursor.execute(
                     f"UPDATE games SET {', '.join(f'{c} = ?' for c in IGDB_COLUMNS)}, "
-                    "igdb_checked_at = SYSUTCDATETIME() WHERE id = ?",
+                    "igdb_checked_at = utcnow() WHERE id = ?",
                     *(info[c] for c in IGDB_COLUMNS), game_id,
                 )
                 matched += 1
             else:
-                cursor.execute("UPDATE games SET igdb_checked_at = SYSUTCDATETIME() WHERE id = ?", game_id)
+                cursor.execute("UPDATE games SET igdb_checked_at = utcnow() WHERE id = ?", game_id)
             conn.commit()   # each game as it's looked up: an interrupted fill keeps its work
 
     log.info("IGDB: %d games looked up, %d matched", len(games), matched)
@@ -337,7 +340,7 @@ def fill_names(client=None):
         if not games:
             return 0
         client = client or IGDBClient()
-        ids = sorted({g.igdb_id for g in games})
+        ids = sorted({igdb_id for _, _, igdb_id in games})
         names = {}
         for start in range(0, len(ids), BATCH):
             batch = ids[start:start + BATCH]
@@ -360,7 +363,7 @@ def fill_time_to_beat(client=None):
         cursor = conn.cursor()
         ids = [r[0] for r in cursor.execute(
             "SELECT DISTINCT igdb_id FROM games WHERE igdb_id IS NOT NULL AND (ttb_checked_at IS NULL "
-            "OR (ttb_normally IS NULL AND ttb_checked_at < DATEADD(DAY, ?, SYSUTCDATETIME())))",
+            "OR (ttb_normally IS NULL AND ttb_checked_at < utcnow() + make_interval(days => ?)))",
             -RETRY_UNMATCHED_DAYS).fetchall()]
         if not ids:
             return 0
@@ -376,7 +379,7 @@ def fill_time_to_beat(client=None):
                 found += bool(t)
                 cursor.execute(
                     "UPDATE games SET ttb_hastily = ?, ttb_normally = ?, ttb_completely = ?, ttb_count = ?, "
-                    "ttb_checked_at = SYSUTCDATETIME() WHERE igdb_id = ?",
+                    "ttb_checked_at = utcnow() WHERE igdb_id = ?",
                     t.get("hastily"), t.get("normally"), t.get("completely"), t.get("count"), igdb_id)
             conn.commit()
     log.info("IGDB: time to beat looked up for %d games, %d have times", len(ids), found)

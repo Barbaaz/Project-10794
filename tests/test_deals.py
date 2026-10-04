@@ -21,21 +21,21 @@ def deals(app_on_test_db):
 
     for name, offers in EDITIONS.items():
         game_id = cursor.execute(
-            "INSERT INTO games (platform_id, title, normalized_title) OUTPUT INSERTED.id VALUES (?, ?, ?)",
+            "INSERT INTO games (platform_id, title, normalized_title) VALUES (?, ?, ?) RETURNING id",
             platform_id, name, name,
         ).fetchone()[0]
         edition_id = cursor.execute(
-            "INSERT INTO game_editions (game_id, edition_key, name) OUTPUT INSERTED.id VALUES (?, '', 'Standard')",
+            "INSERT INTO game_editions (game_id, edition_key, name) VALUES (?, '', 'Standard') RETURNING id",
             game_id,
         ).fetchone()[0]
         for slug, (price, in_stock) in offers.items():
             sp_id = cursor.execute(
                 "INSERT INTO store_products (store_id, game_id, edition_id, platform_id, url, external_name) "
-                "OUTPUT INSERTED.id SELECT id, ?, ?, ?, ?, ? FROM stores WHERE slug = ?",
+                "SELECT id, ?, ?, ?, ?, ? FROM stores WHERE slug = ? RETURNING id",
                 game_id, edition_id, platform_id, f"https://example.test/{slug}/{name}", name, slug,
             ).fetchone()[0]
             cursor.execute("INSERT INTO price_snapshots (store_product_id, price, in_stock) VALUES (?, ?, ?)",
-                           sp_id, price, in_stock)
+                           sp_id, price, bool(in_stock))
 
     yield {d["title"]: d for d in price_service.best_store_deals(limit=50)}
 
@@ -77,15 +77,15 @@ def test_catalog_only_in_stock_and_special_editions(deals, app_on_test_db):
     game_id = cursor.execute("SELECT id FROM games WHERE title = 'half price elsewhere'").fetchone()[0]
     for key, name in [("collectors", "Collector's Edition"), ("|Game Key Card", "Standard · Game Key Card")]:
         edition_id = cursor.execute(
-            "INSERT INTO game_editions (game_id, edition_key, name) OUTPUT INSERTED.id VALUES (?, ?, ?)",
+            "INSERT INTO game_editions (game_id, edition_key, name) VALUES (?, ?, ?) RETURNING id",
             game_id, key, name,
         ).fetchone()[0]
         sp_id = cursor.execute(
             "INSERT INTO store_products (store_id, game_id, edition_id, platform_id, url, external_name) "
-            "OUTPUT INSERTED.id SELECT TOP 1 s.id, ?, ?, g.platform_id, ?, ? FROM stores s, games g WHERE g.id = ?",
+            "SELECT s.id, ?, ?, g.platform_id, ?, ? FROM stores s, games g WHERE g.id = ? LIMIT 1 RETURNING id",
             game_id, edition_id, f"https://example.test/{key}", name, game_id,
         ).fetchone()[0]
-        cursor.execute("INSERT INTO price_snapshots (store_product_id, price, in_stock) VALUES (?, 99, 1)", sp_id)
+        cursor.execute("INSERT INTO price_snapshots (store_product_id, price, in_stock) VALUES (?, 99, true)", sp_id)
 
     everything = catalog(per_page=100)
     names = [g["name"] for g in everything["groups"]]

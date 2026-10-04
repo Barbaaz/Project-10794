@@ -20,9 +20,9 @@ das lojas (não vai buscar preços novos). Nada do que fizer é visto por outras
 ## Antes de começar
 
 - Um computador com **Windows 10 ou 11**, ou um **Mac** (de 2020 ou mais recente, de preferência)
-- Pelo menos **8 GB de memória** e **5 GB livres** no disco
+- Pelo menos **8 GB de memória** e **3 GB livres** no disco
 - Ligação à internet
-- Cerca de **30 minutos** da primeira vez (a maior parte é à espera de descargas); das outras vezes, 1 minuto
+- Cerca de **20 minutos** da primeira vez (a maior parte é a instalar o Docker); das outras vezes, 1 minuto
 - O ficheiro **`demo.json.gz`**, que recebeu de quem lhe enviou este guia (são os jogos e preços)
 
 ---
@@ -52,9 +52,6 @@ O Docker Desktop é um programa gratuito que corre o site e a sua base de dados 
    (para saber:  → **Acerca deste Mac**, linha "Chip" ou "Processador").
 2. Abra o ficheiro `.dmg` e arraste o Docker para a pasta **Aplicações**.
 3. Abra o **Docker** a partir das Aplicações, aceite os termos e, se pedir conta, carregue em **Skip**.
-4. **Só nos Mac com chip Apple (M1 a M4):** no Docker, abra as definições (roda dentada) →
-   **General** e confirme que **Use Rosetta for x86_64/amd64 emulation on Apple Silicon** está
-   ligado. Carregue em **Apply & restart** se o tiver mudado.
 
 ---
 
@@ -88,7 +85,7 @@ O caminho final fica: `Project-10794-main` → `database` → `demo` → `demo.j
    - Se aparecer "**O Windows protegeu o seu PC**", carregue em **Mais informações** → **Executar mesmo assim**.
    - Se aparecer "Aviso de Segurança - Abrir Ficheiro", carregue em **Executar**.
 3. Abre-se uma janela preta com texto. **Não a feche** e espere: da primeira vez demora alguns
-   minutos (descarrega cerca de 1 GB). Se o Docker Desktop não estiver aberto, a janela abre-o sozinha.
+   minutos (descarrega cerca de 300 MB). Se o Docker Desktop não estiver aberto, a janela abre-o sozinha.
 4. Quando estiver pronto, o site abre-se no navegador em **<http://localhost:8010>** e a janela
    preta diz "O site está aberto no navegador". Já a pode fechar.
 
@@ -204,7 +201,7 @@ dados de teste, e apague a pasta **Project-10794-main**.
 | "Falta o ficheiro de dados" | Veja o passo 3: o ficheiro tem de estar em `database` → `demo` |
 | "Alguma coisa correu mal" | Tire uma captura de ecrã da janela e envie-a |
 | O navegador diz "Não é possível aceder a este site" | O site ainda está a arrancar: espere um minuto e atualize a página. Se continuar, abra outra vez o INICIAR |
-| O primeiro arranque está muito lento | É normal da primeira vez (descarga de ~1 GB). Das outras vezes demora cerca de um minuto |
+| O primeiro arranque está muito lento | É normal da primeira vez (descarga de ~300 MB). Das outras vezes demora cerca de um minuto |
 | O computador fica lento | O Docker usa bastante memória: desligue o site com o PARAR quando não estiver a testar |
 
 **Coisas que são assim de propósito** (não é preciso reportar):

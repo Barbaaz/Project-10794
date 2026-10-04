@@ -24,8 +24,8 @@ def mod(market):
     c.execute("UPDATE users SET role = 'moderator' WHERE username = 'matcher_mod'")
     yield market
     c.execute("DELETE FROM match_overrides")
-    c.execute("DELETE ps FROM price_snapshots ps JOIN store_products sp ON sp.id = ps.store_product_id "
-              "WHERE sp.url LIKE 'https://match.test/%'")
+    c.execute("DELETE FROM price_snapshots ps USING store_products sp WHERE sp.id = ps.store_product_id "
+              "AND sp.url LIKE 'https://match.test/%'")
     games = [r[0] for r in c.execute("SELECT DISTINCT game_id FROM store_products WHERE url LIKE 'https://match.test/%'")]
     c.execute("DELETE FROM store_products WHERE url LIKE 'https://match.test/%'")
     for game in games:
@@ -71,6 +71,19 @@ def test_merge_an_edition_by_moving_its_product(mod):
     assert client.get("/api/mod/log").get_json()[0]["action"] == "unpin_product"
 
 
+def test_a_pinned_product_stays_on_its_games_platform(mod):
+    """A PS4 disc the store lists on its PS5 page: the game moved to PS4, the product pinned to it."""
+    client, c = mod["client"], mod["db"]
+    game, by_name = editions(client)
+    standard = by_name["Standard"]
+    ps4 = c.execute("SELECT id FROM platforms WHERE code = 'PS4'").fetchone()[0]
+    c.execute("UPDATE games SET platform_id = ? WHERE id = ?", ps4, game["id"])
+    client.post("/api/mod/matches", headers=HEADERS, json={"product_ids": [standard["products"][0]["id"]],
+                                                           "edition_id": standard["id"]})
+    process_products("press_start", PRODUCTS, full_catalog=False)       # the store still says PS5
+    assert c.execute("SELECT platform_id FROM store_products WHERE url = ?", "https://match.test/3").fetchone()[0] == ps4
+
+
 def test_move_to_a_new_edition(mod):
     client = mod["client"]
     game, by_name = editions(client)
@@ -100,6 +113,32 @@ def test_english_name_by_a_moderator(mod):
     assert put("").get_json() == {"title_en": ""}                         # back to the store's title
 
     sign_up(client, "not_a_mod_2")
+    assert put("Nope").status_code == 403
+
+
+def test_title_corrected_by_a_moderator_is_kept(mod):
+    """A store's typo fixed by hand: the next scrape and a rematch keep it, IGDB looks the game up again."""
+    client, c = mod["client"], mod["db"]
+    game, by_name = editions(client)
+    c.execute("UPDATE games SET igdb_checked_at = utcnow() WHERE id = ?", game["id"])
+    put = lambda title: client.put(f"/api/mod/games/{game['id']}/title", headers=HEADERS, json={"title": title})
+    assert put("Shadow Quest: Reborn").get_json() == {"title": "Shadow Quest: Reborn", "title_fixed": True}
+    assert c.execute("SELECT igdb_checked_at FROM games WHERE id = ?", game["id"]).fetchone()[0] is None
+
+    upper = [dict(p, external_name=p["external_name"].upper()) for p in PRODUCTS]
+    process_products("press_start", upper, full_catalog=False)
+    rematch_all()
+    [after] = client.get("/api/mod/matches?q=shadow quest").get_json()
+    assert (after["id"], after["title"], after["title_fixed"]) == (game["id"], "Shadow Quest: Reborn", True)
+    assert where(mod, 3) == by_name["Standard"]["id"]                       # still matched by the old key
+    assert client.get("/api/mod/log").get_json()[0]["action"] == "rename_game"
+
+    assert put("x" * 301).get_json()["error"] == "title_invalid"
+    assert put("").get_json() == {"title": "Shadow Quest: Reborn", "title_fixed": False}
+    rematch_all()                                                           # the stores' title again
+    assert client.get("/api/mod/matches?q=shadow quest").get_json()[0]["title"] == "SHADOW QUEST"
+
+    sign_up(client, "not_a_mod_3")
     assert put("Nope").status_code == 403
 
 

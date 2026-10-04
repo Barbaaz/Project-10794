@@ -29,7 +29,7 @@ def test_prices_are_recorded_only_when_they_change(cursor):
     assert (stats["new_products"], stats["price_changes"]) == (2, 2)
 
     # same price: nothing new; a new price and out of stock: one snapshot (50.995 as a float is
-    # 50.99499…: 50.99, as SQL Server rounds it)
+    # 50.99499…: 50.99, as to_cents rounds it)
     stats = process_products("press_start", [product(1), product(2, price=50.995, in_stock=False)])
     assert (stats["new_products"], stats["price_changes"], stats["deactivated"]) == (0, 1, 0)
     assert snapshots(cursor, "https://shop.test/2") == [(to_cents(49.99), True), (to_cents(50.99), False)]

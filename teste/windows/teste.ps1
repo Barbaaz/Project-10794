@@ -76,7 +76,7 @@ function Start-TestSite {
     }
 
     Write-Host ""
-    Write-Host "A preparar o site. Da primeira vez demora alguns minutos (descarrega cerca de 1 GB);"
+    Write-Host "A preparar o site. Da primeira vez demora alguns minutos (descarrega cerca de 300 MB);"
     Write-Host "depois é rápido. Não feche esta janela."
     Write-Host ""
     $env:DEMO_MODE = "1"

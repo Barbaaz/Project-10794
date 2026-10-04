@@ -2,14 +2,12 @@ import os
 import secrets
 from pathlib import Path
 
-# Override with the DB_CONNECTION_STRING environment variable on other machines
+# PostgreSQL. Override with the DB_CONNECTION_STRING environment variable on other machines.
+# No password here: on a development machine it's in the user's pgpass file
+# (%APPDATA%\postgresql\pgpass.conf on Windows, ~/.pgpass elsewhere); Docker puts it in the URL.
 DB_CONNECTION_STRING = os.environ.get(
     "DB_CONNECTION_STRING",
-    # Driver 17 returns DATETIME2 as datetime; the old "{SQL Server}" driver returns text
-    "DRIVER={ODBC Driver 17 for SQL Server};"
-    "SERVER=localhost\\SQLEXPRESS;"
-    "DATABASE=Project10794;"
-    "Trusted_Connection=yes;"
+    "postgresql://project10794@localhost:5432/project10794",
 )
 
 INSTANCE_DIR = Path(__file__).resolve().parent.parent / "instance"   # local, never committed
@@ -39,3 +37,15 @@ BEHIND_PROXY = os.environ.get("BEHIND_PROXY") == "1"
 # A test copy on demo data (the teste/ launchers): its prices are a snapshot, never scraped
 # again, so the pages say so and stores aren't flagged as out of date
 DEMO_MODE = os.environ.get("DEMO_MODE") == "1"
+
+# The site's own address, for links in e-mails (never taken from the request: its Host header
+# could point a password-reset link at another site)
+SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:5000").rstrip("/")
+
+# E-mail (app/services/mail_service.py): sent by SMTP once SMTP_HOST is set (any provider);
+# until then, e-mails are only written to the log
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+MAIL_FROM = os.environ.get("MAIL_FROM", "")

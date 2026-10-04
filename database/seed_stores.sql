@@ -2,69 +2,47 @@
 -- To add a store: add a row here with the same slug as its scraper's store_slug,
 -- and register the scraper in scheduler/jobs.py.
 
-USE Project10794;
-GO
-
 -- Codes match app/utils/utils.py. Older platforms (PS3, 3DS, retro...) come with the pre-owned market.
-MERGE dbo.platforms AS t
-USING (VALUES
-    ('PS5',        N'PlayStation 5',      10),
-    ('PS4',        N'PlayStation 4',      20),
-    ('Switch2',    N'Nintendo Switch 2',  30),
-    ('Switch',     N'Nintendo Switch',    40),
-    ('XboxSeries', N'Xbox Series X|S',    50),
-    ('XboxOne',    N'Xbox One',           60),
-    ('PC',         N'PC',                 70),
+INSERT INTO platforms (code, name, sort_order) VALUES
+    ('PS5',        'PlayStation 5',      10),
+    ('PS4',        'PlayStation 4',      20),
+    ('Switch2',    'Nintendo Switch 2',  30),
+    ('Switch',     'Nintendo Switch',    40),
+    ('XboxSeries', 'Xbox Series X|S',    50),
+    ('XboxOne',    'Xbox One',           60),
+    ('PC',         'PC',                 70),
     -- older platforms (2026-10-03): mostly used copies people sell, created from IGDB (app/services/igdb_game_service.py)
-    ('PS3',        N'PlayStation 3',      80),
-    ('Xbox360',    N'Xbox 360',           81),
-    ('WiiU',       N'Wii U',              82),
-    ('Wii',        N'Wii',                83),
-    ('3DS',        N'Nintendo 3DS',       84),
-    ('DS',         N'Nintendo DS',        85),
-    ('PSVita',     N'PlayStation Vita',   86),
-    ('PSP',        N'PlayStation Portable', 87),
-    ('PS2',        N'PlayStation 2',      90),
-    ('PS1',        N'PlayStation',        91),
-    ('Xbox',       N'Xbox (original)',    92),
-    ('GameCube',   N'Nintendo GameCube',  93),
-    ('N64',        N'Nintendo 64',        94),
-    ('GBA',        N'Game Boy Advance',   95),
-    ('GBC',        N'Game Boy Color',     96),
-    ('GB',         N'Game Boy',           97),
-    ('SNES',       N'Super Nintendo',     98),
-    ('NES',        N'NES',                99),
-    ('Dreamcast',  N'Sega Dreamcast',    100),
-    ('Saturn',     N'Sega Saturn',       101),
-    ('MegaDrive',  N'Sega Mega Drive',   102),
-    ('MasterSystem', N'Sega Master System', 103)
-) AS s (code, name, sort_order)
-ON t.code = s.code
-WHEN MATCHED THEN UPDATE SET name = s.name, sort_order = s.sort_order
-WHEN NOT MATCHED THEN INSERT (code, name, sort_order) VALUES (s.code, s.name, s.sort_order);
-GO
+    ('PS3',        'PlayStation 3',      80),
+    ('Xbox360',    'Xbox 360',           81),
+    ('WiiU',       'Wii U',              82),
+    ('Wii',        'Wii',                83),
+    ('3DS',        'Nintendo 3DS',       84),
+    ('DS',         'Nintendo DS',        85),
+    ('PSVita',     'PlayStation Vita',   86),
+    ('PSP',        'PlayStation Portable', 87),
+    ('PS2',        'PlayStation 2',      90),
+    ('PS1',        'PlayStation',        91),
+    ('Xbox',       'Xbox (original)',    92),
+    ('GameCube',   'Nintendo GameCube',  93),
+    ('N64',        'Nintendo 64',        94),
+    ('GBA',        'Game Boy Advance',   95),
+    ('GBC',        'Game Boy Color',     96),
+    ('GB',         'Game Boy',           97),
+    ('SNES',       'Super Nintendo',     98),
+    ('NES',        'NES',                99),
+    ('Dreamcast',  'Sega Dreamcast',    100),
+    ('Saturn',     'Sega Saturn',       101),
+    ('MegaDrive',  'Sega Mega Drive',   102),
+    ('MasterSystem', 'Sega Master System', 103)
+ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order;
 
--- The generic 'Xbox' platform was split into XboxSeries / XboxOne. Removed once nothing uses it
--- (run python -m scheduler.run_all_scrapers and python -m pipeline.rematch first).
-DELETE FROM dbo.platforms
-WHERE code = 'Xbox'
-  AND NOT EXISTS (SELECT 1 FROM dbo.games g WHERE g.platform_id = platforms.id)
-  AND NOT EXISTS (SELECT 1 FROM dbo.store_products sp WHERE sp.platform_id = platforms.id);
-GO
-
-MERGE dbo.stores AS t
-USING (VALUES
-    ('press_start',   N'Press Start',   N'https://www.pressstart.pt',    1),
-    ('mega-mania',    N'Mega Mania',    N'https://mega-mania.com.pt',    1),
-    ('cstech',        N'CSTech',        N'https://cstech.store',         1),
+INSERT INTO stores (slug, name, base_url, is_active) VALUES
+    ('press_start',   'Press Start',   'https://www.pressstart.pt',    true),
+    ('mega-mania',    'Mega Mania',    'https://mega-mania.com.pt',    true),
+    ('cstech',        'CSTech',        'https://cstech.store',         true),
     -- match-only (pipeline/matcher.py MATCH_ONLY_STORES): links to games other stores made; on since 2026-10-03
-    ('radio_popular', N'Rádio Popular', N'https://www.radiopopular.pt',  1),
-    ('gaming_replay', N'Gaming Replay', N'https://www.gamingreplay.com/pt/', 1)  -- since 2026-10-03
-) AS s (slug, name, base_url, is_active)
-ON t.slug = s.slug
+    ('radio_popular', 'Rádio Popular', 'https://www.radiopopular.pt',  true),
+    ('gaming_replay', 'Gaming Replay', 'https://www.gamingreplay.com/pt/', true)  -- since 2026-10-03
 -- is_active is not updated, so a store switched off in the database stays off
-WHEN MATCHED AND (t.name <> s.name OR t.base_url <> s.base_url) THEN
-    UPDATE SET name = s.name, base_url = s.base_url
-WHEN NOT MATCHED THEN INSERT (slug, name, base_url, is_active)
-    VALUES (s.slug, s.name, s.base_url, s.is_active);
-GO
+ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, base_url = EXCLUDED.base_url
+    WHERE stores.name <> EXCLUDED.name OR stores.base_url <> EXCLUDED.base_url;

@@ -29,12 +29,12 @@ def find(q):
         return []
     with session() as s:
         games = s.scalars(select(Game).where(*[Game.normalized_title.like(f"%{w}%") for w in words])
-                          .order_by(Game.title).limit(MAX_GAMES)).all()
+                          .order_by(Game.title, Game.id).limit(MAX_GAMES)).all()
         ids = [g.id for g in games]
         editions = s.scalars(select(GameEdition).where(GameEdition.game_id.in_(ids)).order_by(GameEdition.id)).all() if ids else []
         products = s.execute(
             select(StoreProduct, Store.name).join(Store, Store.id == StoreProduct.store_id)
-            .where(StoreProduct.game_id.in_(ids)).order_by(Store.name, StoreProduct.external_name)).all() if ids else []
+            .where(StoreProduct.game_id.in_(ids)).order_by(Store.name, StoreProduct.external_name, StoreProduct.id)).all() if ids else []
         pinned = set(s.scalars(select(MatchOverride.store_product_id).where(
             MatchOverride.store_product_id.in_([p.id for p, _ in products])))) if products else set()
 
@@ -42,7 +42,8 @@ def find(q):
             return {"id": p.id, "store": store, "name": p.external_name, "url": p.url, "is_active": p.is_active,
                     "pinned": p.id in pinned}
         return [{
-            "id": g.id, "title": g.title, "title_en": g.title_en or "", "platform": g.platform.name,
+            "id": g.id, "title": g.title, "title_fixed": g.title_fixed, "title_en": g.title_en or "",
+            "platform": g.platform.name,
             "editions": [{"id": e.id, "name": e.name, "key": e.edition_key,
                           "products": [product(p, store) for p, store in products if p.edition_id == e.id]}
                          for e in editions if e.game_id == g.id],
@@ -102,6 +103,33 @@ def _target_edition(s, edition_id, game_id, new_edition):
     return edition
 
 
+def set_title(moderator_id, game_id, title):
+    """
+    A game's title corrected by hand (a store's typo: "BRAMBLE THE MONTAIN KING"): the daily
+    processing and the rematch keep it instead of taking the stores' title. "" = the stores'
+    title again (from the next rematch). A game IGDB didn't find is looked up again by it.
+    Its game key stays as it was: the stores still send the old spelling.
+    """
+    title = (title or "").strip()
+    if len(title) > 300:
+        raise ModerationError("title_invalid")
+    with session() as s:
+        game = s.get(Game, int(game_id))
+        if not game:
+            raise ModerationError("not_found", 404)
+        old = game.title
+        if title:
+            game.title = title
+            if game.igdb_id is None:
+                game.igdb_checked_at = None
+        game.title_fixed = bool(title)
+        s.add(ModerationLog(moderator_id=moderator_id, action="rename_game", kind="game", target_id=game.id,
+                            note=f"{old} → {title or '(store title)'}"[:500]))
+        result = {"title": game.title, "title_fixed": game.title_fixed}
+    clear_cache()
+    return result
+
+
 def set_title_en(moderator_id, game_id, title):
     """
     A game's English name, shown when the page is in English ("" = the store's title). A
@@ -136,7 +164,7 @@ def duplicates():
         dismissed = select(DuplicateDismissal).where(DuplicateDismissal.game_a == a.id,
                                                      DuplicateDismissal.game_b == b.id).exists()
         pairs = s.execute(select(a, b).join(b, (b.platform_id == a.platform_id) & (b.igdb_id == a.igdb_id) & (b.id > a.id))
-                          .where(a.igdb_id.is_not(None), ~dismissed).order_by(a.title).limit(MAX_DUPLICATES)).all()
+                          .where(a.igdb_id.is_not(None), ~dismissed).order_by(a.title, a.id, b.id).limit(MAX_DUPLICATES)).all()
         ids = {g.id for pair in pairs for g in pair}
         counts = dict(s.execute(select(StoreProduct.game_id, func.count()).where(
             StoreProduct.game_id.in_(ids), StoreProduct.is_active).group_by(StoreProduct.game_id)).all()) if ids else {}

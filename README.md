@@ -1,7 +1,7 @@
 # Project-10794
 Small project for a Python course
 
-Price comparison for video games across Portuguese stores. Scrapers fill a SQL Server
+Price comparison for video games across Portuguese stores. Scrapers fill a PostgreSQL
 database on a schedule; an API reads from it. Users will also be able to sell used games.
 
 **Testing it?** Follow [GUIA-DE-TESTE.md](GUIA-DE-TESTE.md) (in Portuguese, no technical knowledge
@@ -10,22 +10,22 @@ needed): Docker Desktop, the demo data file and a double-click on `teste/INICIAR
 To put a test copy online instead (testers only need a link and a password): [HOSTING.md](HOSTING.md).
 
 ```
-scheduler → scrapers → pipeline (normalise / match / dedupe) → SQL Server ← API
+scheduler → scrapers → pipeline (normalise / match / dedupe) → PostgreSQL ← API
 ```
 
 ## Try it with Docker
 
 The easiest way to run it on any computer (Windows, macOS, Linux): only
-[Docker Desktop](https://www.docker.com/products/docker-desktop/) is needed. It starts SQL Server
-Express and the site in containers and creates the database by itself.
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) is needed. It starts PostgreSQL
+and the site in containers and creates the database by itself.
 
 1. Get the code and go into its folder:
    ```
    git clone https://github.com/Barbaaz/Project-10794.git
    cd Project-10794
    ```
-2. Copy `.env.example` to `.env` and set your own `DB_PASSWORD` in it (8+ characters with upper
-   case, lower case and a number) and a long random `SECRET_KEY` (the file says how to make one).
+2. Copy `.env.example` to `.env` and set your own `DB_PASSWORD` in it (letters and numbers only)
+   and a long random `SECRET_KEY` (the file says how to make one).
 3. **Demo data** (recommended): if you were given a `demo.json.gz` file, put it in `database/demo/`.
    It holds the games and prices collected so far, so you don't have to scrape the stores. It isn't
    in the repository (it contains the stores' descriptions), so ask for it.
@@ -33,7 +33,7 @@ Express and the site in containers and creates the database by itself.
    ```
    docker compose up --build
    ```
-   The first start downloads SQL Server (about 600 MB) and takes a few minutes. When the log says
+   The first start downloads PostgreSQL and Python (a few hundred MB) and takes a few minutes. When the log says
    `Serving on http://0.0.0.0:5000`, open **http://localhost:5000**.
 
 Stop with `Ctrl+C` (or `docker compose down`); the data is kept for the next start
@@ -54,19 +54,36 @@ docker compose run --rm web python -m scheduler.run_single_store cstech
 Other stores: `press_start`, `mega-mania`, `gaming_replay`, `radio_popular`. Run the tests with
 `docker compose run --rm web python -m pytest -q`.
 
-On Apple Silicon Macs, enable "Use Rosetta for x86/amd64 emulation" in Docker Desktop's settings
-(Microsoft only publishes SQL Server for x86).
-
 ## Setup on Windows without Docker
 
-Needs SQL Server Express and the [ODBC Driver 17 or 18](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server).
-The connection is in `app/config.py` (or the `DB_CONNECTION_STRING` environment variable).
+Needs [PostgreSQL](https://www.postgresql.org/download/) 15 or newer (built with ICU, as the
+standard installers are; developed on 18). Make a login for the project that may create
+databases, once, as the `postgres` superuser:
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -c "CREATE ROLE project10794 LOGIN CREATEDB PASSWORD 'choose-one'"
+```
+
+and put its password in your pgpass file, `%APPDATA%\postgresql\pgpass.conf` (`~/.pgpass` on
+macOS / Linux), so it never has to be in the code:
+
+```
+localhost:5432:*:project10794:choose-one
+```
+
+The connection is in `app/config.py` (`postgresql://project10794@localhost:5432/project10794`), or
+the `DB_CONNECTION_STRING` environment variable.
 
 ```powershell
 pip install -r requirements.txt
 python -m database.setup                                        # creates / updates the database
 python -m database.setup --demo database\demo\demo.json.gz      # ... and loads demo data, if you have it
 ```
+
+**Coming from SQL Server** (the project's database until October 2026): `pip install pyodbc`, then
+`python -m database.from_sqlserver` copies every table of the old `localhost\SQLEXPRESS` /
+`Project10794` database into the new one, ids included, and compares the two row by row
+(`--source` for another SQL Server, `--replace` to copy again).
 
 **Demo marketplace**: `python -m database.demo_market` adds 5 made-up users (`demo_ana`, `demo_bruno`…,
 password `demo12345`) with 15 listings (generated photos marked DEMO) and conversations at every
@@ -101,6 +118,8 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |
 | `POST /api/auth/register` `{username, email, password, display_name?}` | Create an account and log in (the session cookie) |
 | `POST /api/auth/login` `{login, password}` | Log in with username or email; locked for 15 min after 5 wrong passwords |
+| `POST /api/auth/forgot` `{email, lang}` | E-mail a link to choose a new password (valid 1 hour, works once); the same answer whether or not the email has an account. Sent by SMTP once `SMTP_HOST` is set (`.env.example`), else only logged |
+| `POST /api/auth/reset` `{token, password}` | The new password from that link; logs in |
 | `POST /api/auth/logout` · `GET /api/auth/me` | Log out · the logged-in user (or `null`) |
 | `GET /api/listings?game_id=` · `GET /api/listings/<id>` | Pre-owned copies people sell (active / reserved), with photos; never the seller's email |
 | `GET /api/listings?platform=&sort=newest\|price_asc\|price_desc&page=` | The "Used" tab: one group per game edition with its sellers' active listings, paged |
@@ -113,6 +132,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/conversations/<id>?after=` · `POST …/messages` `{body}` | One conversation (only messages after `after`, for refreshing) · send a message |
 | `POST /api/conversations/<id>/steps` `{action}` | Purchase step: `request`, `accept` (reserves), `decline`, `sent`, `received` (sold), `problem`, `cancel`; 7 days after `sent` it completes by itself |
 | `GET /api/igdb/games?q=` · `POST /api/igdb/games` `{igdb_id, platform}` | The sell form, for games the catalogue doesn't have (older platforms): IGDB games on our platforms · the game on that platform, created from IGDB if needed (20 per user per day) → `{game_id, edition_id}` |
+| `PUT /api/mod/games/<id>/title` `{title}` | Moderators: correct a store's typo in a game's title, kept by the processing and the rematch (`""` = the stores' title again) |
 | `PUT /api/mod/games/<id>/title-en` `{title_en}` | Moderators: a game's English name, shown when the page is in English (`""` = the store's title) |
 | `POST /api/collection/import` `{ids}` | Favourites an old browser kept (before accounts; favourites are now the wishlist), put on the wishlist (merged editions followed) → `{added}` |
 | `GET /api/ratings/pending` | Completed purchases the user still has to rate (`overdue` after 14 days: buying and selling blocked until rated) |
@@ -124,6 +144,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `PUT /api/collection/settings` `{public}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown) · a public collection |
 | `GET /api/games/<id>/reviews?page=` | Players' reviews of a game on that platform: average, count and how many gave each score 1–10, the user's own review, 20 shown reviews per page (newest first; hidden ones and blocked users' left out; `owner` = has the game in their collection). Catalogue / deals / wishlist cards carry `review_score` and `review_count` |
 | `PUT /api/games/<id>/reviews/mine` `{score: 1–10, title?, body?}` · `DELETE` | Write or change one's review (one per user and game) · delete it (not once a moderator hid it) |
+| `PUT /api/games/<id>/reviews/mine/score` `{score: 1–10 or ""}` | Only the review's score (the collection page's rating); its text is kept |
 | `POST /api/reports` `{kind: listing\|user\|rating\|review, target_id, reason, details?}` | Report something to the moderators (not your own; once while open; 20 a day) |
 | `GET /api/mod/reports` · `GET /api/mod/problems` · `GET /api/mod/log` | Moderators: open reports grouped by what was reported · purchases with a problem · past actions |
 | `POST /api/mod/actions` `{action, target_id, note?}` | Moderators: `hide_listing` / `restore_listing`, `hide_rating` / `restore_rating`, `hide_review` / `restore_review`, `block_user` / `unblock_user`, `dismiss` (target = the report) |
@@ -160,6 +181,21 @@ button returns to the search or tab the game was opened from. Wished editions th
 stock show as a banner. Each card's ☆ opens a menu: ⭐ Quero (wishlist; ★ on the card) and
 📚 Tenho (collection; a small 📚 on the card). Favourites were folded into the wishlist
 (migration 0007).
+
+## The app on a phone
+
+The site can be installed on a phone's home screen (and on a computer, from Chrome / Edge):
+`static/manifest.webmanifest` (name, icons in `static/icons/`, colours) and a service worker,
+`static/sw.js`, served as `/sw.js`. Android / desktop show a "📲 Instalar app" button in the header
+when the browser offers it; on an iPhone it's Safari's Share → Add to Home Screen. Installing
+needs HTTPS, except on `localhost`.
+
+Without a connection (or one too slow to answer in 6 s), pages visited before open from what was
+saved on the last visit; a page never visited shows `static/offline.html`. Only public reads are
+saved (catalogue, game pages and price history, discounts, pre-orders, releases, lists, used
+copies): whenever a page shows saved prices, a notice says so, with when they were saved.
+Anything personal (account, messages, collection, moderation, reviews) or that changes something
+always goes to the network. After changing what `sw.js` saves, raise its `VERSION`.
 
 ## Games and editions
 
@@ -199,7 +235,7 @@ Omnibus rule: the current price must be lower than the lowest price recorded in 
 30 days before it dropped. A product needs 30 days of history before it can show a
 discount, so keep the scheduler running.
 
-The connection string defaults to `localhost\SQLEXPRESS` / `Project10794`; set the
+The connection string defaults to `project10794` on `localhost:5432`; set the
 `DB_CONNECTION_STRING` environment variable to use another server.
 
 ## Filling the database
@@ -249,7 +285,13 @@ only stored when a price or stock status changes.
   Their tables are made by `database/schema.sql` (not Alembic), which the models follow.
 - **Price analysis** (the `current_offers` discount view, the catalogue / discount / history
   queries in `app/services/`): SQL in `database/*.sql` and `db.fetch_all`, being reports (latest
-  price per product, 30-day windows) that read better as SQL.
+  price per product, 30-day windows) that read better as SQL. Parameters are written `?`
+  (`db.fetch_all("... WHERE id = ?", game_id)`); `db.py` passes them to psycopg.
+- **Times** are UTC without a time zone (`timestamp`), set by the database's `utcnow()`
+  (`database/schema.sql`); the API sends them with a `Z`.
+- **Names** that are sorted (game titles, edition, store and platform names) use the `pt_ci`
+  collation: Portuguese order, case ignored, as SQL Server sorted them. Usernames are unique
+  without case (an index on `lower(username)`; look users up with `User.named(name)`).
 
 `python -m database.setup` runs both. To change a marketplace table:
 
@@ -271,8 +313,8 @@ python -m pytest
   refresh the fixture from the live page and see which tests break.
 - Edition splitting, platform detection, price parsing, the "código na caixa" exclusion and the
   half-broken-scraper safeguard are plain unit tests.
-- The discount rule runs against a throwaway SQL Server database created and dropped by the
-  tests (skipped when SQL Server isn't available).
+- The discount rule, the services and the pipeline run against a throwaway PostgreSQL database
+  created and dropped by the tests (skipped when PostgreSQL isn't available).
 
 ## Game information
 

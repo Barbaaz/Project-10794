@@ -7,7 +7,7 @@ A rating can be changed for EDIT_DAYS; the rated user may reply to it.
 """
 from datetime import timedelta
 
-from sqlalchemy import Numeric, and_, cast, exists, func, literal_column, or_, select
+from sqlalchemy import Numeric, and_, cast, exists, func, or_, select
 
 from app.models import NOW, Conversation, Rating, User, fields
 from db import session
@@ -15,7 +15,6 @@ from db import session
 OVERDUE_DAYS = 14
 EDIT_DAYS = 14
 MAX_TEXT = 500
-DAY = literal_column("DAY")    # DATEADD's first argument is a keyword, not a value
 
 
 class RatingError(Exception):
@@ -114,7 +113,7 @@ def check_not_blocked(user_id, error_class):
     """Raise error_class("ratings_overdue", 403) when a rating is OVERDUE_DAYS late (no new purchases / listings)."""
     with session() as s:
         late = s.scalar(select(func.count()).select_from(Conversation).where(
-            _unrated(user_id), Conversation.completed_at < func.dateadd(DAY, -OVERDUE_DAYS, NOW)))
+            _unrated(user_id), Conversation.completed_at < NOW - timedelta(days=OVERDUE_DAYS)))
     if late:
         raise error_class("ratings_overdue", 403)
 
@@ -138,7 +137,7 @@ def profile(username):
     from app.services.listing_service import listings_of_user   # listing_service imports this module
     from app.services.review_service import reviews_of_user
     with session() as s:
-        user = s.scalars(select(User).where(User.username == username, User.is_active)).first()
+        user = s.scalars(select(User).where(User.named(username), User.is_active)).first()
         if not user:
             return None
         result = fields(user, "id", "username", "display_name", "created_at")

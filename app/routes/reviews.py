@@ -30,6 +30,14 @@ def save(game_id):
                                        data.get("body")))
 
 
+@bp.put("/<int:game_id>/reviews/mine/score")
+@login_required
+def save_score(game_id):
+    """{score: 1–10 or ""}: only the score (the collection page); the review's text is kept."""
+    data = request.get_json(silent=True) or {}
+    return jsonify(review_service.set_score(current_user()["id"], game_id, data.get("score")))
+
+
 @bp.delete("/<int:game_id>/reviews/mine")
 @login_required
 def delete(game_id):

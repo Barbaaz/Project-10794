@@ -1,5 +1,5 @@
 """
-/api/auth: sign up, log in, log out, who am I. The login is a signed session cookie
+/api/auth: sign up, log in, a forgotten password, log out, who am I. The login is a signed session cookie
 (HttpOnly, SameSite=Lax; see app/web.py), holding only the user id.
 """
 from functools import wraps
@@ -58,7 +58,7 @@ def log_in(user):
 
 
 def account_error(e):
-    return jsonify(error=e.code), 400 if e.code != "login_locked" else 429
+    return jsonify(error=e.code), 429 if e.code.endswith("_locked") else 400
 
 
 @bp.post("/register")
@@ -78,6 +78,29 @@ def login():
     data = request.get_json(silent=True) or {}
     try:
         user = auth_service.authenticate(data.get("login"), data.get("password"), request.remote_addr or "?")
+    except AccountError as e:
+        return account_error(e)
+    log_in(user)
+    return jsonify(user)
+
+
+@bp.post("/forgot")
+def forgot():
+    """{email, lang}: e-mail a link to choose a new password; the same answer whether or not it has an account."""
+    data = request.get_json(silent=True) or {}
+    try:
+        auth_service.request_password_reset(data.get("email"), data.get("lang"), request.remote_addr or "?")
+    except AccountError as e:
+        return account_error(e)
+    return jsonify(ok=True)
+
+
+@bp.post("/reset")
+def reset():
+    """{token, password}: the new password from the e-mailed link; logged in afterwards."""
+    data = request.get_json(silent=True) or {}
+    try:
+        user = auth_service.reset_password(data.get("token"), data.get("password"))
     except AccountError as e:
         return account_error(e)
     log_in(user)
