@@ -96,13 +96,13 @@
     <!-- Front page: the visitor picks what to see; the choice is remembered in this browser -->
     <section id="front" class="mb-4">
         <ul class="nav nav-pills mb-3 gap-1" role="tablist">
-            <li class="nav-item"><button class="nav-link" data-tab="discounts" role="tab" data-i18n="tab_discounts"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="preorders" role="tab" data-i18n="tab_preorders"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="releases" role="tab" data-i18n="tab_releases"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="catalog" role="tab" data-i18n="tab_catalog"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="special" role="tab" data-i18n="tab_special"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="market" role="tab" data-i18n="tab_market"></button></li>
-            <li class="nav-item"><button class="nav-link" data-tab="wishlist" role="tab" data-i18n="tab_wishlist"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="discounts" role="tab" data-i18n="tab_discounts"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="preorders" role="tab" data-i18n="tab_preorders"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="releases" role="tab" data-i18n="tab_releases"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="catalog" role="tab" data-i18n="tab_catalog"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="special" role="tab" data-i18n="tab_special"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="market" role="tab" data-i18n="tab_market"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="wishlist" role="tab" data-i18n="tab_wishlist"></button></li>
         </ul>
         <div id="front-loading" class="text-center my-4 d-none"><div class="spinner-border text-primary"></div></div>
         <div id="front-content"></div>
@@ -170,7 +170,7 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
     col.innerHTML = `
         <div class="card h-100 shadow-sm overflow-hidden game-card">
             <div class="position-relative">
-                <a href="${gameUrl}" class="cover-link"><img src="${esc(group.cover || best?.image || group.image || "")}"
+                <a href="${gameUrl}" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(group.cover || best?.image || group.image || "")}"
                     class="${group.cover ? "" : "store-photo"}" alt="" loading="lazy"></a>
                 ${coverBadge}
                 ${group.at_historical_low ? `<span class="badge text-bg-success low-price-badge"
@@ -219,7 +219,7 @@ function marketCard(group) {
     col.className = "col";
     col.innerHTML = `
         <div class="card h-100 shadow-sm overflow-hidden game-card">
-            <a href="/game/${group.game_id}#market" class="cover-link"><img src="${esc(cover)}" alt="" loading="lazy"></a>
+            <a href="/game/${group.game_id}#market" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(cover)}" alt="" loading="lazy"></a>
             <div class="card-body d-flex flex-column">
                 <a href="/game/${group.game_id}#market" class="link-body-emphasis text-decoration-none game-title"
                    title="${esc(localName(group))}">${esc(localName(group))}</a>
@@ -522,6 +522,8 @@ const FRONT_TABS = {
     },
 };
 const frontData = {};      // tab → data, loaded once per visit
+const SHOW_STEP = 48;      // items drawn at a time on the long tabs ("Mostrar mais" for the next ones)
+const frontShown = {};     // tab → how many are drawn now
 const frontDataPlatform = {};   // tab → platform its data was loaded for (platform-aware tabs)
 // The favourites tab became the wishlist (favourites were folded into it): old links and choices go there
 const tabName = tab => tab === "favorites" ? "wishlist" : tab;
@@ -556,6 +558,7 @@ function setPageUrl(url) {
 
 async function selectFrontTab(tab) {
     frontTab = tab;
+    frontShown[tab] = SHOW_STEP;
     save("frontTab", tab);
     document.querySelectorAll("[data-tab]").forEach(b => {
         b.classList.toggle("active", b.dataset.tab === tab);
@@ -617,7 +620,21 @@ function renderFront() {
     const selected = document.getElementById("consoleFilter").value;
     const items = (frontData[frontTab] || []).filter(i => !selected || (i.console || i.platform) === selected);
 
-    if (items.length) content.appendChild(config.render(items));
+    // ~540 pre-orders at once made the page 65,000 px tall on a phone: SHOW_STEP at a time
+    const shown = frontShown[frontTab] || SHOW_STEP;
+    if (items.length) content.appendChild(config.render(items.slice(0, shown)));
+    if (items.length > shown) {
+        const more = document.createElement("button");
+        more.type = "button";
+        more.className = "btn btn-secondary d-block mx-auto mt-3 show-more";
+        more.textContent = t("show_more", { count: items.length - shown });
+        more.onclick = () => {
+            frontShown[frontTab] = shown + SHOW_STEP;
+            renderFront();
+            content.querySelector(".show-more")?.focus();     // keyboard users carry on from here
+        };
+        content.appendChild(more);
+    }
 
     empty.textContent = selected && frontData[frontTab]?.length ? t("empty_platform") : t(FRONT_TABS[frontTab].empty);
     empty.classList.toggle("d-none", items.length > 0);
@@ -770,7 +787,7 @@ function renderReleases(games) {
                     <div class="small text-body-secondary">${weekdayName(day)}</div>
                     ${isToday ? `<span class="badge text-bg-success">${t("today")}</span>` : ""}
                 </div>
-                <div class="release-games flex-grow-1 row row-cols-1 row-cols-md-2 row-cols-xl-3 g-2"></div>`;
+                <div class="release-games flex-grow-1 min-w-0 row row-cols-1 row-cols-md-2 row-cols-xl-3 g-2"></div>`;
             wrap.appendChild(row);
             dayList = row.querySelector(".release-games");
         }
@@ -794,7 +811,7 @@ function releaseItem(g, note = "") {
     const editions = g.editions > 1 ? ` · ${t("editions_count", { count: g.editions })}` : "";
     col.innerHTML = `
         <div class="d-flex gap-2 align-items-center release-item">
-            <a href="${gameUrl}" class="flex-shrink-0"><img src="${esc(g.image || "")}" alt="" loading="lazy"></a>
+            <a href="${gameUrl}" class="flex-shrink-0" tabindex="-1" aria-hidden="true"><img src="${esc(g.image || "")}" alt="" loading="lazy"></a>
             <div class="flex-grow-1 min-w-0">
                 <a href="${gameUrl}" class="link-body-emphasis text-decoration-none fw-semibold d-block text-truncate"
                    title="${esc(localName(g, "title"))}">${esc(localName(g, "title"))}</a>
