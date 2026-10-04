@@ -32,7 +32,8 @@ const STRINGS = {
         empty_wishlist: "A sua lista de desejos está vazia. Carregue na ☆ de um jogo e escolha ⭐ Quero para o acompanhar aqui.",
         empty_platform: "Nada para esta plataforma.",
         store_deals_intro: "<strong>Melhores preços entre lojas.</strong> Ainda não há descontos reais para mostrar (o preço tem de estar abaixo do mais baixo dos 30 dias anteriores, e o histórico começou a 1 de outubro). Entretanto, estes jogos estão bem mais baratos numa loja do que na seguinte.",
-        vs_other_stores: "-{percent}% vs outras lojas",
+        vs_other_stores: "-{saving} vs outras lojas",
+        vs_other_stores_hint: "{percent}% mais barato do que a loja seguinte",
 
         // cards
         view_at: "Ver na {store}",
@@ -359,6 +360,7 @@ const STRINGS = {
         collection_empty_owned: "Ainda sem jogos. Na página de um jogo, use \"Tenho\" na edição que tem.",
         collection_empty_wishlist: "A lista de desejos está vazia. Na página de um jogo, use \"Quero\".",
         collection_add_owned: "📚 Tenho",
+        platforms: "Plataformas",
         filters_button: "Filtros",
         nav_sell: "Vender",
         nav_collection: "Coleção",
@@ -648,7 +650,8 @@ const STRINGS = {
         empty_wishlist: "Your wishlist is empty. Click the ☆ on a game and choose ⭐ Want to follow it here.",
         empty_platform: "Nothing for this platform.",
         store_deals_intro: "<strong>Best prices between stores.</strong> There are no real discounts to show yet (the price must be below the lowest of the previous 30 days, and price tracking started on 1 October). Meanwhile, these games are much cheaper at one store than at the next.",
-        vs_other_stores: "-{percent}% vs other stores",
+        vs_other_stores: "-{saving} vs other stores",
+        vs_other_stores_hint: "{percent}% cheaper than the next store",
 
         view_at: "View at {store}",
         used: "Used",
@@ -973,6 +976,7 @@ const STRINGS = {
         collection_empty_owned: "No games yet. On a game's page, use \"Owned\" on the edition you have.",
         collection_empty_wishlist: "The wishlist is empty. On a game's page, use \"Want\".",
         collection_add_owned: "📚 Owned",
+        platforms: "Platforms",
         filters_button: "Filters",
         nav_sell: "Sell",
         nav_collection: "Collection",
@@ -1251,7 +1255,27 @@ const eur = new Intl.NumberFormat(LOCALE, { style: "currency", currency: "EUR" }
 // A game's (or card's) name in the page's language: item.name_en / item.title_en when the page is
 // in English and the game has an English name (IGDB's, or a moderator's), else the store's
 function localName(item, field = "name") {
-    return (LANG === "en" && item[`${field}_en`]) || item[field];
+    return calmCaps((LANG === "en" && item[`${field}_en`]) || item[field]);
+}
+
+// A store title written in capitals, in normal case: "HELLRAISER REVIVAL" → "Hellraiser Revival",
+// "KINGDOM HEARTS I-III" → "Kingdom Hearts I-III", "EA SPORTS FC 26" → "EA Sports FC 26". Titles
+// with any small letter are left alone (they're written on purpose: "eFootball", "LEGO Batman")
+const KEEP_CAPS = new Set(["FIFA", "LEGO", "UEFA", "NASCAR", "WRC", "NHL", "NFL", "NBA", "MLB", "EA", "FC", "UFC", "PGA",
+    "WWE", "DLC", "VR", "HD", "GTA", "RPG", "UK", "USA", "TT", "F1", "MX", "ATV", "PES", "DBZ", "TMNT", "WWII", "II", "XL"]);
+const SMALL_WORDS = new Set(["of", "the", "and", "a", "an", "in", "on", "to", "for", "at", "by", "or", "de", "da", "do", "das", "dos", "e", "o"]);
+
+function calmCaps(text) {
+    if (!text || /[a-zà-ÿ]/.test(text) || !/[A-ZÀ-Þ]{4}/.test(text)) return text;
+    let first = true;
+    return text.replace(/[A-Za-zÀ-ÿ0-9']+/g, word => {
+        const lower = word.toLowerCase();
+        const out = KEEP_CAPS.has(word) || /\d/.test(word) || /^[IVXLC]+$/.test(word) ? word
+            : !first && SMALL_WORDS.has(lower) ? lower
+            : lower.charAt(0).toUpperCase() + lower.slice(1);
+        first = false;
+        return out;
+    });
 }
 
 // fallback: what to show when there's no text for `key` (by default the key itself)

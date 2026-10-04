@@ -32,6 +32,7 @@
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
         .card-platform { line-height: 1.4; height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .platform-chip { --bs-btn-padding-y: .05rem; --bs-btn-padding-x: .4rem; --bs-btn-font-size: .72rem; }
         .card-extra {
             line-height: 1.4; height: 2.8em; margin-bottom: .4rem;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -151,7 +152,14 @@ function handleSearch(event) {
 // A card: cover, title, platform and up to MAX_OFFERS store prices.
 // group = {name, console, platform_name, game_id, edition_id, offers: [...]}
 // extraLine: null = no extra line; "" = keep the space, so cards in the same grid line up
-function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
+// Short platform names for the cards' chips (three fit on a phone's card)
+const PLATFORM_SHORT = { PS5: "PS5", PS4: "PS4", PS3: "PS3", Switch2: "Switch 2", Switch: "Switch",
+                         XboxSeries: "Xbox X|S", XboxOne: "Xbox One", Xbox360: "Xbox 360", PC: "PC" };
+
+// A game on several platforms is one card (the catalogue's `alternatives`): its platforms as chips,
+// pressing one shows that platform's offers, cover and ☆ menu. again(group): the card for another
+// platform, made the way the caller made this one (its badges)
+function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {}) {
     // in stock first, then cheapest
     const offers = [...group.offers].sort((a, b) => (b.in_stock - a.in_stock) || (a.price - b.price));
     const best = offers[0];
@@ -193,14 +201,42 @@ function makeCard(group, { coverBadge = "", extraLine = null } = {}) {
             </div>
             <div class="card-body d-flex flex-column">
                 <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(localName(group))}">${esc(localName(group))}</a>
-                <div class="text-body-secondary small card-platform">${esc(group.platform_name || group.console)}${group.review_count
-                    ? ` · <span title="${esc(t("review_score_hint", { count: group.review_count }))}">${fmtNumber(group.review_score)}/10 (${group.review_count})</span>` : ""}</div>
+                ${platformLine(group)}
                 ${extraLine === null ? '<div class="mb-2"></div>' : `<div class="small card-extra">${extraLine}</div>`}
                 <div class="mt-auto">${rows}${more}</div>
             </div>
         </div>`;
     col.querySelector(".fav-btn").onclick = e => toggleCardMenu(e.currentTarget, group);
+    col.querySelectorAll("[data-platform-index]").forEach(chip => chip.onclick = () => {
+        const all = platformsOf(group);
+        const i = Number(chip.dataset.platformIndex);
+        const next = { ...all[i], alternatives: [], _all: all };
+        const card = again ? again(next) : makeCard(next, { coverBadge, extraLine });
+        col.replaceWith(card);
+        card.querySelector(`[data-platform-index="${i}"]`)?.focus();
+    });
     return col;
+}
+
+// The card's platforms in a fixed order (the cheapest first, as the catalogue sent them)
+function platformsOf(group) {
+    return group._all || (group.alternatives?.length ? [group, ...group.alternatives] : null);
+}
+
+function platformLine(group) {
+    const reviews = group.review_count
+        ? `<span title="${esc(t("review_score_hint", { count: group.review_count }))}">${fmtNumber(group.review_score)}/10 (${group.review_count})</span>` : "";
+    const all = platformsOf(group);
+    if (!all) {
+        return `<div class="text-body-secondary small card-platform">${esc(group.platform_name || group.console)}${reviews ? ` · ${reviews}` : ""}</div>`;
+    }
+    const chips = all.map((g, i) => {
+        const on = g.edition_id === group.edition_id;
+        return `<button type="button" class="btn btn-sm platform-chip ${on ? "btn-primary" : "btn-secondary"}" data-platform-index="${i}"
+            aria-pressed="${on}" title="${esc(g.platform_name)}">${esc(PLATFORM_SHORT[g.console] || g.platform_name)}</button>`;
+    }).join("");
+    return `<div class="platform-chips d-flex flex-wrap gap-1" role="group" aria-label="${esc(t("platforms"))}">${chips}</div>
+        ${reviews ? `<div class="text-body-secondary small">${reviews}</div>` : ""}`;
 }
 
 // "👤 Usados (2) · 18,99 €": the copies users sell; one → that listing, several → the game page's list
@@ -495,16 +531,20 @@ function renderCatalog(data, showPage = showCatalogPage) {
 
     // Games not out yet: "Pré-reserva" on the cover, release date next to the platform
     const grid = cardGrid();
-    data.groups.forEach(g => {
-        if (!g.is_preorder) return grid.appendChild(makeCard(g));
-        const card = { ...g, platform_name: `${g.platform_name} · 📅 ${releaseLabel(g.release_date, g.date_is_estimate)}` };
-        grid.appendChild(makeCard(card, {
-            coverBadge: `<span class="badge text-bg-primary discount-badge">${t("preorder")}</span>`,
-        }));
-    });
+    data.groups.forEach(g => grid.appendChild(catalogCard(g)));
     wrap.appendChild(grid);
     wrap.appendChild(pagination(data.page, data.pages, showPage));
     return wrap;
+}
+
+// A catalogue card; games not out yet: "Pré-reserva" on the cover and the release date under the name
+function catalogCard(g) {
+    if (!g.is_preorder) return makeCard(g, { again: catalogCard });
+    return makeCard(g, {
+        coverBadge: `<span class="badge text-bg-primary discount-badge">${t("preorder")}</span>`,
+        extraLine: `<span class="text-body-secondary">📅 ${esc(releaseLabel(g.release_date, g.date_is_estimate))}</span>`,
+        again: catalogCard,
+    });
 }
 
 const FRONT_TABS = {
@@ -771,7 +811,8 @@ function renderDiscounts(offers) {
                         edition_id: o.edition_id, offers: o.offers || [o] };
         grid.appendChild(makeCard(group, {
             coverBadge: storeDeals
-                ? `<span class="badge text-bg-success discount-badge">${t("vs_other_stores", { percent: o.savings_percent })}</span>`
+                ? `<span class="badge text-bg-success discount-badge" title="${esc(t("vs_other_stores_hint", { percent: o.savings_percent }))}">${
+                    t("vs_other_stores", { saving: eur.format(o.savings ?? (o.next_price - o.price)) })}</span>`
                 : `<span class="badge text-bg-danger discount-badge">-${o.discount_percent}%</span>`,
         }));
     });
