@@ -122,8 +122,9 @@ class GameMatcher:
 
         if game:
             # Prefer "Silent Hill: Townfall" over Mega Mania's "SILENT HILL TOWNFALL"
-            # (title is None for a shortened or mended name: not this game's own title)
-            if title and game.title.isupper() and not title.isupper():
+            # (title is None for a shortened or mended name: not this game's own title;
+            # a title a moderator corrected is kept)
+            if title and not game.title_fixed and game.title.isupper() and not title.isupper():
                 game.title = title[:300]
             return game.id
         if not create:

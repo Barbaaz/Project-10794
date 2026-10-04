@@ -116,6 +116,32 @@ def test_english_name_by_a_moderator(mod):
     assert put("Nope").status_code == 403
 
 
+def test_title_corrected_by_a_moderator_is_kept(mod):
+    """A store's typo fixed by hand: the next scrape and a rematch keep it, IGDB looks the game up again."""
+    client, c = mod["client"], mod["db"]
+    game, by_name = editions(client)
+    c.execute("UPDATE games SET igdb_checked_at = utcnow() WHERE id = ?", game["id"])
+    put = lambda title: client.put(f"/api/mod/games/{game['id']}/title", headers=HEADERS, json={"title": title})
+    assert put("Shadow Quest: Reborn").get_json() == {"title": "Shadow Quest: Reborn", "title_fixed": True}
+    assert c.execute("SELECT igdb_checked_at FROM games WHERE id = ?", game["id"]).fetchone()[0] is None
+
+    upper = [dict(p, external_name=p["external_name"].upper()) for p in PRODUCTS]
+    process_products("press_start", upper, full_catalog=False)
+    rematch_all()
+    [after] = client.get("/api/mod/matches?q=shadow quest").get_json()
+    assert (after["id"], after["title"], after["title_fixed"]) == (game["id"], "Shadow Quest: Reborn", True)
+    assert where(mod, 3) == by_name["Standard"]["id"]                       # still matched by the old key
+    assert client.get("/api/mod/log").get_json()[0]["action"] == "rename_game"
+
+    assert put("x" * 301).get_json()["error"] == "title_invalid"
+    assert put("").get_json() == {"title": "Shadow Quest: Reborn", "title_fixed": False}
+    rematch_all()                                                           # the stores' title again
+    assert client.get("/api/mod/matches?q=shadow quest").get_json()[0]["title"] == "SHADOW QUEST"
+
+    sign_up(client, "not_a_mod_3")
+    assert put("Nope").status_code == 403
+
+
 def test_portuguese_page_shows_the_better_written_name_only_when_the_words_are_the_same():
     from app.services.common import better_title
     assert better_title({"title": "ASSASSINS CREED ODYSSEY", "title_en": "Assassin's Creed Odyssey"}) \

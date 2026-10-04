@@ -78,7 +78,8 @@ def rematch_all(dry_run=False):
                 if old_edition and edition_id and old_edition != edition_id:
                     moves["edition"][old_edition][edition_id] += 1
 
-        renamed = refresh_names(s, Game, "title", 300, game_titles)
+        fixed = set(s.scalars(select(Game.id).where(Game.title_fixed)))     # corrected by a moderator: kept
+        renamed = refresh_names(s, Game, "title", 300, {g: t for g, t in game_titles.items() if g not in fixed})
         renamed += refresh_names(s, GameEdition, "name", 200, edition_names)
         merged = record_merges(s, moves)
         if dry_run:

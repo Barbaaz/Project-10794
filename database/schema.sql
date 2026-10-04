@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS games (
     -- The game's English name, shown when the page is in English: IGDB's name (pipeline/igdb.py),
     -- correctable by moderators. "" = looked up, IGDB has none (the store title is shown)
     title_en         varchar(300) NULL,
+    -- title corrected by a moderator (a store's typo): the processing and the rematch keep it
+    title_fixed      boolean      NOT NULL DEFAULT false,
     image_url        varchar(1000) NULL,
     created_at       timestamp    NOT NULL DEFAULT utcnow(),
     -- A game no store sells, created from IGDB by a user selling a copy (app/services/igdb_game_service.py):
@@ -71,6 +73,8 @@ CREATE TABLE IF NOT EXISTS games (
     ttb_checked_at   timestamp    NULL,
     CONSTRAINT uq_games_title_platform UNIQUE (normalized_title, platform_id)
 );
+-- Columns added after a database was made (CREATE TABLE IF NOT EXISTS leaves it as it was)
+ALTER TABLE games ADD COLUMN IF NOT EXISTS title_fixed boolean NOT NULL DEFAULT false;
 
 -- Editions of a game: Standard, Deluxe, Day One, Collector's, Game Key Card...
 CREATE TABLE IF NOT EXISTS game_editions (

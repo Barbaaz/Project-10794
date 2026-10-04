@@ -241,7 +241,7 @@ def enrich_games(limit=300):
         cursor = conn.cursor()
         games = cursor.execute(
             f"""
-            SELECT g.id, g.title, g.normalized_title, p.code
+            SELECT g.id, g.title, g.normalized_title, p.code, g.title_fixed
             FROM games g JOIN platforms p ON p.id = g.platform_id
             WHERE g.igdb_checked_at IS NULL
                OR (g.igdb_id IS NULL AND g.igdb_checked_at < utcnow() + make_interval(days => ?))
@@ -253,7 +253,9 @@ def enrich_games(limit=300):
         ).fetchall()
 
         matched = 0
-        for game_id, title, game_key, platform in games:
+        for game_id, title, game_key, platform, title_fixed in games:
+            if title_fixed:              # a moderator's spelling, not the store's typo in the key
+                game_key = normalize_name(title)
             try:
                 g = best_match(game_key, client.search(title, platform))
             except requests.RequestException as e:

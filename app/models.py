@@ -60,6 +60,7 @@ class Game(Base):
     title: Mapped[str] = mapped_column(Unicode(300))
     normalized_title: Mapped[str] = mapped_column(Unicode(300))     # the game key (core/editions.py)
     title_en: Mapped[str | None] = mapped_column(Unicode(300))      # English name (IGDB / moderators)
+    title_fixed: Mapped[bool] = mapped_column(Boolean, default=False)  # title corrected by a moderator: kept
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))
     created_at = created_at()
     created_by: Mapped[int | None] = mapped_column(Integer)   # a user who created it from IGDB (no store sells it)
