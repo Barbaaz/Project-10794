@@ -200,6 +200,8 @@ const STRINGS = {
         sell_description: "Descrição",
         sell_description_placeholder: "O que inclui (caixa, manual, extras), defeitos, como entrega…",
         sell_photos: "Fotografias",
+        sell_add_photos: "📷 Adicionar fotografias",
+        sell_photos_count: "{count} de {max}",
         sell_photos_help: "Entre 3 e 10 (JPEG, PNG ou WebP, até 10 MB cada). A localização guardada nas fotos é removida.",
         sell_first_photo: "Capa",
         sell_publish: "Publicar anúncio",
@@ -237,6 +239,7 @@ const STRINGS = {
         unread_count: "{count} por ler",
         no_conversations: "Ainda não tem conversas. Use os botões Comprar ou Enviar mensagem num anúncio.",
         pick_conversation: "Escolha uma conversa.",
+        chat_back: "← Conversas",
         message_placeholder: "Escreva uma mensagem…",
         send: "Enviar",
         you_buy: "compra",
@@ -301,7 +304,8 @@ const STRINGS = {
         rating_comment: "Comentário (opcional): como correu?",
         send_rating: "Enviar avaliação",
         save_rating: "Guardar avaliação",
-        ratings_pending_title: "Tem {count} avaliação(ões) por fazer:",
+        ratings_pending_title: "Tem {count} avaliações por fazer:",
+        ratings_pending_title_one: "Tem 1 avaliação por fazer:",
         ratings_overdue_title: "Avaliações em atraso: não pode comprar nem vender até avaliar ({count}):",
         rate_link: "avaliar @{user} ({game})",
         profile_not_found: "Este utilizador não existe.",
@@ -309,7 +313,8 @@ const STRINGS = {
         profile_no_ratings: "Ainda sem avaliações.",
         profile_listings: "À venda",
         profile_no_listings: "Nada à venda neste momento.",
-        profile_rating_count: "{count} avaliação(ões)",
+        profile_rating_count: "{count} avaliações",
+        profile_rating_count_one: "1 avaliação",
         rated_as_seller: "por @{user}, que lhe comprou {game}",
         rated_as_buyer: "por @{user}, a quem comprou {game}",
         reply_from: "Resposta de @{user}:",
@@ -347,6 +352,8 @@ const STRINGS = {
         collection_status: "Estado",
         collection_all_statuses: "Todos os estados",
         collection_no_status: "Sem estado",
+        collection_edit: "Editar",
+        collection_edit_done: "Fechar",
         collection_format: "Formato",
         collection_notes: "Notas (só para si)",
         collection_score: "Avaliação",
@@ -822,6 +829,8 @@ const STRINGS = {
         sell_description: "Description",
         sell_description_placeholder: "What's included (box, manual, extras), defects, how you deliver…",
         sell_photos: "Photos",
+        sell_add_photos: "📷 Add photos",
+        sell_photos_count: "{count} of {max}",
         sell_photos_help: "Between 3 and 10 (JPEG, PNG or WebP, up to 10 MB each). The location saved in photos is removed.",
         sell_first_photo: "Cover",
         sell_publish: "Publish listing",
@@ -859,6 +868,7 @@ const STRINGS = {
         unread_count: "{count} unread",
         no_conversations: "No conversations yet. Use the Buy or Send message buttons on a listing.",
         pick_conversation: "Pick a conversation.",
+        chat_back: "← Conversations",
         message_placeholder: "Write a message…",
         send: "Send",
         you_buy: "buying",
@@ -923,7 +933,8 @@ const STRINGS = {
         rating_comment: "Comment (optional): how did it go?",
         send_rating: "Send rating",
         save_rating: "Save rating",
-        ratings_pending_title: "You have {count} rating(s) to give:",
+        ratings_pending_title: "You have {count} ratings to give:",
+        ratings_pending_title_one: "You have 1 rating to give:",
         ratings_overdue_title: "Overdue ratings: you can't buy or sell until you rate ({count}):",
         rate_link: "rate @{user} ({game})",
         profile_not_found: "This user doesn't exist.",
@@ -931,7 +942,8 @@ const STRINGS = {
         profile_no_ratings: "No ratings yet.",
         profile_listings: "For sale",
         profile_no_listings: "Nothing for sale right now.",
-        profile_rating_count: "{count} rating(s)",
+        profile_rating_count: "{count} ratings",
+        profile_rating_count_one: "1 rating",
         rated_as_seller: "by @{user}, who bought {game} from them",
         rated_as_buyer: "by @{user}, who sold them {game}",
         reply_from: "Reply from @{user}:",
@@ -969,6 +981,8 @@ const STRINGS = {
         collection_status: "Status",
         collection_all_statuses: "All statuses",
         collection_no_status: "No status",
+        collection_edit: "Edit",
+        collection_edit_done: "Close",
         collection_format: "Format",
         collection_notes: "Notes (only for you)",
         collection_score: "Rating",
@@ -1291,7 +1305,9 @@ function calmCaps(text) {
 }
 
 // fallback: what to show when there's no text for `key` (by default the key itself)
+// With {count: 1}, a "<key>_one" text is used when there is one (singular)
 function t(key, vars = {}, fallback = key) {
+    if (vars.count === 1 && STRINGS.pt[`${key}_one`]) key = `${key}_one`;
     const text = STRINGS[LANG][key] ?? STRINGS.pt[key] ?? fallback;
     return text.replace(/\{(\w+)\}/g, (_, name) => vars[name] ?? "");
 }

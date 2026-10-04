@@ -59,11 +59,6 @@
         .release-date { width: 3.2rem; }
         .release-item img { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: #000; }
         .min-w-0 { min-width: 0; }
-        /* Phones: the tabs in one row that scrolls sideways (7 buttons took 5 rows) */
-        @media (max-width: 767.98px) {
-            .front-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .25rem; scrollbar-width: thin; }
-            .front-tabs .nav-link { white-space: nowrap; }
-        }
         /* Catalogue filters, labels above: always shown from tablet width, behind "Filtros" on a phone */
         .catalog-filters { display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
         .catalog-filters.open { display: grid; }
@@ -109,7 +104,7 @@
 
     <!-- Front page: the visitor picks what to see; the choice is remembered in this browser -->
     <section id="front" class="mb-4">
-        <ul class="nav nav-pills mb-3 gap-1 front-tabs" role="tablist">
+        <ul class="nav nav-pills mb-3 gap-1 front-tabs scroll-tabs" role="tablist">
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="discounts" role="tab" data-i18n="tab_discounts"></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="preorders" role="tab" data-i18n="tab_preorders"></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="releases" role="tab" data-i18n="tab_releases"></button></li>

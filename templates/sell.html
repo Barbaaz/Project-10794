@@ -88,9 +88,14 @@
 
             <!-- 4. Photos (3 to 10) -->
             <div class="mb-3">
-                <label class="form-label fw-semibold" for="photos" data-i18n="sell_photos"></label>
-                <input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple class="form-control"
-                       aria-describedby="photos-help">
+                <div class="form-label fw-semibold" id="photos-label" data-i18n="sell_photos"></div>
+                <!-- the browser's file field is hidden: its button and "no file chosen" don't fit a phone -->
+                <input id="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" id="add-photos" class="btn btn-secondary"
+                            aria-describedby="photos-label photos-count photos-help" data-i18n="sell_add_photos"></button>
+                    <span id="photos-count" class="small text-body-secondary"></span>
+                </div>
                 <div id="photos-help" class="form-text" data-i18n="sell_photos_help"></div>
                 <div id="previews" class="photo-previews mt-2"></div>
             </div>
@@ -223,7 +228,10 @@ document.getElementById("photos").addEventListener("change", e => {
     renderPreviews();
 });
 
+document.getElementById("add-photos").onclick = () => document.getElementById("photos").click();
+
 function renderPreviews() {
+    document.getElementById("photos-count").textContent = t("sell_photos_count", { count: photos.length, max: MAX_PHOTOS });
     const box = document.getElementById("previews");
     box.innerHTML = "";
     photos.forEach((file, i) => {
@@ -267,6 +275,7 @@ document.getElementById("sell-form").onsubmit = async event => {
 // --- start -------------------------------------------------------------------------------
 async function start() {
     applyI18n();
+    renderPreviews();
     await renderAccountArea();
     if (!currentUser) return location.replace(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
     document.getElementById("condition").innerHTML =

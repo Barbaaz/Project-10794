@@ -34,6 +34,11 @@
         .star-input label { font-size: 1.6rem; line-height: 1; cursor: pointer; color: var(--bs-secondary-color); }
         .star-input input:checked ~ label, .star-input label:hover, .star-input label:hover ~ label { color: #f5b301; }
         .star-input input:focus-visible + label { outline: 2px solid var(--bs-primary); border-radius: .2rem; }
+        /* On a phone an open conversation takes the screen (the list is one tap away, "Conversas") */
+        @media (max-width: 767.98px) {
+            .chat-open .chat-list-col { display: none; }
+            .chat-messages { height: 58vh; height: 58dvh; }
+        }
     </style>
 </head>
 <body class="bg-body-tertiary">
@@ -55,14 +60,16 @@
 
     <h1 class="h4 mb-3" data-i18n="messages"></h1>
 
-    <div class="row g-3">
-        <div class="col-md-4">
+    <div id="chat-layout" class="row g-3">
+        <div class="col-md-4 chat-list-col">
             <div id="chat-list" class="list-group chat-list"></div>
             <p id="no-chats" class="small text-body-secondary d-none" data-i18n="no_conversations"></p>
         </div>
         <div class="col-md-8">
             <section id="chat" class="card shadow-sm d-none">
                 <div class="card-body">
+                    <button type="button" id="back-to-list" class="btn btn-sm btn-link px-0 mb-2 d-md-none"
+                            data-i18n="chat_back"></button>
                     <div class="chat-header d-flex align-items-center gap-2 mb-2">
                         <img id="chat-thumb" alt="">
                         <div class="me-auto">
@@ -141,8 +148,19 @@ async function openChat(id) {
     renderChat(open.messages);
     document.getElementById("chat").classList.remove("d-none");
     document.getElementById("pick-chat").classList.add("d-none");
+    document.getElementById("chat-layout").classList.add("chat-open");
     loadList();
     showUnreadCount();
+}
+
+// Phone: back from a conversation to the list
+function closeChat() {
+    open = null;
+    history.replaceState(null, "", "/messages");
+    document.getElementById("chat").classList.add("d-none");
+    document.getElementById("chat-layout").classList.remove("chat-open");
+    loadList();
+    window.scrollTo(0, 0);
 }
 
 function eventText(event) {
@@ -330,6 +348,7 @@ async function start() {
     await renderAccountArea();
     if (!currentUser) return location.replace(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
     const id = Number(new URLSearchParams(location.search).get("c"));
+    document.getElementById("back-to-list").onclick = closeChat;
     await loadList();
     if (id) openChat(id);
 }

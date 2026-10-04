@@ -16,7 +16,8 @@
     <script src="/static/market.js"></script>
     <style>
         .item-cover { width: 64px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: var(--bs-secondary-bg); }
-        .stat { min-width: 8rem; }
+        .stat { min-width: 7.5rem; flex: 1 1 7.5rem; max-width: 11rem; }
+        .item-facts { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: center; }
     </style>
 </head>
 <body class="bg-body-tertiary">
@@ -91,19 +92,23 @@ function stat(label, value) {
         <div class="small text-body-secondary">${esc(label)}</div><div class="fs-5 fw-semibold">${value}</div></div></div>`;
 }
 
+// Only the figures there is something to show for (an empty collection shows the two counts)
 function renderStats() {
     const s = data.stats;
-    const statuses = STATUSES.filter(x => s.statuses[x]).map(x => `${t(`status_play_${x}`)} ${s.statuses[x]}`).join(" · ");
+    const statuses = STATUSES.filter(x => s.statuses[x]).map(x => `${t(`status_play_${x}`)}: ${s.statuses[x]}`).join(" · ");
+    const platforms = s.platforms.map(([p, n]) => `${p}: ${n}`).join(" · ");
     document.getElementById("stats").innerHTML = [
         stat(t("collection_owned_count"), fmtNumber(s.owned)),
         stat(t("collection_wishlist_count"), fmtNumber(s.wishlist)),
-        stat(t("collection_completed"), s.owned ? `${fmtNumber(s.completed)} <span class="small fw-normal">(${Math.round(100 * s.completed / s.owned)}%)</span>` : "—"),
-        stat(t("collection_hours"), fmtNumber(Math.round(s.hours * 10) / 10)),
-        stat(t("collection_achievements"), s.achievements_total
-            ? `${fmtNumber(s.achievements)} / ${fmtNumber(s.achievements_total)} <span class="small fw-normal">(${Math.round(100 * s.achievements / s.achievements_total)}%)</span>` : "—"),
-        stat(t("collection_worth_new"), s.priced_new ? `${eur.format(s.worth_new)} <span class="small fw-normal text-body-secondary">(${s.priced_new})</span>` : "—"),
-        stat(t("collection_worth_used"), s.priced_used ? `${eur.format(s.worth_used)} <span class="small fw-normal text-body-secondary">(${s.priced_used})</span>` : "—"),
-    ].join("") + (s.platforms.length ? `<div class="w-100 small text-body-secondary">${s.platforms.map(([p, n]) => `${esc(p)} ${n}`).join(" · ")}${statuses ? ` — ${esc(statuses)}` : ""}</div>` : "");
+        s.owned && stat(t("collection_completed"), `${fmtNumber(s.completed)} <span class="small fw-normal">(${Math.round(100 * s.completed / s.owned)}%)</span>`),
+        s.hours && stat(t("collection_hours"), fmtNumber(Math.round(s.hours * 10) / 10)),
+        s.achievements_total && stat(t("collection_achievements"),
+            `${fmtNumber(s.achievements)} / ${fmtNumber(s.achievements_total)} <span class="small fw-normal">(${Math.round(100 * s.achievements / s.achievements_total)}%)</span>`),
+        s.priced_new && stat(t("collection_worth_new"), `${eur.format(s.worth_new)} <span class="small fw-normal text-body-secondary">(${s.priced_new})</span>`),
+        s.priced_used && stat(t("collection_worth_used"), `${eur.format(s.worth_used)} <span class="small fw-normal text-body-secondary">(${s.priced_used})</span>`),
+    ].filter(Boolean).join("")
+        + (platforms ? `<div class="w-100 small text-body-secondary">${esc(platforms)}</div>` : "")
+        + (statuses ? `<div class="w-100 small text-body-secondary mt-n2">${esc(statuses)}</div>` : "");
     document.querySelector('[data-kind="owned"]').textContent = `${t("collection_tab_owned")} (${s.owned})`;
     document.querySelector('[data-kind="wishlist"]').textContent = `${t("collection_tab_wishlist")} (${s.wishlist})`;
 }
@@ -123,70 +128,74 @@ function priceLine(item) {
     return parts.join(" · ");
 }
 
+// What the user wrote about an owned game, in one line (the editor stays closed until "Editar")
+function ownedFacts(item) {
+    const facts = [
+        item.status ? `<span class="badge text-bg-secondary">${esc(t(`status_play_${item.status}`))}</span>` : "",
+        esc(t(`format_${item.format || "physical"}`)),
+        item.score ? `★ ${item.score}/10` : "",
+        item.hours ? `${fmtNumber(item.hours)} h` : "",
+        item.achievements_total ? `🏆 ${item.achievements ?? 0}/${item.achievements_total}` : (item.achievements ? `🏆 ${item.achievements}` : ""),
+        item.notes ? `<span class="fst-italic text-truncate" style="max-width: 16rem;">“${esc(item.notes)}”</span>` : "",
+    ];
+    return facts.filter(Boolean).map(f => f.startsWith("<") ? f : `<span>${f}</span>`).join("");
+}
+
+function field(label, control, cols = "col-6 col-md-4") {
+    return `<div class="${cols}"><label class="form-label small text-body-secondary mb-0 d-block">${esc(label)}${control}</label></div>`;
+}
+
 function ownedControls(item) {
     return `
-        <div class="row g-2 mt-1">
-            <div class="col-6 col-sm-auto">
-                <select class="form-select form-select-sm" data-field="status" aria-label="${esc(t("collection_status"))}">
+        <div class="row g-2 mt-1 d-none" data-editor id="editor-${item.id}">
+            ${field(t("collection_status"), `
+                <select class="form-select form-select-sm" data-field="status">
                     <option value="">${t("collection_no_status")}</option>
                     ${STATUSES.map(x => `<option value="${x}" ${item.status === x ? "selected" : ""}>${t(`status_play_${x}`)}</option>`).join("")}
-                </select>
-            </div>
-            <div class="col-6 col-sm-auto">
-                <select class="form-select form-select-sm" data-field="format" aria-label="${esc(t("collection_format"))}">
+                </select>`)}
+            ${field(t("collection_format"), `
+                <select class="form-select form-select-sm" data-field="format">
                     ${["physical", "digital"].map(x => `<option value="${x}" ${item.format === x ? "selected" : ""}>${t(`format_${x}`)}</option>`).join("")}
-                </select>
-            </div>
-            <div class="col-6 col-sm-auto">
-                <select class="form-select form-select-sm" data-score ${item.score_locked ? "disabled" : ""}
-                        aria-label="${esc(t("collection_score"))}" title="${esc(t("collection_score_hint"))}">
-                    <option value="">${t("collection_no_score")}</option>
+                </select>`)}
+            ${field(t("collection_score"), `
+                <select class="form-select form-select-sm" data-score ${item.score_locked ? "disabled" : ""} title="${esc(t("collection_score_hint"))}">
+                    <option value="" aria-label="${esc(t("collection_no_score"))}">—</option>
                     ${Array.from({ length: 10 }, (_, i) => 10 - i).map(n => `<option value="${n}" ${item.score === n ? "selected" : ""}>★ ${n}/10</option>`).join("")}
-                </select>
-            </div>
-            <div class="col-6 col-sm-auto">
-                <div class="input-group input-group-sm" style="max-width: 9rem;">
-                    <input type="text" inputmode="decimal" class="form-control" data-field="hours" value="${item.hours === null ? "" : fmtNumber(item.hours)}"
-                           aria-label="${esc(t("collection_hours"))}" placeholder="0">
-                    <span class="input-group-text">h</span>
-                </div>
-            </div>
-            <div class="col-6 col-sm-auto">
-                <div class="input-group input-group-sm" style="max-width: 11rem;" title="${esc(t("collection_achievements"))}">
-                    <span class="input-group-text">🏆</span>
-                    <input type="number" min="0" class="form-control" data-field="achievements" value="${item.achievements ?? ""}"
-                           aria-label="${esc(t("collection_achievements_done"))}" placeholder="0">
-                    <span class="input-group-text">/</span>
-                    <input type="number" min="0" class="form-control" data-field="achievements_total" value="${item.achievements_total ?? ""}"
-                           aria-label="${esc(t("collection_achievements_total"))}" placeholder="—">
-                </div>
-            </div>
-            <div class="col-12 col-sm">
-                <input type="text" maxlength="1000" class="form-control form-control-sm" data-field="notes" value="${esc(item.notes || "")}"
-                       placeholder="${esc(t("collection_notes"))}" aria-label="${esc(t("collection_notes"))}">
-            </div>
+                </select>`)}
+            ${field(t("collection_hours"), `
+                <input type="text" inputmode="decimal" class="form-control form-control-sm" data-field="hours"
+                       value="${item.hours === null ? "" : fmtNumber(item.hours)}" placeholder="0">`)}
+            ${field(t("collection_achievements_done"), `
+                <input type="number" min="0" class="form-control form-control-sm" data-field="achievements" value="${item.achievements ?? ""}" placeholder="0">`)}
+            ${field(t("collection_achievements_total"), `
+                <input type="number" min="0" class="form-control form-control-sm" data-field="achievements_total" value="${item.achievements_total ?? ""}" placeholder="—">`)}
+            ${field(t("collection_notes"), `
+                <input type="text" maxlength="1000" class="form-control form-control-sm" data-field="notes" value="${esc(item.notes || "")}">`, "col-12")}
         </div>`;
 }
 
+const openEditors = new Set();     // items whose editor is open (kept across a re-render)
+
 function itemRow(item) {
     const owned = item.kind === "owned";
+    const open = openEditors.has(String(item.id));
     return `
         <div class="list-group-item ${item.good_deal ? "border-start border-success border-4" : ""}" data-id="${item.id}">
             <div class="d-flex gap-3">
-                <a href="/game/${item.game_id}"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
+                <a href="/game/${item.game_id}" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
                 <div class="flex-grow-1 min-w-0">
-                    <div class="d-flex flex-wrap justify-content-between gap-1">
-                        <a href="/game/${item.game_id}" class="fw-semibold link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
-                        <span class="small text-body-secondary">${esc(item.platform_name || "")}</span>
-                    </div>
+                    <a href="/game/${item.game_id}" class="fw-semibold link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
+                    <div class="small text-body-secondary">${esc(item.platform_name || "")}</div>
                     <div class="small mt-1">${priceLine(item)}</div>
-                    ${owned ? ownedControls(item) : ""}
+                    ${owned ? `<div class="item-facts small mt-1" data-facts>${ownedFacts(item)}</div>${ownedControls(item)}` : ""}
                     <div class="d-flex flex-wrap gap-2 mt-2">
+                        ${owned ? `<button type="button" class="btn btn-sm btn-secondary" data-action="edit"
+                                           aria-expanded="${open}" aria-controls="editor-${item.id}">${t(open ? "collection_edit_done" : "collection_edit")}</button>` : ""}
                         ${owned
                             // only physical copies can be sold (a digital game can't be handed over)
                             ? (item.format === "digital" ? "" : `<a class="btn btn-sm btn-success" href="/sell?game_id=${item.game_id}&edition_id=${item.edition_id}">${t("collection_sell")}</a>`)
                             : `<button type="button" class="btn btn-sm btn-success" data-action="bought">${t("collection_bought")}</button>`}
-                        <button type="button" class="btn btn-sm btn-danger" data-action="remove">${t("collection_remove")}</button>
+                        <button type="button" class="btn btn-sm btn-danger ms-auto" data-action="remove">${t("collection_remove")}</button>
                     </div>
                 </div>
             </div>
@@ -219,9 +228,25 @@ function renderItems() {
             const item = data.items.find(i => String(i.id) === id);
             const numeric = ["hours", "achievements", "achievements_total"].includes(input.dataset.field);
             item[input.dataset.field] = numeric ? (input.value ? Number(input.value.replace(",", ".")) : null) : input.value || null;
+            row.querySelector("[data-facts]").innerHTML = ownedFacts(item);
             data.stats = recount();
             renderStats();
         });
+        const editButton = row.querySelector("[data-action=edit]");
+        const editor = row.querySelector("[data-editor]");
+        if (editButton) {
+            const show = open => {
+                editor.classList.toggle("d-none", !open);
+                editButton.setAttribute("aria-expanded", open);
+                editButton.textContent = t(open ? "collection_edit_done" : "collection_edit");
+                open ? openEditors.add(id) : openEditors.delete(id);
+            };
+            show(openEditors.has(id));
+            editButton.onclick = () => {
+                show(editor.classList.contains("d-none"));
+                if (!editor.classList.contains("d-none")) editor.querySelector("select, input").focus();
+            };
+        }
         // the score is the user's review of the game (game page): one per game, kept in step on every card of it
         const score = row.querySelector("[data-score]");
         if (score) score.onchange = async () => {
@@ -233,6 +258,7 @@ function renderItems() {
                 return showMessage(false, t(`error_${answer?.error || "unknown"}`));
             }
             data.items.filter(i => i.game_id === item.game_id).forEach(i => i.score = answer.score);
+            row.querySelector("[data-facts]").innerHTML = ownedFacts(item);
             list.querySelectorAll("[data-id]").forEach(other => {
                 const same = data.items.find(i => String(i.id) === other.dataset.id)?.game_id === item.game_id;
                 if (same && other.querySelector("[data-score]")) other.querySelector("[data-score]").value = answer.score ?? "";

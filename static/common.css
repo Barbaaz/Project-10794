@@ -36,3 +36,9 @@
 @media (max-width: 359.98px) {
     .site-header .site-brand span { display: none; }      /* only 🎮 on the narrowest phones */
 }
+
+/* Phones: tabs in one row that scrolls sideways (home page, /admin), not several rows */
+@media (max-width: 767.98px) {
+    .scroll-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .25rem; scrollbar-width: thin; }
+    .scroll-tabs .nav-link { white-space: nowrap; }
+}
