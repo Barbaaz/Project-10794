@@ -58,6 +58,8 @@ def rate(user_id, conversation_id, stars, comment=None):
         rating = s.scalars(select(Rating).where(Rating.conversation_id == conversation_id,
                                                 Rating.rater_id == user_id)).first()
         if rating:
+            if rating.hidden:              # by a moderator: rewriting it would undo that (as hidden reviews)
+                raise RatingError("rating_hidden", 403)
             if _now(s) - rating.created_at > timedelta(days=EDIT_DAYS):
                 raise RatingError("rating_locked", 409)
             rating.stars, rating.comment, rating.updated_at = stars, comment, NOW
@@ -77,6 +79,8 @@ def reply(user_id, rating_id, text):
         rating = s.get(Rating, rating_id)
         if not rating or rating.rated_id != user_id:
             raise RatingError("not_found", 404)
+        if rating.hidden:
+            raise RatingError("rating_hidden", 403)
         rating.reply = text
         return fields(rating, "id", "stars", "comment", "reply")
 

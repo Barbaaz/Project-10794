@@ -297,8 +297,9 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             FROM store_products sp {LATEST_PRICE}
             WHERE sp.is_active AND last.in_stock AND sp.edition_id IS NOT NULL
         ),
-        used AS (
-            SELECT edition_id, price FROM user_listings WHERE status = 'active' AND edition_id IS NOT NULL
+        used AS (       -- a blocked seller's copies don't count (listing_service.SELLER_ACTIVE)
+            SELECT l.edition_id, l.price FROM user_listings l JOIN users u ON u.id = l.user_id
+            WHERE l.status = 'active' AND l.edition_id IS NOT NULL AND u.is_active
         ),
         ed AS (
             SELECT edition_id, MIN(price) AS best_price

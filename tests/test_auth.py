@@ -181,6 +181,13 @@ def test_blocked_account_is_logged_out(client, test_db):
     assert post(client, "login", login="ana_92", password="segredo123").get_json()["error"] == "login_failed"
 
 
+@pytest.mark.parametrize("body", ["[1, 2]", '"text"', "7", "null"])
+def test_a_json_body_that_isnt_an_object_is_refused(client, body):
+    """Our pages always send {…}; anything else is a 400, not a server error in the route."""
+    response = client.post("/api/auth/login", data=body, content_type="application/json", headers=HEADERS)
+    assert (response.status_code, response.get_json()["error"]) == (400, "body_invalid")
+
+
 def test_changes_need_our_pages_header(client):
     # a form on another site can't add this header: the request is refused
     response = client.post("/api/auth/register", json={"username": "x_user", "email": "x@x.pt", "password": "segredo123"})

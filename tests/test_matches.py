@@ -43,6 +43,18 @@ def where(m, n):
     return m["db"].execute("SELECT edition_id FROM store_products WHERE url = ?", f"https://match.test/{n}").fetchone()[0]
 
 
+@pytest.mark.parametrize("path, body", [
+    ("/api/mod/matches", {"product_ids": "12", "edition_id": 1}),        # a text, not a list
+    ("/api/mod/matches", {"product_ids": ["x"], "edition_id": 1}),
+    ("/api/mod/matches", {"product_ids": [1], "game_id": "x", "new_edition": "Gold"}),
+    ("/api/mod/duplicates/merge", {"from_id": "x", "into_id": 1}),
+    ("/api/mod/duplicates/dismiss", {"a": None, "b": 2}),
+])
+def test_ids_that_arent_numbers_are_refused(mod, path, body):
+    response = mod["client"].post(path, json=body, headers=HEADERS)
+    assert (response.status_code, response.get_json()["error"]) == (400, "ids_invalid")
+
+
 def test_merge_an_edition_by_moving_its_product(mod):
     client = mod["client"]
     game, by_name = editions(client)

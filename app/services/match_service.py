@@ -57,7 +57,10 @@ def move(moderator_id, product_ids, edition_id=None, game_id=None, new_edition=N
     new one of game `game_id` named `new_edition` (the game's edition with the same key if it
     already has one). Returns the target edition's id.
     """
-    product_ids = list(dict.fromkeys(int(i) for i in product_ids or []))
+    if not isinstance(product_ids or [], list):
+        raise ModerationError("ids_invalid")
+    product_ids = list(dict.fromkeys(_id(i) for i in product_ids or []))
+    edition_id, game_id = (_id(edition_id) if edition_id else None), (_id(game_id) if game_id else None)
     if not product_ids or len(product_ids) > MAX_PRODUCTS:
         raise ModerationError("products_invalid")
     from pipeline.rematch import delete_orphans, record_merges     # pipeline code, only needed here
@@ -85,14 +88,24 @@ def move(moderator_id, product_ids, edition_id=None, game_id=None, new_edition=N
     return target_id
 
 
+def _id(value):
+    """A record id sent by the page; ModerationError("ids_invalid") when it isn't a whole number."""
+    if isinstance(value, bool):
+        raise ModerationError("ids_invalid")
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ModerationError("ids_invalid")
+
+
 def _target_edition(s, edition_id, game_id, new_edition):
     if edition_id:
-        edition = s.get(GameEdition, int(edition_id))
+        edition = s.get(GameEdition, edition_id)
         if not edition:
             raise ModerationError("not_found", 404)
         return edition
     name = (new_edition or "").strip()
-    game = s.get(Game, int(game_id)) if game_id else None
+    game = s.get(Game, game_id) if game_id else None
     if not game or not name or len(name) > 200:
         raise ModerationError("new_edition_invalid")
     key = edition_key_of(normalize_name(name))
@@ -194,8 +207,9 @@ def merge_games(moderator_id, from_id, into_id):
     product; the emptied game is merged (merged_ids: old links, listings and collection items
     follow). Returns {"game_id": into_id}.
     """
+    from_id, into_id = _id(from_id), _id(into_id)
     with session() as s:
-        source, target = s.get(Game, int(from_id)), s.get(Game, int(into_id))
+        source, target = s.get(Game, from_id), s.get(Game, into_id)
         if not source or not target or source.id == target.id:
             raise ModerationError("not_found", 404)
         if source.platform_id != target.platform_id:
@@ -218,14 +232,14 @@ def merge_games(moderator_id, from_id, into_id):
         for start in range(0, len(product_ids), MAX_PRODUCTS):
             move(moderator_id, product_ids[start:start + MAX_PRODUCTS], edition_id=edition_id)
     with session() as s:
-        s.add(ModerationLog(moderator_id=moderator_id, action="merge_game", kind="game", target_id=int(into_id),
+        s.add(ModerationLog(moderator_id=moderator_id, action="merge_game", kind="game", target_id=into_id,
                             note=f"#{from_id} {title} → #{into_id}"[:500]))
-    return {"game_id": int(into_id)}
+    return {"game_id": into_id}
 
 
 def dismiss_duplicate(moderator_id, game_a, game_b):
     """Two games that only look like duplicates: they leave the list."""
-    a, b = sorted((int(game_a), int(game_b)))
+    a, b = sorted((_id(game_a), _id(game_b)))
     with session() as s:
         if not s.get(Game, a) or not s.get(Game, b):
             raise ModerationError("not_found", 404)

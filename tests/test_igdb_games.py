@@ -37,6 +37,16 @@ def test_search_lists_our_platforms_only(igdb):
     assert client.get("/api/igdb/games?q=o").get_json() == []              # too short: IGDB isn't asked
 
 
+def test_search_words_stay_inside_the_query_text(igdb):
+    """A typed backslash would escape the closing quote of IGDB's search "…": it goes, like quotes."""
+    client = igdb["client"]
+    sign_up(client, "retro_seller3")
+    client.get('/api/igdb/games?q=okami \\" ; fields *; \\')
+    search = igdb["asked"][-1]
+    assert search.startswith('search "okami ; fields *;"; fields ')
+    assert "\\" not in search
+
+
 def test_picking_a_platform_creates_the_game_once(igdb):
     client = igdb["client"]
     sign_up(client, "retro_seller2")

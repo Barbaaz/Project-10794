@@ -39,6 +39,26 @@ def test_only_real_images_are_accepted():
 
 # --- listings through the API ------------------------------------------------------------------
 
+def test_prices_that_arent_numbers_are_refused(market):
+    """Decimal reads "NaN" and "Infinity" too: refused like any wrong price, not a server error."""
+    sign_up(market["client"], "seller_nan")
+    for price in ("NaN", "nan", "sNaN", "Infinity", "-Infinity"):
+        response = new_listing(market, price=price)
+        assert (response.status_code, response.get_json()["error"]) == (400, "price_invalid"), price
+
+
+def test_a_blocked_sellers_copies_leave_the_catalogue(market):
+    """The catalogue lists editions with a store offer or a used copy; a blocked seller's copies don't count
+    (no card, no price from them), as everywhere else in the market."""
+    client = market["client"]
+    seller = sign_up(client, "seller_blocked")
+    new_listing(market, price="9.99")
+    catalog = lambda: client.get("/api/games/catalog?platform=PS5&q=market test game").get_json()["groups"]
+    assert [g["edition_id"] for g in catalog()] == [market["edition"]]
+    market["db"].execute("UPDATE users SET is_active = false WHERE id = ?", seller["id"])
+    assert catalog() == []
+
+
 def test_selling_needs_an_account(market):
     assert new_listing(market).status_code == 401
 

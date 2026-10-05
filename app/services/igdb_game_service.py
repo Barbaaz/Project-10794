@@ -57,7 +57,8 @@ def known_platforms():
 
 def search(q):
     """IGDB games whose name has q, on our platforms: [{igdb_id, name, year, cover, platforms: [{code, name}]}]."""
-    q = " ".join((q or "").replace('"', " ").split())[:100]
+    # inside IGDB's search "…": no quote to close it, no backslash to escape the closing one
+    q = " ".join((q or "").replace('"', " ").replace("\\", " ").split())[:100]
     if len(q) < 2:
         return []
     platforms = known_platforms()

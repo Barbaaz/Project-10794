@@ -58,6 +58,15 @@ def only_our_pages_change_things():
         abort(403, description="missing_request_header")
 
 
+@app.before_request
+def json_bodies_are_objects():
+    """Our pages send {…}; the routes read it with .get(). A list, a number, null or broken JSON is
+    refused here instead of failing inside a route."""
+    if request.method in CHANGING_METHODS and request.is_json and request.get_data():
+        if not isinstance(request.get_json(silent=True), dict):
+            abort(400, description="body_invalid")
+
+
 # Safe with the pages' inline scripts: no framing by other sites (clickjacking), no <base> or plugins.
 # A full script policy would need the inline scripts moved into files first.
 SECURITY_HEADERS = {

@@ -256,7 +256,7 @@ def _hours(value):
         hours = Decimal(str(value).replace(",", ".")).quantize(Decimal("0.1"))
     except InvalidOperation:
         raise CollectionError("hours_invalid")
-    if not 0 <= hours <= MAX_HOURS:
+    if not hours.is_finite() or not 0 <= hours <= MAX_HOURS:            # "NaN" gets past quantize()
         raise CollectionError("hours_invalid")
     return hours
 

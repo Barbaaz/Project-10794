@@ -245,7 +245,7 @@ def _checked_fields(price, condition, description):
         price = Decimal(str(price)).quantize(Decimal("0.01"))
     except (InvalidOperation, ValueError):
         raise ListingError("price_invalid")
-    if not MIN_PRICE <= price <= MAX_PRICE:
+    if not price.is_finite() or not MIN_PRICE <= price <= MAX_PRICE:     # "NaN" gets past quantize()
         raise ListingError("price_invalid")
     if condition not in CONDITIONS:
         raise ListingError("condition_invalid")

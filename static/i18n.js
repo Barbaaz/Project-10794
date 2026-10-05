@@ -639,6 +639,7 @@ const STRINGS = {
         error_review_title_long: "Título demasiado longo (máximo 120 caracteres).",
         error_review_text_long: "Texto demasiado longo (máximo 4000 caracteres).",
         error_review_hidden: "Um moderador escondeu esta avaliação; já não a pode alterar nem apagar.",
+        error_rating_hidden: "Um moderador escondeu esta avaliação; já não pode ser alterada nem respondida.",
         error_review_has_text: "A sua avaliação tem texto: para a apagar, use a página do jogo.",
     },
     en: {
@@ -1268,6 +1269,7 @@ const STRINGS = {
         error_review_title_long: "Title too long (at most 120 characters).",
         error_review_text_long: "Text too long (at most 4000 characters).",
         error_review_hidden: "A moderator hid this review; it can't be changed or deleted.",
+        error_rating_hidden: "A moderator hid this rating; it can't be changed or replied to.",
         error_review_has_text: "Your review has text: delete it on the game's page.",
     },
 };
