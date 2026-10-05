@@ -67,12 +67,14 @@ def json_bodies_are_objects():
             abort(400, description="body_invalid")
 
 
-# Safe with the pages' inline scripts: no framing by other sites (clickjacking), no <base> or plugins.
-# A full script policy would need the inline scripts moved into files first.
+# Scripts only from files: ours (static/, the pages' in static/pages/) and the CDN's (checked against
+# their hashes), so an injected <script> or onclick="…" doesn't run (tests/test_csp.py). No framing by
+# other sites (clickjacking), no <base> or plugins. Images, styles and frames (YouTube) aren't limited.
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
-    "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+    "Content-Security-Policy": "script-src 'self' https://cdn.jsdelivr.net/npm/; "
+                               "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
     # other sites get only our origin, never a full address (a password-reset link carries its token)
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",

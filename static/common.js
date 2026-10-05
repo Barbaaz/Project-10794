@@ -51,6 +51,11 @@ function toggleDark() {
 
 document.documentElement.setAttribute("data-bs-theme", savedTheme());
 
+// Every theme button (the header's, the account menu's on a phone): one listener, no onclick="…" (the CSP)
+document.addEventListener("click", event => {
+    if (event.target.closest("[data-toggle-dark]")) toggleDark();
+});
+
 // Calls to our API that change something: JSON in and out, with the header the server
 // requires on such requests (it can't be added by another site: app/web.py).
 // Resolves to {ok, status, data}; data.error is a code for t("error_" + code).
@@ -119,7 +124,6 @@ async function renderAccountArea() {
         save("lang", LANG === "pt" ? "en" : "pt");
         location.reload();
     };
-    box.querySelector("[data-toggle-dark]").onclick = () => toggleDark();
 }
 
 // The account menu: opens on click; Esc, Tab out or a click elsewhere closes it; arrows move

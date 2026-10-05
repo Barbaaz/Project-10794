@@ -10,7 +10,9 @@
  *   something, other sites' images): straight to the network, never saved here
  * Change VERSION when this file changes what it saves: the old saved copies are dropped.
  */
-const VERSION = "v2";      // v2: CDN files with integrity hashes (v1 may hold opaque copies they can't use)
+// v2: CDN files with integrity hashes (v1 may hold opaque copies they can't use)
+// v3: page scripts in files (static/pages/); saved pages from before had them inline
+const VERSION = "v3";
 const CACHE = `site-${VERSION}`;
 const SLOW_MS = 6000;      // past this, a saved copy is shown while the network keeps trying
 const CDN = "https://cdn.jsdelivr.net";       // Bootstrap, Chart.js: fixed versions in their URLs
@@ -18,7 +20,8 @@ const BOOTSTRAP_CSS = `${CDN}/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css`;
 
 // Saved when the worker is installed, so even the first offline visit has them
 const PRECACHE = [
-    "/static/offline.html", "/static/common.css", "/static/common.js", "/static/i18n.js", "/static/market.js",
+    "/static/offline.html", "/static/pages/offline.js", "/static/common.css", "/static/common.js", "/static/i18n.js",
+    "/static/market.js",
     "/static/favicon.svg", "/static/icons/icon-192.png", BOOTSTRAP_CSS,
 ];
 
