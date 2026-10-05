@@ -1,6 +1,7 @@
 """
 /api/auth: sign up, log in, a forgotten password, log out, who am I. The login is a signed session cookie
-(HttpOnly, SameSite=Lax; see app/web.py), holding only the user id.
+(HttpOnly, SameSite=Lax; see app/web.py), holding the user id and a mark of their password
+(auth_service.session_mark): a new password logs out every other session.
 """
 from functools import wraps
 
@@ -15,9 +16,11 @@ bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 def current_user():
     """The logged-in user (cached for the request), or None."""
     if "user" not in g:
-        g.user = auth_service.get_user(session.get("user_id"))
+        g.user = auth_service.get_user(session.get("user_id"), mark=session.get("mark", ""))
         if g.user is None:
-            session.pop("user_id", None)   # deleted or blocked since logging in
+            # deleted or blocked since logging in, or the password changed (another device, a stolen cookie)
+            session.pop("user_id", None)
+            session.pop("mark", None)
     return g.user
 
 
@@ -53,6 +56,7 @@ admin_required = role_required("admin")
 def log_in(user):
     session.clear()            # a new session on login (no reuse of one set before)
     session["user_id"] = user["id"]
+    session["mark"] = auth_service.session_mark(user["id"])   # a new password ends this session
     session.permanent = True   # stays logged in (PERMANENT_SESSION_LIFETIME) instead of until the browser closes
     g.user = user
 

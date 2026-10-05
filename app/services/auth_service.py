@@ -6,6 +6,7 @@ request_password_reset). Google / Microsoft sign-in
 come later and create accounts without a password (password_hash None).
 """
 import hashlib
+import hmac
 import re
 import threading
 import time
@@ -160,13 +161,33 @@ def reset_password(token, password):
     return get_user(user_id)
 
 
-def get_user(user_id):
-    """The user's own account fields, or None (also for a blocked account)."""
+def get_user(user_id, mark=None):
+    """
+    The user's own account fields, or None (also for a blocked account). With `mark` (a login
+    cookie's session_mark): None too when the password changed since that login, so a new
+    password logs out every other copy of the cookie.
+    """
     if user_id is None:
         return None
     with session() as s:
         user = s.scalars(select(User).where(User.id == user_id, User.is_active)).first()
-        return fields(user, *OWN_FIELDS) if user else None
+        if not user or (mark is not None and not hmac.compare_digest(str(mark), _session_mark(user))):
+            return None
+        return fields(user, *OWN_FIELDS)
+
+
+def session_mark(user_id):
+    """What the login cookie keeps besides the user id (see get_user)."""
+    with session() as s:
+        user = s.get(User, user_id)
+        return _session_mark(user) if user else None
+
+
+def _session_mark(user):
+    """Changes when the password does. Keyed with the secret key: the cookie is signed, not hidden,
+    so it mustn't tell anything about the password hash."""
+    return hmac.new(config.SECRET_KEY.encode(), b"session:" + (user.password_hash or "").encode(),
+                    hashlib.sha256).hexdigest()[:32]
 
 
 def _check_password(password):

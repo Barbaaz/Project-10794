@@ -117,6 +117,21 @@ def test_forgotten_password(client, mails):
     assert post(client, "login", login="ana_92", password="nova-senha-1").status_code == 200
 
 
+def test_a_new_password_logs_out_every_other_session(client, mails):
+    """Someone with a copy of the login cookie (another computer, a stolen one) is out once the password changes."""
+    from app.web import app
+    register(client)
+    other = app.test_client()
+    assert post(other, "login", login="ana_92", password="segredo123").status_code == 200
+    assert other.get("/api/auth/me").get_json()["username"] == "ana_92"
+
+    post(client, "forgot", email="ana@example.pt")
+    post(client, "reset", token=reset_token(mails[0]), password="nova-senha-1")
+    assert client.get("/api/auth/me").get_json()["username"] == "ana_92"   # the one who changed it stays in
+    assert other.get("/api/auth/me").get_json() is None
+    assert other.get("/api/collection").status_code == 401
+
+
 def test_reset_link_expires_and_requests_are_limited(client, mails, monkeypatch):
     register(client)
     post(client, "forgot", email="ana@example.pt")
