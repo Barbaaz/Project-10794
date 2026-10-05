@@ -129,6 +129,36 @@ def test_reset_link_expires_and_requests_are_limited(client, mails, monkeypatch)
     assert (response.status_code, response.get_json()["error"]) == (429, "reset_locked")
 
 
+def test_huge_logins_and_passwords_are_refused_and_not_kept(client):
+    """A request can be ~100 MB: such a login mustn't be kept in memory (the lock-out's records), nor
+    sent to the database or hashed."""
+    register(client)
+    post(client, "logout")
+    huge = "a" * 100_000
+    assert post(client, "login", login=huge, password="segredo123").get_json()["error"] == "login_failed"
+    assert post(client, "login", login="ana_92", password=huge).get_json()["error"] == "login_failed"
+    assert all(len(login) <= auth_service.MAX_LOGIN for _, login in auth_service._failures)
+    long_password = "p" * (auth_service.MAX_PASSWORD + 1)
+    assert register(client, username="bea_1", email="bea@example.pt", password=long_password).get_json()["error"] == "password_long"
+    assert post(client, "reset", token="x", password=long_password).get_json()["error"] == "password_long"
+
+
+def test_only_photo_uploads_may_be_big(client):
+    """JSON bodies are small: past 1 MB the request is refused before it's read (photos are multipart)."""
+    response = post(client, "login", login="a" * 2_000_000, password="segredo123")
+    assert response.status_code == 413
+
+
+def test_lock_out_records_are_bounded(client, monkeypatch):
+    """Wrong passwords for many different logins: the oldest records go, memory doesn't grow forever."""
+    monkeypatch.setattr(auth_service, "MAX_TRACKED", 3)
+    for i in range(8):
+        with pytest.raises(auth_service.AccountError):
+            auth_service.authenticate(f"user_{i}", "wrong-password", ip="203.0.113.5")
+    assert len(auth_service._failures) <= 3
+    assert ("203.0.113.5", "user_7") in auth_service._failures            # the latest kept
+
+
 def test_blocked_account_is_logged_out(client, test_db):
     register(client)
     test_db.conn.cursor().execute("UPDATE users SET is_active = false")

@@ -7,6 +7,7 @@ come later and create accounts without a password (password_hash None).
 """
 import hashlib
 import re
+import threading
 import time
 
 from sqlalchemy import or_, select
@@ -20,13 +21,17 @@ from db import session
 USERNAME = re.compile(r"^[A-Za-z0-9_.-]{3,30}$")
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD = 8
+MAX_PASSWORD = 200        # longer isn't a real password: refused before hashing it
+MAX_LOGIN = 255           # a username or email (emails are at most 255)
 LANGS = ("pt", "en")      # the page's languages; the user's is kept for e-mails (wishlist alerts)
 
 # After this many wrong passwords for one login (username / email) from one address,
 # that pair is locked for LOCK_SECONDS: slows down password guessing
 MAX_FAILURES = 5
 LOCK_SECONDS = 15 * 60
+MAX_TRACKED = 10_000      # (ip, login) pairs remembered at most: stale ones go first, then the oldest
 _failures = {}   # (ip, login) → [times of recent failures]
+_failures_lock = threading.Lock()   # the server answers several requests at once
 
 # What a user sees about their own account (never the password hash). Other people see less:
 # never the email (see the marketplace's seller info)
@@ -48,8 +53,7 @@ def register(username, email, password, display_name=None, lang=None):
         raise AccountError("username_invalid")
     if not EMAIL.match(email) or len(email) > 255:
         raise AccountError("email_invalid")
-    if len(password or "") < MIN_PASSWORD:
-        raise AccountError("password_short")
+    _check_password(password)
     if len(display_name) > 100:
         raise AccountError("display_name_long")
 
@@ -69,6 +73,8 @@ def register(username, email, password, display_name=None, lang=None):
 def authenticate(login, password, ip="?", lang=None):
     """The user for this username / email and password; AccountError("login_failed" / "login_locked")."""
     login = (login or "").strip()
+    if len(login) > MAX_LOGIN or len(password or "") > MAX_PASSWORD:
+        raise AccountError("login_failed")        # no such account: not looked up, hashed or remembered
     key = (ip, login.lower())
     if _locked(key):
         raise AccountError("login_locked")
@@ -78,14 +84,15 @@ def authenticate(login, password, ip="?", lang=None):
         # check a hash even when there's no such user, so the answer takes as long either way
         hash_ = user.password_hash if user and user.password_hash else _DUMMY_HASH
         if not (check_password_hash(hash_, password or "") and user and user.password_hash and user.is_active):
-            _failures.setdefault(key, []).append(time.monotonic())
+            _note_failure(key)
             raise AccountError("login_failed")
         user.last_login_at = NOW
         if lang in LANGS:
             user.lang = lang
         user_id = user.id
 
-    _failures.pop(key, None)
+    with _failures_lock:
+        _failures.pop(key, None)
     return get_user(user_id)
 
 
@@ -119,7 +126,7 @@ def request_password_reset(email, lang="pt", ip="?"):
     key = (ip, "password reset")
     if _locked(key):
         raise AccountError("reset_locked")
-    _failures.setdefault(key, []).append(time.monotonic())
+    _note_failure(key)
 
     email = (email or "").strip().lower()
     with session() as s:
@@ -134,8 +141,7 @@ def request_password_reset(email, lang="pt", ip="?"):
 
 def reset_password(token, password):
     """A new password from a reset link (logged in afterwards); AccountError("reset_invalid") for an old or used link."""
-    if len(password or "") < MIN_PASSWORD:
-        raise AccountError("password_short")
+    _check_password(password)
     from itsdangerous import BadSignature
     try:
         data = _reset_tokens().loads(token or "", max_age=RESET_SECONDS)
@@ -148,8 +154,9 @@ def reset_password(token, password):
             raise AccountError("reset_invalid")
         user.password_hash = generate_password_hash(password)
         user_id, logins = user.id, {user.username.lower(), user.email}
-    for key in [k for k in _failures if k[1] in logins]:      # locked out by wrong passwords: not any more
-        _failures.pop(key, None)
+    with _failures_lock:
+        for key in [k for k in _failures if k[1] in logins]:      # locked out by wrong passwords: not any more
+            _failures.pop(key, None)
     return get_user(user_id)
 
 
@@ -162,10 +169,37 @@ def get_user(user_id):
         return fields(user, *OWN_FIELDS) if user else None
 
 
+def _check_password(password):
+    if len(password or "") < MIN_PASSWORD:
+        raise AccountError("password_short")
+    if len(password) > MAX_PASSWORD:
+        raise AccountError("password_long")
+
+
 def _locked(key):
-    recent = [t for t in _failures.get(key, []) if time.monotonic() - t < LOCK_SECONDS]
-    _failures[key] = recent
+    """Whether this (ip, login) has MAX_FAILURES recent failures; forgets the old ones (and keeps no
+    record for a key without any, or every login tried would stay in memory)."""
+    now = time.monotonic()
+    with _failures_lock:
+        recent = [t for t in _failures.get(key, []) if now - t < LOCK_SECONDS]
+        if recent:
+            _failures[key] = recent
+        else:
+            _failures.pop(key, None)
     return len(recent) >= MAX_FAILURES
+
+
+def _note_failure(key):
+    """Remember a failure for the lock-out. At most MAX_TRACKED keys: stale ones are dropped first,
+    then the oldest (a bounded memory beats a perfect count under a flood of different logins)."""
+    now = time.monotonic()
+    with _failures_lock:
+        if key not in _failures and len(_failures) >= MAX_TRACKED:
+            for stale in [k for k, times in _failures.items() if now - times[-1] >= LOCK_SECONDS]:
+                del _failures[stale]
+            while len(_failures) >= MAX_TRACKED:
+                del _failures[next(iter(_failures))]
+        _failures.setdefault(key, []).append(now)
 
 
 _DUMMY_HASH = generate_password_hash("not a real password")

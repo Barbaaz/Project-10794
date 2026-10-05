@@ -3,6 +3,7 @@ Pieces the services share: the offer columns sent to clients, SQL fragments, how
 is named and built, the lowest-price query, and a small cache.
 """
 import re
+import threading
 import time
 
 from core.normalizer import normalize_name
@@ -83,7 +84,10 @@ def better_title(row):
     return english if english and normalize_name(english) == normalize_name(row["title"]) else row["title"]
 
 CACHE_SECONDS = 600   # prices change once a day; no need to recompute on every visit
+# Keys hold request values (a platform typed in the address): at most this many, the oldest go first
+MAX_CACHED = 500
 _cache = {}
+_cache_lock = threading.Lock()
 
 
 def cached(key, compute, seconds=CACHE_SECONDS):
@@ -92,12 +96,17 @@ def cached(key, compute, seconds=CACHE_SECONDS):
     if hit and time.monotonic() - hit[0] < seconds:
         return hit[1]
     value = compute()
-    _cache[key] = (time.monotonic(), value)
+    with _cache_lock:
+        _cache.pop(key, None)                     # re-added last: the newest
+        while len(_cache) >= MAX_CACHED:
+            del _cache[next(iter(_cache))]
+        _cache[key] = (time.monotonic(), value)
     return value
 
 
 def clear_cache():
-    _cache.clear()
+    with _cache_lock:
+        _cache.clear()
 
 
 def title_word_filters(q):

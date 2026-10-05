@@ -36,6 +36,15 @@ for blueprint in (auth.bp, chat.bp, collection.bp, games.bp, igdb_games.bp, list
     app.register_blueprint(blueprint)
 
 CHANGING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+MAX_JSON_BYTES = 1024 * 1024
+
+
+@app.before_request
+def only_uploads_are_big():
+    """MAX_CONTENT_LENGTH is sized for a listing's photos; any other request (JSON) is small, so a
+    huge one is refused (413) before it's read into memory."""
+    if request.mimetype != "multipart/form-data":
+        request.max_content_length = MAX_JSON_BYTES
 
 
 @app.before_request
