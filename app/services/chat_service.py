@@ -227,11 +227,16 @@ def get_conversation(user_id, conversation_id, after_id=0):
     complete_overdue()
     with session() as s:
         conversation = s.get(Conversation, conversation_id)
-        messages = message_dicts(conversation_id, s.scalars(
-            select(Message).where(Message.conversation_id == conversation_id, Message.id > int(after_id or 0))
-            .order_by(Message.id)))
+        new = s.scalars(select(Message).where(Message.conversation_id == conversation_id, Message.id > int(after_id or 0))
+                        .order_by(Message.id)).all()
+        messages = message_dicts(conversation_id, new)
         result = _as_dict(conversation, user_id)
-        _mark_read(conversation, user_id)
+        # read up to the newest message returned, not "now": one being saved meanwhile (an earlier time,
+        # committed later) stays unread. A poll with nothing new writes nothing
+        newest = max((m.created_at for m in new), default=None)
+        read_at = conversation.buyer_read_at if conversation.buyer_id == user_id else conversation.seller_read_at
+        if newest is not None and (read_at is None or newest > read_at):
+            _mark_read(conversation, user_id, up_to=newest)
     result["messages"] = messages
     if result["deal_status"] == "completed":
         result["ratings"] = ratings_of_conversation(user_id, conversation_id)
@@ -251,11 +256,12 @@ def _role(conversation, user_id):
     return "buyer" if conversation.buyer_id == user_id else "seller"
 
 
-def _mark_read(conversation, user_id):
+def _mark_read(conversation, user_id, up_to=NOW):
+    """This side has read the conversation up to `up_to` (the newest message seen; now for one's own)."""
     if conversation.buyer_id == user_id:
-        conversation.buyer_read_at = NOW
+        conversation.buyer_read_at = up_to
     else:
-        conversation.seller_read_at = NOW
+        conversation.seller_read_at = up_to
 
 
 def _add_message(s, conversation, sender_id, body=None, event=None, actor_id=None):

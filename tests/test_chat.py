@@ -189,6 +189,31 @@ def test_unread_messages(deal):
     assert reply.get_json()["messages"][-1]["body"] == "Sim!"
 
 
+def test_reading_marks_up_to_the_newest_message_seen(deal):
+    """
+    The read mark is the newest message the reader saw, not the time of the request: a message that
+    was being saved at that moment (its time a little earlier than the request's) still counts as
+    unread. And polling without anything new writes nothing.
+    """
+    client = deal["client"]
+    conversation_id = start(client, deal["listing"]["id"], message="Olá!").get_json()["id"]
+    db = deal["db"]
+    log_in(client, "seller")
+    client.get(f"/api/conversations/{conversation_id}")
+    read_at, seen = db.execute("SELECT c.seller_read_at, max(m.created_at) FROM conversations c "
+                               "JOIN messages m ON m.conversation_id = c.id WHERE c.id = ? GROUP BY c.id",
+                               conversation_id).fetchone()
+    assert read_at == seen
+    client.get(f"/api/conversations/{conversation_id}")                              # a poll: nothing new
+    assert db.execute("SELECT seller_read_at FROM conversations WHERE id = ?", conversation_id).fetchone()[0] == read_at
+
+    # the buyer's message saved in a transaction that began before the seller's last poll, finished after it
+    buyer_id = db.execute("SELECT buyer_id FROM conversations WHERE id = ?", conversation_id).fetchone()[0]
+    db.execute("INSERT INTO messages (conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, "
+               "?::timestamp + interval '1 millisecond')", conversation_id, buyer_id, "E o preço?", seen)
+    assert client.get("/api/conversations/unread").get_json()["count"] == 1
+
+
 def test_conversations_are_private(deal):
     client = deal["client"]
     conversation_id = start(client, deal["listing"]["id"], message="Olá").get_json()["id"]
