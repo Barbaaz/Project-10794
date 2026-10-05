@@ -44,6 +44,11 @@ handleForm("forgot-form", "/api/auth/forgot", { extra: { lang: LANG }, done: mes
     message.textContent = t("forgot_sent");
 } });
 handleForm("reset-form", "/api/auth/reset", { extra: { token: RESET_TOKEN }, done: () => location.assign("/account") });
+handleForm("password-form", "/api/auth/password", { done: message => {
+    document.getElementById("password-form").reset();
+    message.className = "alert alert-success py-2";
+    message.textContent = t("password_changed");
+} });
 
 async function load() {
     const user = await fetch("/api/auth/me").then(r => r.json()).catch(() => null);

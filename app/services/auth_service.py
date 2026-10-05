@@ -108,6 +108,25 @@ def authenticate(login, password, ip="?", lang=None):
     return get_user(user_id)
 
 
+def change_password(user_id, current, new, ip="?"):
+    """
+    A logged-in user's new password, given the current one. A wrong current password counts like a
+    wrong login (the same lock-out), so a borrowed session can't be used to guess it.
+    """
+    _check_password(new)
+    with session() as s:
+        user = s.get(User, user_id)
+        key = (ip, (user.username or user.email).lower())
+        if _locked(key):
+            raise AccountError("login_locked")
+        current = current or ""
+        if not (user.password_hash and len(current) <= MAX_PASSWORD and check_password_hash(user.password_hash, current)):
+            _note_failure(key)
+            raise AccountError("password_wrong")
+        user.password_hash = generate_password_hash(new)
+    return get_user(user_id)
+
+
 # --- forgotten password: a link by e-mail ---------------------------------------------------
 RESET_SECONDS = 60 * 60
 RESET_MAIL = {

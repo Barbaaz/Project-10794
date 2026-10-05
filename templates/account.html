@@ -117,6 +117,24 @@
             <h1 class="h4 mb-3" data-i18n="my_account"></h1>
             <dl id="account-facts" class="row mb-3"></dl>
             <button type="button" id="logout" class="btn btn-secondary" data-i18n="log_out"></button>
+
+            <!-- A new password: this session stays, the others (other devices) are logged out -->
+            <form id="password-form" class="border-top mt-4 pt-3" style="max-width: 420px;" novalidate>
+                <h2 class="h6" data-i18n="change_password"></h2>
+                <div class="mb-3">
+                    <label class="form-label" for="current-password" data-i18n="current_password"></label>
+                    <input id="current-password" name="current" type="password" class="form-control"
+                           autocomplete="current-password" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="new-password" data-i18n="new_password"></label>
+                    <input id="new-password" name="password" type="password" class="form-control" autocomplete="new-password"
+                           required minlength="8" maxlength="200" aria-describedby="new-password-help">
+                    <div id="new-password-help" class="form-text" data-i18n="password_help"></div>
+                </div>
+                <div class="alert alert-danger d-none py-2" role="alert"></div>
+                <button type="submit" class="btn btn-primary" data-i18n="reset_save"></button>
+            </form>
         </div>
     </section>
 

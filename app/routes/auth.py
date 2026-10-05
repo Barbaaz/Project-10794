@@ -112,6 +112,20 @@ def reset():
     return jsonify(user)
 
 
+@bp.post("/password")
+@login_required
+def change_password():
+    """{current, password}: a new password; this session stays, every other one is logged out."""
+    data = request.get_json(silent=True) or {}
+    try:
+        user = auth_service.change_password(current_user()["id"], data.get("current"), data.get("password"),
+                                            request.remote_addr or "?")
+    except AccountError as e:
+        return account_error(e)
+    log_in(user)                 # this session gets the new password's mark
+    return jsonify(user)
+
+
 @bp.post("/logout")
 def logout():
     session.clear()

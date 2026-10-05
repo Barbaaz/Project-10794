@@ -155,6 +155,34 @@ def test_a_new_password_logs_out_every_other_session(client, mails):
     assert other.get("/api/collection").status_code == 401
 
 
+def test_changing_the_password_while_logged_in(client):
+    from app.web import app
+    assert post(client, "password", current="segredo123", password="nova-senha-1").status_code == 401
+    register(client)
+    other = app.test_client()
+    post(other, "login", login="ana_92", password="segredo123")
+
+    assert post(client, "password", current="segredo123", password="curta").get_json()["error"] == "password_short"
+    response = post(client, "password", current="errada-123", password="nova-senha-1")
+    assert (response.status_code, response.get_json()["error"]) == (400, "password_wrong")
+    assert post(client, "password", current="segredo123", password="nova-senha-1").get_json()["username"] == "ana_92"
+
+    assert client.get("/api/auth/me").get_json()["username"] == "ana_92"   # this session stays
+    assert other.get("/api/auth/me").get_json() is None                    # the others are logged out
+    post(client, "logout")
+    assert post(client, "login", login="ana_92", password="segredo123").get_json()["error"] == "login_failed"
+    assert post(client, "login", login="ana_92", password="nova-senha-1").status_code == 200
+
+
+def test_the_current_password_cant_be_guessed_there(client):
+    """Wrong current passwords count like wrong logins: locked after MAX_FAILURES."""
+    register(client)
+    for _ in range(auth_service.MAX_FAILURES):
+        post(client, "password", current="errada-123", password="nova-senha-1")
+    response = post(client, "password", current="segredo123", password="nova-senha-1")
+    assert (response.status_code, response.get_json()["error"]) == (429, "login_locked")
+
+
 def test_reset_link_expires_and_requests_are_limited(client, mails, monkeypatch):
     register(client)
     post(client, "forgot", email="ana@example.pt")
