@@ -7,6 +7,7 @@ come later and create accounts without a password (password_hash None).
 """
 import hashlib
 import hmac
+import logging
 import re
 import threading
 import time
@@ -19,6 +20,8 @@ from app.models import NOW, User, fields
 from app.services import mail_service
 from db import session
 
+log = logging.getLogger(__name__)
+
 USERNAME = re.compile(r"^[A-Za-z0-9_.-]{3,30}$")
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD = 8
@@ -30,6 +33,8 @@ LANGS = ("pt", "en")      # the page's languages; the user's is kept for e-mails
 # that pair is locked for LOCK_SECONDS: slows down password guessing
 MAX_FAILURES = 5
 LOCK_SECONDS = 15 * 60
+MAX_SIGNUPS = 10         # sign-up tries from one address per SIGNUP_SECONDS (accounts made in bulk)
+SIGNUP_SECONDS = 60 * 60
 MAX_TRACKED = 10_000      # (ip, login) pairs remembered at most: stale ones go first, then the oldest
 _failures = {}   # (ip, login) → [times of recent failures]
 _failures_lock = threading.Lock()   # the server answers several requests at once
@@ -47,7 +52,13 @@ class AccountError(Exception):
         self.code = code
 
 
-def register(username, email, password, display_name=None, lang=None):
+def register(username, email, password, display_name=None, lang=None, ip=None):
+    """A new account. ip: the visitor's address, for the sign-up limit (None from the command line: no limit)."""
+    if ip is not None:
+        key = (ip, "sign up")
+        if _locked(key, MAX_SIGNUPS, SIGNUP_SECONDS):
+            raise AccountError("register_locked")
+        _note_failure(key)                 # every try counts (also those refused below)
     username, email = (username or "").strip(), (email or "").strip().lower()
     display_name = (display_name or "").strip() or username
     if not USERNAME.match(username):
@@ -137,7 +148,19 @@ def request_password_reset(email, lang="pt", ip="?"):
         token = _reset_tokens().dumps({"id": user.id, "mark": _password_mark(user)})
         username = user.username
     subject, text = RESET_MAIL.get(lang, RESET_MAIL["pt"])
-    mail_service.send(email, subject, text.format(username=username, link=f"{config.SITE_URL}/account?reset={token}"))
+    # in the background: sending takes seconds, and only for real accounts, so waiting for it would tell
+    in_background(mail_service.send, email, subject,
+                  text.format(username=username, link=f"{config.SITE_URL}/account?reset={token}"))
+
+
+def in_background(work, *args):
+    """Run work(*args) in its own thread; a failure is logged (the person sees the same answer either way)."""
+    def run():
+        try:
+            work(*args)
+        except Exception:
+            log.exception("Background work failed: %s", getattr(work, "__name__", work))
+    threading.Thread(target=run, daemon=True).start()
 
 
 def reset_password(token, password):
@@ -197,17 +220,17 @@ def _check_password(password):
         raise AccountError("password_long")
 
 
-def _locked(key):
-    """Whether this (ip, login) has MAX_FAILURES recent failures; forgets the old ones (and keeps no
-    record for a key without any, or every login tried would stay in memory)."""
+def _locked(key, limit=MAX_FAILURES, seconds=LOCK_SECONDS):
+    """Whether this (ip, login) has `limit` failures in the last `seconds`; forgets older ones (and keeps
+    no record for a key without any, or every login tried would stay in memory)."""
     now = time.monotonic()
     with _failures_lock:
-        recent = [t for t in _failures.get(key, []) if now - t < LOCK_SECONDS]
+        recent = [t for t in _failures.get(key, []) if now - t < seconds]
         if recent:
             _failures[key] = recent
         else:
             _failures.pop(key, None)
-    return len(recent) >= MAX_FAILURES
+    return len(recent) >= limit
 
 
 def _note_failure(key):

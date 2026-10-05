@@ -155,6 +155,7 @@ const STRINGS = {
         reset_ask_again: "Pedir outra ligação",
         error_reset_invalid: "Esta ligação já não é válida (expirou ou já foi usada). Peça outra.",
         error_reset_locked: "Demasiados pedidos. Tente de novo daqui a 15 minutos.",
+        error_register_locked: "Demasiadas contas criadas a partir desta ligação. Tente de novo daqui a uma hora.",
         error_missing_request_header: "Pedido recusado. Recarregue a página e tente de novo.",
         error_unknown: "Algo correu mal. Tente de novo.",
 
@@ -787,6 +788,7 @@ const STRINGS = {
         reset_ask_again: "Ask for another link",
         error_reset_invalid: "This link no longer works (it expired or was already used). Ask for another one.",
         error_reset_locked: "Too many requests. Try again in 15 minutes.",
+        error_register_locked: "Too many accounts created from this connection. Try again in an hour.",
         error_missing_request_header: "Request refused. Reload the page and try again.",
         error_unknown: "Something went wrong. Try again.",
 

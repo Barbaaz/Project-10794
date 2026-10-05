@@ -46,6 +46,14 @@ def test_sign_up_rules(client, fields, error):
     assert (response.status_code, response.get_json()["error"]) == (400, error)
 
 
+def test_sign_ups_from_one_address_are_limited(client):
+    """Accounts made in bulk (spam, other people's e-mail addresses): at most MAX_SIGNUPS tries per hour."""
+    for i in range(auth_service.MAX_SIGNUPS):
+        assert register(client, username=f"user_{i}", email=f"user_{i}@example.pt").status_code == 201
+    response = register(client, username="one_more", email="one_more@example.pt")
+    assert (response.status_code, response.get_json()["error"]) == (429, "register_locked")
+
+
 def test_username_and_email_are_unique(client, test_db):
     register(client)
     assert register(client, email="other@example.pt").get_json()["error"] == "username_taken"
@@ -83,10 +91,25 @@ def test_wrong_password_and_lock_out(client):
 
 @pytest.fixture
 def mails(monkeypatch):
-    """E-mails the app sends, as (to, subject, text), instead of sending them."""
+    """E-mails the app sends, as (to, subject, text), instead of sending them (at once, not in the background)."""
     sent = []
     monkeypatch.setattr(auth_service.mail_service, "send", lambda *mail: sent.append(mail) or False)
+    monkeypatch.setattr(auth_service, "in_background", lambda work, *args: work(*args))
     return sent
+
+
+def test_asking_for_a_reset_doesnt_wait_for_the_mail(client, monkeypatch):
+    """Sending takes seconds and only happens for real accounts: done in the background, the answer
+    takes as long either way (it doesn't tell whether the address has an account)."""
+    import threading
+    import time
+    register(client)
+    sent = threading.Event()
+    monkeypatch.setattr(auth_service.mail_service, "send", lambda *mail: time.sleep(2) or sent.set())
+    started = time.monotonic()
+    assert post(client, "forgot", email="ana@example.pt").get_json() == {"ok": True}
+    assert time.monotonic() - started < 1.5
+    assert sent.wait(5)                                                    # and it does go out
 
 
 def reset_token(mail):

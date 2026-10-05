@@ -70,7 +70,7 @@ def register():
     data = request.get_json(silent=True) or {}
     try:
         user = auth_service.register(data.get("username"), data.get("email"), data.get("password"),
-                                     data.get("display_name"), data.get("lang"))
+                                     data.get("display_name"), data.get("lang"), ip=request.remote_addr or "?")
     except AccountError as e:
         return account_error(e)
     log_in(user)
