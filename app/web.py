@@ -58,6 +58,27 @@ def only_our_pages_change_things():
         abort(403, description="missing_request_header")
 
 
+# Safe with the pages' inline scripts: no framing by other sites (clickjacking), no <base> or plugins.
+# A full script policy would need the inline scripts moved into files first.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+    # other sites get only our origin, never a full address (a password-reset link carries its token)
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
+
+
+@app.after_request
+def security_headers(response):
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    if COOKIE_SECURE:          # served over HTTPS (production): browsers keep to HTTPS for a year
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return response
+
+
 @app.errorhandler(HTTPException)
 def json_error(e):
     if request.path.startswith("/api/"):
