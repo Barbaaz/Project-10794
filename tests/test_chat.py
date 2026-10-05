@@ -84,6 +84,47 @@ def test_cancelling_an_accepted_purchase_puts_the_listing_back(deal):
     assert step(client, conversation_id, "request").get_json()["deal_status"] == "requested"
 
 
+def change_listing(client, m, **changes):
+    return client.patch(f"/api/listings/{m['listing']['id']}", json=changes, headers=HEADERS)
+
+
+def test_a_listing_in_a_deal_cant_be_changed_by_its_seller(deal):
+    """Once a purchase is accepted, the seller can't put the copy back on sale for someone else, nor change
+    what the buyer agreed to (price, condition, photos): cancelling the purchase comes first."""
+    client = deal["client"]
+    conversation_id = start(client, deal["listing"]["id"], buy=True).get_json()["id"]
+    log_in(client, "seller")
+    assert change_listing(client, deal, price="25.00").status_code == 200      # only requested: still free
+    step(client, conversation_id, "accept")
+
+    for changes in ({"status": "active"}, {"status": "removed"}, {"price": "99.00"}, {"condition": "poor"}):
+        response = change_listing(client, deal, **changes)
+        assert (response.status_code, response.get_json()["error"]) == (409, "listing_in_deal"), changes
+    photo = deal["listing"]["photos"][0]["id"]
+    deleted = client.delete(f"/api/listings/{deal['listing']['id']}/photos/{photo}", headers=HEADERS)
+    assert deleted.get_json()["error"] == "listing_in_deal"
+    assert listing_status(deal) == "reserved"
+    step(client, conversation_id, "sent")
+    assert change_listing(client, deal, status="active").get_json()["error"] == "listing_in_deal"
+
+    log_in(client, "buyer")
+    step(client, conversation_id, "received")
+    log_in(client, "seller")
+    assert change_listing(client, deal, status="active").status_code == 200    # done: the seller's to manage
+
+
+def test_a_restored_listing_stays_reserved_for_its_buyer(deal):
+    client = deal["client"]
+    conversation_id = start(client, deal["listing"]["id"], buy=True).get_json()["id"]
+    log_in(client, "seller")
+    step(client, conversation_id, "accept")
+    sign_up(client, "mod")
+    deal["db"].execute("UPDATE users SET role = 'moderator' WHERE username = 'mod'")
+    for action in ("hide_listing", "restore_listing"):
+        client.post("/api/mod/actions", json={"action": action, "target_id": deal["listing"]["id"]}, headers=HEADERS)
+    assert listing_status(deal) == "reserved"
+
+
 def test_two_buyers_one_copy(deal):
     client = deal["client"]
     first = start(client, deal["listing"]["id"], buy=True).get_json()["id"]

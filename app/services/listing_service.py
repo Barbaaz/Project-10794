@@ -307,9 +307,23 @@ def _process(data):
 
 
 def _own_listing(s, user_id, listing_id):
+    """The seller's listing, to change; not while a purchase of it is under way (the buyer agreed to
+    this price, condition and photos, and the copy is promised to them: cancelling comes first)."""
     listing = s.get(Listing, listing_id)
     if listing is None or (listing.user_id != user_id and listing.status not in VISIBLE):
         raise ListingError("not_found", 404)
     if listing.user_id != user_id:
         raise ListingError("not_yours", 403)
+    if in_deal(s, listing.id):
+        raise ListingError("listing_in_deal", 409)
     return listing
+
+
+# A purchase under way: accepted by the seller, not yet completed or cancelled (chat_service.STEPS)
+DEAL_UNDER_WAY = ("accepted", "sent", "problem")
+
+
+def in_deal(s, listing_id):
+    """Whether a purchase of this listing is under way (the listing is then reserved for that buyer)."""
+    return s.scalar(select(Conversation.id).where(Conversation.listing_id == listing_id,
+                                                  Conversation.deal_status.in_(DEAL_UNDER_WAY)).limit(1)) is not None

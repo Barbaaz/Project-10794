@@ -15,6 +15,7 @@ from app.models import (
     NOW, REPORT_KINDS, REPORT_REASONS, Conversation, GameReview, Listing, ModerationLog, Rating, Report, User,
     fields,
 )
+from app.services.listing_service import in_deal
 from db import session
 
 MAX_REPORTS_PER_DAY = 20
@@ -152,7 +153,9 @@ def _apply(s, moderator, action, target_id):
             raise ModerationError("not_found", 404)
         hide = action == "hide_listing"
         listing.removed_by_moderator = hide
-        listing.status = "removed" if hide else "sold" if listing.sold_at else "active"
+        # restored: sold, still promised to a buyer whose purchase is under way, or on sale again
+        listing.status = ("removed" if hide else "sold" if listing.sold_at
+                          else "reserved" if in_deal(s, listing.id) else "active")
         listing.updated_at = NOW
     elif action in ("hide_rating", "restore_rating"):
         rating = s.get(Rating, target_id)
