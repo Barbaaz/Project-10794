@@ -12,6 +12,11 @@ DB_CONNECTION_STRING = os.environ.get(
 
 INSTANCE_DIR = Path(__file__).resolve().parent.parent / "instance"   # local, never committed
 
+# The cookie only holds the user id: whoever knows the key can sign one for any user (an admin too).
+# So never .env.example's placeholder, and long enough not to be guessed (DEPLOY.md makes 64 characters)
+MIN_SECRET_KEY = 32
+SECRET_KEY_PLACEHOLDERS = {"change-me-to-a-long-random-text"}
+
 
 def _secret_key():
     """
@@ -19,7 +24,11 @@ def _secret_key():
     development machine, made once and kept in instance/secret_key so logins survive restarts.
     """
     if os.environ.get("SECRET_KEY"):
-        return os.environ["SECRET_KEY"]
+        key = os.environ["SECRET_KEY"]
+        if key in SECRET_KEY_PLACEHOLDERS or len(key) < MIN_SECRET_KEY:
+            raise SystemExit(f"SECRET_KEY must be a long random text, at least {MIN_SECRET_KEY} characters "
+                             '(not the example\'s): python -c "import secrets; print(secrets.token_hex(32))"')
+        return key
     path = INSTANCE_DIR / "secret_key"
     if not path.exists():
         INSTANCE_DIR.mkdir(exist_ok=True)
