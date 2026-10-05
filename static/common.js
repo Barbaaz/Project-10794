@@ -24,10 +24,11 @@ function save(key, value, storage = "localStorage") {
     try { window[storage].setItem(key, typeof value === "string" ? value : JSON.stringify(value)); } catch (e) {}
 }
 
+// Text for HTML, in content and in attributes (title="…", value="…"): quotes too, or a display
+// name like x" onmouseover="… would add its own attribute (tests/test_escaping.py)
+const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 function esc(text) {
-    const div = document.createElement("div");
-    div.textContent = text ?? "";
-    return div.innerHTML;
+    return String(text ?? "").replace(/[&<>"']/g, c => ESCAPES[c]);
 }
 
 // `stores` ({slug: store}) is filled by each page from /api/stores
