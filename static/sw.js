@@ -10,7 +10,7 @@
  *   something, other sites' images): straight to the network, never saved here
  * Change VERSION when this file changes what it saves: the old saved copies are dropped.
  */
-const VERSION = "v1";
+const VERSION = "v2";      // v2: CDN files with integrity hashes (v1 may hold opaque copies they can't use)
 const CACHE = `site-${VERSION}`;
 const SLOW_MS = 6000;      // past this, a saved copy is shown while the network keeps trying
 const CDN = "https://cdn.jsdelivr.net";       // Bootstrap, Chart.js: fixed versions in their URLs
@@ -98,7 +98,8 @@ async function cacheFirst(request) {
     const saved = await caches.match(request);
     if (saved) return saved;
     const response = await fetch(request);
-    if (response.ok || response.type === "opaque") {
+    // only real (CORS) answers: the pages check CDN files against their hash, which an opaque copy can't pass
+    if (response.ok) {
         const copy = response.clone();
         caches.open(CACHE).then(cache => cache.put(request, copy));
     }
