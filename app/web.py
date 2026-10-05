@@ -5,6 +5,7 @@ scheduler fills (python -m scheduler.run_all_scrapers). Nothing here scrapes the
     python app.py                     # development server, http://127.0.0.1:5000
     waitress-serve app.web:app        # production server (Docker uses this)
 """
+import re
 from datetime import timedelta
 from pathlib import Path
 
@@ -103,11 +104,16 @@ def admin_page():
     return render_template("admin.html")
 
 
+# The only public uploads: listing photos, as LocalPhotoStorage names them (listings/<id>/<uuid hex>.jpg)
+PUBLIC_MEDIA = re.compile(r"listings/\d+/[0-9a-f]{32}\.jpg")
+
+
 @app.route("/media/<path:key>")
 def media(key):
-    """Uploaded photos kept on this computer (app/services/photo_storage.py); no paths outside it.
-    Not the photos sent in conversations: those only through /api/conversations/<id>/photos/."""
-    if key.startswith("chats/"):
+    """Listing photos kept on this computer (app/services/photo_storage.py). Only keys of exactly that
+    shape: the photos sent in conversations (chats/…) go only through /api/conversations/<id>/photos/,
+    and "./chats/…", "listings/../chats/…" or "Chats/…" (Windows ignores case) must not reach them."""
+    if not PUBLIC_MEDIA.fullmatch(key):
         abort(404)
     return send_from_directory(storage.root, key, max_age=7 * 24 * 3600)
 

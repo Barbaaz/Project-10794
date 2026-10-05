@@ -199,6 +199,9 @@ def test_photos_in_a_conversation(deal):
     # not through /media (anyone with the address), not for others, not from another conversation's address
     key = deal["db"].execute("SELECT photo_key FROM message_photos ORDER BY id LIMIT 1").fetchone()[0]
     assert key.startswith(f"chats/{conversation_id}/") and client.get(f"/media/{key}").status_code == 404
+    # nor through a path that only looks different (these got through a "starts with chats/" check)
+    for disguised in (f"./{key}", f"listings/../{key}", key.replace("chats/", "Chats/"), key.replace("chats/", "CHATS/")):
+        assert client.get(f"/media/{disguised}").status_code == 404, disguised
     sign_up(client, "stranger")
     assert client.get(sent["photos"][0]["url"]).status_code == 404
     deal["db"].execute("UPDATE users SET role = 'moderator' WHERE username = 'stranger'")
