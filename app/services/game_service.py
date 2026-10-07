@@ -84,7 +84,7 @@ def get_game(game_id):
     game = fetch_one(
         """
         SELECT g.id, g.title, NULLIF(g.title_en, '') AS title_en, p.code AS platform, p.name AS platform_name,
-               g.image_url AS image, g.igdb_id, g.summary, g.genres, g.publishers, g.developers, g.first_release_date,
+               g.kind, g.image_url AS image, g.igdb_id, g.summary, g.genres, g.publishers, g.developers, g.first_release_date,
                g.rating, g.pegi, g.cover_image_id, g.screenshot_ids, g.video_ids AS videos,
                g.ttb_hastily, g.ttb_normally, g.ttb_completely, g.ttb_count
         FROM games g JOIN platforms p ON p.id = g.platform_id
@@ -272,8 +272,12 @@ CARD_SORTS = {
 }
 
 
+# What catalog(kind=…) lists: games, or the hardware tab's consoles / controllers / headsets (core/hardware.py)
+HARDWARE_KINDS = ("console", "controller", "headset")
+
+
 def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False, q=None, store=None, genre=None,
-            tags=None, pegi=None):
+            tags=None, pegi=None, kind="game"):
     """
     The whole catalogue: every edition with at least one offer in stock at a store or a used
     copy for sale by a user, as card groups (same shape as /search), one page at a time; each
@@ -289,8 +293,10 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
     shown, to compare).
     genre: only games in this category (app/services/genre_service.py); an unknown one is ignored.
     tags: only games with all these tags; pegi: PEGI rating up to this age (app/services/tag_service.py).
+    kind: "game" (default), "hardware" (consoles, controllers and headsets) or one of HARDWARE_KINDS.
     """
     order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS["name"])
+    kinds = HARDWARE_KINDS if kind == "hardware" else (kind,) if kind in HARDWARE_KINDS else ("game",)
     in_stock_editions = f"""
         WITH offers AS (
             SELECT sp.id AS store_product_id, sp.edition_id, sp.store_id, sp.condition, last.price
@@ -307,7 +313,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             GROUP BY edition_id
         )
     """
-    filters, params = ["(? IS NULL OR p.code = ?)"], [platform, platform]
+    filters, params = ["(? IS NULL OR p.code = ?)", f"g.kind IN ({placeholders(kinds)})"], [platform, platform, *kinds]
     if special_only:
         filters.append("e.edition_key <> '' AND e.edition_key NOT LIKE '|%'")
     words, word_params = title_word_filters(q)

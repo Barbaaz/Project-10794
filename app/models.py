@@ -59,6 +59,7 @@ class Game(Base):
     platform_id: Mapped[int] = mapped_column(ForeignKey("platforms.id"))
     title: Mapped[str] = mapped_column(Unicode(300))
     normalized_title: Mapped[str] = mapped_column(Unicode(300))     # the game key (core/editions.py)
+    kind: Mapped[str] = mapped_column(String(12), server_default="game")   # game / console / controller / headset
     title_en: Mapped[str | None] = mapped_column(Unicode(300))      # English name (IGDB / moderators)
     title_fixed: Mapped[bool] = mapped_column(Boolean, default=False)  # title corrected by a moderator: kept
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))
@@ -111,6 +112,7 @@ class StoreProduct(Base):
     url: Mapped[str] = mapped_column(Unicode(800))
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))
     condition: Mapped[str] = mapped_column(String(10), server_default="new")
+    kind: Mapped[str] = mapped_column(String(12), server_default="game")   # as the scraper found it (Game.kind)
     first_seen_at = mapped_column(DateTime, server_default=NOW, nullable=False)
     last_seen_at = mapped_column(DateTime, server_default=NOW, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=true())

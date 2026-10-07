@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.models import Game, GameEdition, StoreProduct
 from core.close_match import KeyIndex, expand
 from core.editions import EDITION_WORDS, parse_title, learn_phrase, edition_key_of, cut_display
+from core.hardware import display_name, hardware_key
 
 MIN_TYPO_LENGTH = 5     # words this long may differ by a typo ("delixe" / "deluxe")
 TYPO_SIMILARITY = 0.8
@@ -41,9 +42,10 @@ class GameMatcher:
         self.known_phrases = set()
         self.learn(session.scalars(select(StoreProduct.external_name).where(StoreProduct.external_name.like("% - %"))))
 
-        # Known game keys per platform, for the fuller-name and mended-title rules
+        # Known game keys per platform, for the fuller-name and mended-title rules (games only:
+        # hardware matches strictly, see match_hardware)
         self.keys = {}
-        for key, platform_id in session.execute(select(Game.normalized_title, Game.platform_id)):
+        for key, platform_id in session.execute(select(Game.normalized_title, Game.platform_id).where(Game.kind == "game")):
             self.keys.setdefault(platform_id, KeyIndex()).add(key)
 
     def learn(self, names):
@@ -62,6 +64,8 @@ class GameMatcher:
         shortened or cut wrongly: it isn't a good display title for the game it went to.
         With create=False only known games / editions, and no names (the store's aren't good ones).
         """
+        if product.get("kind", "game") != "game":
+            return self.match_hardware(product, create)
         platform_id = self.platform_ids.get(product["console"])
         parsed = parse_title(product["external_name"], self.known_phrases)
 
@@ -93,6 +97,38 @@ class GameMatcher:
             self.editions[(game_id, edition_key)] = edition_id
 
         return game_id, edition_id, own_title, edition_name
+
+    def match_hardware(self, product, create=True):
+        """
+        A console, controller or headset (core/hardware.py): the same product only when its cleaned
+        name is the same (strict, user's choice; moderators merge the rest), one "Standard" edition.
+        """
+        platform_id = self.platform_ids.get(product["console"])
+        kind = product["kind"]
+        key = hardware_key(product["external_name"], kind)
+        if not platform_id or key == f"{kind}:":
+            return None, None, None, None
+        title = display_name(product["external_name"]) if create else None
+
+        game_id = self.games.get((key, platform_id))
+        if game_id is None:
+            game = self.session.scalars(select(Game).where(Game.normalized_title == key, Game.platform_id == platform_id)).first()
+            if game is None and not create:
+                return None, None, None, None
+            if game is None:
+                game = Game(platform_id=platform_id, title=title[:300], normalized_title=key, kind=kind,
+                            image_url=product.get("image"))
+                self.session.add(game)
+                self.session.flush()
+            game_id = self.games[(key, platform_id)] = game.id
+
+        edition_id = self.editions.get((game_id, ""))
+        if edition_id is None:
+            edition_id = self.get_or_create_edition(game_id, "", "Standard", create)
+            if edition_id is None:
+                return None, None, None, None
+            self.editions[(game_id, "")] = edition_id
+        return game_id, edition_id, title, None
 
     def mend_split(self, parsed, index):
         """

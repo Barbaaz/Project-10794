@@ -100,6 +100,7 @@ def update_product(sp, p, game_id, edition_id, platform_id):
     """Set a store product from what the scraper read now (`p`)."""
     sp.game_id, sp.edition_id, sp.platform_id = game_id, edition_id, platform_id
     sp.external_name = p["external_name"][:300]
+    sp.kind = p.get("kind", "game")
     sp.image_url = (p.get("image") or "")[:1000] or None
     sp.is_preorder = bool(p.get("is_preorder", False))
     # keep the known date when this run didn't read one (e.g. the game came out and the store hid it)

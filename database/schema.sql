@@ -75,6 +75,10 @@ CREATE TABLE IF NOT EXISTS games (
 );
 -- Columns added after a database was made (CREATE TABLE IF NOT EXISTS leaves it as it was)
 ALTER TABLE games ADD COLUMN IF NOT EXISTS title_fixed boolean NOT NULL DEFAULT false;
+-- What it is (core/hardware.py, 2026-10-07): 'game', or a console / controller / headset, which share
+-- the game → edition → offers grouping (prices, history, wishlist, used listings) but none of the game
+-- information (IGDB, genres, tags, release calendar). Their normalized_title starts with the kind
+ALTER TABLE games ADD COLUMN IF NOT EXISTS kind varchar(12) NOT NULL DEFAULT 'game';
 
 -- Editions of a game: Standard, Deluxe, Day One, Collector's, Game Key Card...
 CREATE TABLE IF NOT EXISTS game_editions (
@@ -126,6 +130,8 @@ CREATE TABLE IF NOT EXISTS store_products (
     CONSTRAINT uq_store_products_url UNIQUE (store_id, url, condition),
     CONSTRAINT ck_store_products_condition CHECK (condition IN ('new', 'used'))
 );
+-- What the scraper found it to be (games.kind): the rematch links it again the same way
+ALTER TABLE store_products ADD COLUMN IF NOT EXISTS kind varchar(12) NOT NULL DEFAULT 'game';
 
 -- Price history: a new row only when price, old price or stock changes.
 -- store_products.last_seen_at says when the latest price was last confirmed.

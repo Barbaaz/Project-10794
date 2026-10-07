@@ -33,7 +33,7 @@ LATEST_PRICE = """
 # What card_group() needs, from game_editions e JOIN games g JOIN platforms p
 EDITION_CARD_COLUMNS = """
     e.id AS edition_id, e.name AS edition, e.edition_key, g.id AS game_id, g.title, g.title_en, g.cover_image_id,
-    p.code AS console, p.name AS platform_name
+    p.code AS console, p.name AS platform_name, g.kind
 """
 
 # The game's IGDB cover, double size (528 × 748) so cards stay sharp on phone screens
@@ -133,6 +133,7 @@ def card_group(row, offers, **extra):
         "cover": card_cover(row),
         "console": row["console"],
         "platform_name": row["platform_name"],
+        "kind": row.get("kind", "game"),        # game / console / controller / headset (core/hardware.py)
         **extra,
         "offers": offers,
     }

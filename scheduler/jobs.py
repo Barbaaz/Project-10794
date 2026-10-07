@@ -1,5 +1,6 @@
 import logging
 import sys
+from collections import Counter
 from contextlib import contextmanager
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -32,6 +33,11 @@ MIN_HOURS_BETWEEN_RUNS = 8
 # stock; no product pages), so prices are at most ~12 h old. CSTech stays once a day: it has
 # answered "too many requests" before; Rádio Popular too (match-only, few of its products link).
 LIGHT_STORES = ("press_start", "mega-mania", "gaming_replay")
+
+# Stores whose consoles, controllers and headsets are read too (core/hardware.py; user, 2026-10-07):
+# a store is added once a check run's kept / left-out names were read (these three: 2026-10-07).
+# Not yet: CSTech (its feed has them, product_type not "Jogos …"), Techinn, Rádio Popular (match-only)
+HARDWARE_STORES = {"press_start", "mega-mania", "gaming_replay"}
 
 # To add a store: write its scraper, register it here and add it to database/seed_stores.sql
 SCRAPERS = {
@@ -119,8 +125,12 @@ def scrape_store(slug, accept_drop, force, light):
                                  last_seen=last_seen(slug))
         if light:
             scraper.max_product_pages = 0
+        scraper.read_hardware = slug in HARDWARE_STORES
         products = scraper.scrape_catalog()
         log.info("[%s] %d requests", slug, scraper.http.request_count)
+        if scraper.read_hardware:
+            kinds = Counter(p.get("kind", "game") for p in products)
+            log.info("[%s] hardware: %s; %d left out", slug, dict(kinds), len(scraper.hardware_left_out))
         if not products:
             raise RuntimeError("Scraper returned 0 products, the site's HTML may have changed")
 

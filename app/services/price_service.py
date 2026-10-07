@@ -67,7 +67,7 @@ def _featured_discounts(limit, min_percent, platform):
         JOIN games g ON g.id = o.game_id
         JOIN platforms p ON p.id = g.platform_id
         JOIN game_editions e ON e.id = o.edition_id
-        WHERE o.rn = 1 AND (? IS NULL OR p.code = ?)
+        WHERE o.rn = 1 AND (? IS NULL OR p.code = ?) AND g.kind = 'game'
         ORDER BY o.discount_percent DESC, o.price, o.store_product_id
         LIMIT {int(limit)}
         """,
@@ -120,7 +120,7 @@ def _best_store_deals(limit, min_percent, max_percent, platform):
             JOIN store_products sp ON sp.id = gap.offer_id
             JOIN games g ON g.id = sp.game_id
             JOIN platforms p ON p.id = g.platform_id
-            WHERE gap.savings_percent BETWEEN ? AND ? AND (? IS NULL OR p.code = ?)
+            WHERE gap.savings_percent BETWEEN ? AND ? AND (? IS NULL OR p.code = ?) AND g.kind = 'game'
         )
         SELECT g.title, g.title_en, g.cover_image_id, p.code AS platform, p.name AS platform_name, e.name AS edition, e.edition_key,
                sp.id AS offer_id, sp.game_id, sp.edition_id, s.slug AS store, s.name AS store_name,
@@ -144,7 +144,7 @@ def _best_store_deals(limit, min_percent, max_percent, platform):
 
 def list_discounts(platform=None, min_percent=0, page=1, per_page=20):
     """Offers that are really on sale (see current_offers in database/views.sql), biggest first."""
-    where = ["o.is_discount", "o.is_active", "o.in_stock", "o.discount_percent >= ?"]
+    where = ["o.is_discount", "o.is_active", "o.in_stock", "o.discount_percent >= ?", "g.kind = 'game'"]
     params = [min_percent]
 
     if platform:

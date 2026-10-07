@@ -172,7 +172,17 @@ const MAX_TAGS = 5;      // as many as /api/games/catalog takes
 let filtersOpen = false;
 
 function extraFilters() {
+    // the hardware tab has no game filters (category, tags, PEGI), but a type (/?tab=hardware&type=console)
+    if (onHardwareTab()) return [["store", catalogStore], ["type", hardwareType]];
     return [["store", catalogStore], ["genre", catalogGenre], ["tags", catalogTag], ["pegi", catalogPegi]];
+}
+
+// Consoles, controllers and headsets (user, 2026-10-07): their own tab, with a type filter
+let hardwareType = new URLSearchParams(location.search).get("type") || "";
+const HARDWARE_TYPES = ["console", "controller", "headset"];
+
+function onHardwareTab() {
+    return frontTab === "hardware" && !document.getElementById("q").value.trim();     // a search lists games
 }
 
 // /?tab=catalog&page=3 opens on that page (bookmarks, the game page's back button)
@@ -180,14 +190,14 @@ function extraFilters() {
 const startParams = new URLSearchParams(location.search);
 let pageFromUrl = startParams.get("q") ? 1 : Number(startParams.get("page")) || 1;
 
-function catalogTab(special, empty) {
+function catalogTab(special, empty, hardware = false) {
     return {
         platformAware: true,
         paged: true,
         load: platform => {
             const page = pageFromUrl;
             pageFromUrl = 1;    // only for the first load
-            return loadCatalogPage(special, platform, page);
+            return loadCatalogPage(special, platform, page, hardware);
         },
         render: renderCatalog,
         empty,
@@ -196,7 +206,7 @@ function catalogTab(special, empty) {
 
 async function showCatalogPage(page) {
     const data = frontData[frontTab];
-    frontData[frontTab] = await loadCatalogPage(data.special, data.platform, page);
+    frontData[frontTab] = await loadCatalogPage(data.special, data.platform, page, data.hardware);
     setPageUrl(listUrl({ tab: frontTab }, page));
     renderFront();
     document.getElementById("front").scrollIntoView({ block: "start" });
@@ -254,12 +264,16 @@ function catalogParams(page, platform, extra = {}) {
     return params;
 }
 
-async function loadCatalogPage(special, platform, page) {
+async function loadCatalogPage(special, platform, page, hardware = false) {
     const params = catalogParams(page, platform, special ? { editions: "special" } : {});
+    if (hardware) {          // the type filter is the API's kind
+        params.delete("type");
+        params.set("kind", HARDWARE_TYPES.includes(hardwareType) ? hardwareType : "hardware");
+    }
     const data = await fetch(`/api/games/catalog?${params}`).then(r => r.json());
     // pages is computed here too, in case the server is older than this page
     const pages = data.pages || Math.max(1, Math.ceil(data.total / (data.per_page || CATALOG_PAGE)));
-    return { ...data, pages, special, platform };
+    return { ...data, pages, special, platform, hardware };
 }
 
 // The catalogue tabs and the search results: count, store filter, sort, cards, page buttons.
@@ -329,22 +343,17 @@ function renderCatalog(data, showPage = showCatalogPage) {
             <button type="button" class="btn-close btn-close-white" style="font-size: .55rem;" data-remove-tag="${esc(tag)}"
                     aria-label="${esc(t("remove_tag", { tag: t(`tag_${tag}`) }))}"></button></span>`).join("");
     const pegiOptions = PEGI_AGES.map(age => `<option value="${age}">${esc(t("pegi_up_to", { age }))}</option>`).join("");
+    const typeOptions = HARDWARE_TYPES.map(type => `<option value="${type}">${esc(t(`kind_${type}`))}</option>`).join("");
+    const hardware = data.hardware && !data.query;
     const wrap = document.createElement("div");
-    const activeFilters = [catalogGenre, catalogPegi, catalogStore].filter(Boolean).length + chosenTags.length;
-    wrap.innerHTML = `
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-            <span class="small text-body-secondary me-auto">${esc(t(data.query ? "search_count"
-                : data.special ? "special_count" : "catalog_count", count))}</span>
-            <button type="button" class="btn btn-sm ${activeFilters ? "btn-primary" : "btn-secondary"} d-md-none" id="filters-toggle"
-                    aria-expanded="${filtersOpen}" aria-controls="catalog-filters">${t("filters_button")}${activeFilters ? ` (${activeFilters})` : ""}</button>
-            <label class="small text-body-secondary d-none d-sm-inline" for="catalog-sort">${t("sort")}</label>
-            <select id="catalog-sort" class="form-select form-select-sm w-auto" aria-label="${esc(t("sort"))}">
-                <option value="name">${t("sort_name")}</option>
-                <option value="price_asc">${t("sort_price_asc")}</option>
-                <option value="price_desc">${t("sort_price_desc")}</option>
-            </select>
-        </div>
-        <div id="catalog-filters" class="catalog-filters mb-3 ${filtersOpen ? "open" : ""}">
+    const activeFilters = hardware ? [catalogStore, hardwareType].filter(Boolean).length
+        : [catalogGenre, catalogPegi, catalogStore].filter(Boolean).length + chosenTags.length;
+    // the game filters (category, tags, PEGI) or, on the hardware tab, the type
+    const kindFilters = hardware ? `
+            <div><label class="form-label small text-body-secondary mb-1" for="catalog-type">${t("type_filter")}</label>
+                <select id="catalog-type" class="form-select form-select-sm">
+                    <option value="">${t("all_types")}</option>${typeOptions}
+                </select></div>` : `
             <div><label class="form-label small text-body-secondary mb-1" for="catalog-genre">${t("genre_filter")}</label>
                 <select id="catalog-genre" class="form-select form-select-sm">
                     <option value="">${t("all_genres")}</option>${genreOptions}
@@ -356,13 +365,27 @@ function renderCatalog(data, showPage = showCatalogPage) {
             <div><label class="form-label small text-body-secondary mb-1" for="catalog-pegi">${t("pegi_filter")}</label>
                 <select id="catalog-pegi" class="form-select form-select-sm">
                     <option value="">${t("all_ages")}</option>${pegiOptions}
-                </select></div>
+                </select></div>`;
+    wrap.innerHTML = `
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <span class="small text-body-secondary me-auto">${esc(t(data.query ? "search_count"
+                : data.special ? "special_count" : hardware ? "hardware_count" : "catalog_count", count))}</span>
+            <button type="button" class="btn btn-sm ${activeFilters ? "btn-primary" : "btn-secondary"} d-md-none" id="filters-toggle"
+                    aria-expanded="${filtersOpen}" aria-controls="catalog-filters">${t("filters_button")}${activeFilters ? ` (${activeFilters})` : ""}</button>
+            <label class="small text-body-secondary d-none d-sm-inline" for="catalog-sort">${t("sort")}</label>
+            <select id="catalog-sort" class="form-select form-select-sm w-auto" aria-label="${esc(t("sort"))}">
+                <option value="name">${t("sort_name")}</option>
+                <option value="price_asc">${t("sort_price_asc")}</option>
+                <option value="price_desc">${t("sort_price_desc")}</option>
+            </select>
+        </div>
+        <div id="catalog-filters" class="catalog-filters mb-3 ${filtersOpen ? "open" : ""}">${kindFilters}
             <div><label class="form-label small text-body-secondary mb-1" for="catalog-store">${t("store_filter")}</label>
                 <select id="catalog-store" class="form-select form-select-sm">
                     <option value="">${t("all_stores")}</option>${storeOptions}
                 </select></div>
         </div>
-        ${chosenTags.length ? `<div class="d-flex flex-wrap gap-1 mb-3" aria-label="${esc(t("chosen_tags"))}">${tagChips}</div>` : ""}`;
+        ${chosenTags.length && !hardware ? `<div class="d-flex flex-wrap gap-1 mb-3" aria-label="${esc(t("chosen_tags"))}">${tagChips}</div>` : ""}`;
 
     const toggle = wrap.querySelector("#filters-toggle");
     toggle.onclick = () => {
@@ -387,13 +410,17 @@ function renderCatalog(data, showPage = showCatalogPage) {
         };
     };
     filterSelect("#catalog-store", catalogStore, v => catalogStore = v);
-    filterSelect("#catalog-genre", catalogGenre, v => catalogGenre = v);
-    filterSelect("#catalog-tag", "", v => catalogTag = [...chosenTags, v].filter(Boolean).join(","));
-    wrap.querySelectorAll("[data-remove-tag]").forEach(b => b.onclick = async () => {
-        catalogTag = chosenTags.filter(tag => tag !== b.dataset.removeTag).join(",");
-        await showPage(1);
-    });
-    filterSelect("#catalog-pegi", catalogPegi, v => catalogPegi = v);
+    if (hardware) {
+        filterSelect("#catalog-type", hardwareType, v => hardwareType = v);
+    } else {
+        filterSelect("#catalog-genre", catalogGenre, v => catalogGenre = v);
+        filterSelect("#catalog-tag", "", v => catalogTag = [...chosenTags, v].filter(Boolean).join(","));
+        wrap.querySelectorAll("[data-remove-tag]").forEach(b => b.onclick = async () => {
+            catalogTag = chosenTags.filter(tag => tag !== b.dataset.removeTag).join(",");
+            await showPage(1);
+        });
+        filterSelect("#catalog-pegi", catalogPegi, v => catalogPegi = v);
+    }
 
     // Games not out yet: "Pré-reserva" on the cover, release date next to the platform
     const grid = cardGrid();
@@ -434,6 +461,7 @@ const FRONT_TABS = {
     releases: { url: "/api/releases", render: renderReleases, empty: "empty_releases" },
     catalog: catalogTab(false, "empty_catalog"),
     special: catalogTab(true, "empty_special"),
+    hardware: catalogTab(false, "empty_hardware", true),
     market: {
         platformAware: true,
         paged: true,

@@ -66,7 +66,15 @@ function render() {
     game.editions.forEach((edition, i) => container.appendChild(renderEdition(edition, i)));
     drawCharts();
     loadMarket();
-    loadReviewsOnce();
+    // players' reviews are of games; a console, controller or headset has none (core/hardware.py)
+    const isGame = (game.kind || "game") === "game";
+    document.getElementById("reviews").classList.toggle("d-none", !isGame);
+    if (isGame) loadReviewsOnce();
+    document.querySelector('#about [data-i18n="about"]').textContent = t(isGame ? "about" : "about_product");
+    if (!isGame) {
+        document.getElementById("sell-link").textContent = t("market_sell_this_product");
+        document.getElementById("market-empty").textContent = t("market_empty_product");
+    }
     fillCollectionButtons();
 
     document.getElementById("game").classList.remove("d-none");

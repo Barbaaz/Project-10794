@@ -252,8 +252,9 @@ def enrich_games(limit=300):
             f"""
             SELECT g.id, g.title, g.normalized_title, p.code, g.title_fixed
             FROM games g JOIN platforms p ON p.id = g.platform_id
-            WHERE g.igdb_checked_at IS NULL
-               OR (g.igdb_id IS NULL AND g.igdb_checked_at < utcnow() + make_interval(days => ?))
+            WHERE g.kind = 'game'        -- consoles / controllers / headsets aren't in IGDB
+              AND (g.igdb_checked_at IS NULL
+                   OR (g.igdb_id IS NULL AND g.igdb_checked_at < utcnow() + make_interval(days => ?)))
             ORDER BY CASE WHEN EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active)
                           THEN 0 ELSE 1 END, g.id DESC
             LIMIT {int(limit)}
