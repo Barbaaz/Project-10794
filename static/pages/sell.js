@@ -10,57 +10,13 @@ function showError(code, values) {
 }
 
 // --- the game ----------------------------------------------------------------------------
-let searchTimer;
-document.getElementById("game-search").addEventListener("input", e => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => searchGames(e.target.value.trim()), 250);
-});
-
-async function searchGames(q) {
-    const list = document.getElementById("game-results");
-    document.getElementById("igdb-results").innerHTML = "";
-    document.getElementById("igdb-search").classList.toggle("d-none", q.length < 2);
-    if (q.length < 2) { list.innerHTML = ""; return; }
-    const { games } = await fetch(`/api/games?q=${encodeURIComponent(q)}&per_page=8`).then(r => r.json());
-    list.innerHTML = games.map(g => `
-        <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2 game-option" data-id="${g.id}">
-            <img src="${esc(g.image || "")}" alt="">
-            <span>${esc(g.title)} <span class="text-body-secondary small">· ${esc(g.platform)}</span></span>
-        </button>`).join("") || `<div class="list-group-item small text-body-secondary">${t("no_results")}</div>`;
-    list.querySelectorAll("[data-id]").forEach(b => b.onclick = () => chooseGame(Number(b.dataset.id)));
-}
-
-// Games the catalogue doesn't have: IGDB's, each with a button per platform; picking one creates
-// the game on that platform (app/services/igdb_game_service.py)
-document.getElementById("igdb-search").onclick = async () => {
-    const list = document.getElementById("igdb-results");
-    list.innerHTML = `<div class="list-group-item small text-body-secondary">${t("sell_igdb_searching")}</div>`;
-    const q = document.getElementById("game-search").value.trim();
-    const response = await fetch(`/api/igdb/games?q=${encodeURIComponent(q)}`);
-    const games = response.ok ? await response.json() : null;
-    if (!games) {
-        list.innerHTML = `<div class="list-group-item small text-danger">${t("error_igdb_unavailable")}</div>`;
-        return;
-    }
-    list.innerHTML = games.map(g => `
-        <div class="list-group-item d-flex align-items-center gap-2 game-option">
-            <img src="${esc(g.cover || "")}" alt="">
-            <div class="min-w-0">
-                <div>${esc(g.name)}${g.year ? ` <span class="text-body-secondary small">(${g.year})</span>` : ""}</div>
-                <div class="d-flex flex-wrap gap-1 mt-1">${g.platforms.map(p => `
-                    <button type="button" class="btn btn-sm btn-primary py-0" data-igdb="${g.igdb_id}" data-platform="${esc(p.code)}">
-                        ${esc(p.name)}</button>`).join("")}</div>
-            </div>
-        </div>`).join("") || `<div class="list-group-item small text-body-secondary">${t("sell_igdb_empty")}</div>`;
-    list.querySelectorAll("[data-igdb]").forEach(b => b.onclick = async () => {
-        b.disabled = true;
-        const { ok, data } = await api("/api/igdb/games", { body: { igdb_id: Number(b.dataset.igdb), platform: b.dataset.platform } });
-        b.disabled = false;
-        if (!ok) return showError(data?.error || "unknown");
-        list.innerHTML = "";
-        chooseGame(data.game_id, data.edition_id);
-    });
-};
+// The catalogue's games, then IGDB's (market.js gamePicker)
+gamePicker({
+    search: document.getElementById("game-search"),
+    results: document.getElementById("game-results"),
+    igdbButton: document.getElementById("igdb-search"),
+    igdbResults: document.getElementById("igdb-results"),
+}, chooseGame, showError);
 
 async function chooseGame(id, editionId = null) {
     const data = await fetch(`/api/games/${id}`).then(r => r.ok ? r.json() : null);

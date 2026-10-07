@@ -1,6 +1,7 @@
 """
-Games no store sells (older platforms, mostly), created from IGDB when a user wants to sell a copy:
-the sell form searches IGDB when the catalogue doesn't have the game, and picking a result on a
+Games no store sells (older platforms, mostly), created from IGDB when a user wants to sell a copy or
+add it to their collection (user, 2026-10-07; never a typed name, unlike Trophium's collection):
+the sell form and /collection search IGDB when the catalogue doesn't have the game, and picking a result on a
 platform creates the game there with its IGDB information and a Standard edition (the game's other
 IGDB editions are offered too: edition_options). The game then
 works like any other (game page, collection, reviews); if a store starts selling it, the daily

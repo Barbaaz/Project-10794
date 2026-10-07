@@ -353,6 +353,10 @@ const STRINGS = {
         error_ratings_overdue: "Tem avaliações em atraso: avalie primeiro as suas compras e vendas concluídas.",
         // game collection
         collection_title: "A minha coleção",
+        collection_add_game_owned: "➕ Adicionar um jogo que tem",
+        collection_add_game_wish: "➕ Adicionar um jogo que quer",
+        collection_added_owned: "Adicionado à sua coleção.",
+        collection_added_wish: "Adicionado à lista de desejos.",
         collection_public: "Mostrar no meu perfil",
         collection_wish_alerts: "Avisos da lista de desejos por email",
         collection_wish_alerts_hint: "Um email por dia, no máximo, quando um jogo que quer volta a estar em stock ou desce de preço.",
@@ -1013,6 +1017,10 @@ const STRINGS = {
         error_ratings_overdue: "You have overdue ratings: rate your completed purchases and sales first.",
         // game collection
         collection_title: "My collection",
+        collection_add_game_owned: "➕ Add a game you own",
+        collection_add_game_wish: "➕ Add a game you want",
+        collection_added_owned: "Added to your collection.",
+        collection_added_wish: "Added to your wishlist.",
         collection_public: "Show on my profile",
         collection_wish_alerts: "Wishlist alerts by email",
         collection_wish_alerts_hint: "At most one email a day, when a game you want is back in stock or its price drops.",

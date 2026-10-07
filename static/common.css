@@ -42,3 +42,7 @@
     .scroll-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .25rem; scrollbar-width: thin; }
     .scroll-tabs .nav-link { white-space: nowrap; }
 }
+
+/* Game search results (market.js gamePicker: the sell form, the collection) */
+.game-option img { width: 32px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .2rem; background: #000; flex-shrink: 0; }
+.min-w-0 { min-width: 0; }

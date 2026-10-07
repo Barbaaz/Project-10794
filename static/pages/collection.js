@@ -129,6 +129,7 @@ function renderItems() {
         b.classList.toggle("active", b.dataset.kind === kind);
         b.setAttribute("aria-selected", b.dataset.kind === kind);
     });
+    document.getElementById("add-game-title").textContent = t(kind === "owned" ? "collection_add_game_owned" : "collection_add_game_wish");
     const status = document.getElementById("filter-status");
     status.classList.toggle("d-none", kind !== "owned");
     const words = document.getElementById("filter-text").value.toLowerCase().split(/\s+/).filter(Boolean);
@@ -230,6 +231,28 @@ async function load() {
     renderItems();
     document.getElementById("content").classList.remove("d-none");
 }
+
+// A game not in the collection yet, from the catalogue or (one no store sells) IGDB (user, 2026-10-07):
+// its Standard edition goes onto the open tab; a game IGDB has and we don't is created first
+async function addGame(gameId, editionId) {
+    if (!editionId) {        // a catalogue game: its Standard edition (the game's editions come Standard first)
+        const game = await fetch(`/api/games/${gameId}`).then(r => r.ok ? r.json() : null);
+        editionId = game?.editions[0]?.id;
+        if (!editionId) return showMessage(false, t("error_unknown"));
+    }
+    const { ok, data: answer } = await api("/api/collection", { body: { edition_id: editionId, kind } });
+    if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
+    clearAddSearch();
+    await load();
+    showMessage(true, t(kind === "owned" ? "collection_added_owned" : "collection_added_wish"));
+}
+
+const clearAddSearch = gamePicker({
+    search: document.getElementById("add-search"),
+    results: document.getElementById("add-results"),
+    igdbButton: document.getElementById("add-igdb"),
+    igdbResults: document.getElementById("add-igdb-results"),
+}, addGame, code => showMessage(false, t(`error_${code}`)));
 
 // The link in a wishlist alert e-mail (?alerts_off=…) works without logging in
 async function alertsOffFromLink() {
