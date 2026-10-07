@@ -1,8 +1,10 @@
 import logging
 import sys
+from contextlib import contextmanager
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
+import db
 from db import connection
 from pipeline.process_scraped_data import process_products
 from scrapers.cstech.scraper import CSTechScraper
@@ -80,6 +82,31 @@ def run_store(slug, accept_drop=False, force=False, light=False):
     if slug not in SCRAPERS:
         raise ValueError(f"No scraper registered for '{slug}'. Known: {', '.join(SCRAPERS)}")
 
+    with store_lock(slug):
+        return scrape_store(slug, accept_drop, force, light)
+
+
+@contextmanager
+def store_lock(slug):
+    """
+    One run of a store at a time, across processes. A PC switched on after 18:00 starts the missed
+    morning task and the evening one together (10-06, 10-07): both read Gaming Replay, Mega Mania
+    and Press Start at once. The second now waits here, then the MIN_HOURS_BETWEEN_RUNS check skips it.
+    """
+    conn = db.connect(db.DB_CONNECTION_STRING, autocommit=True)
+    try:
+        cursor = conn.cursor()
+        key = f"scrape_store:{slug}"
+        if not cursor.execute("SELECT pg_try_advisory_lock(hashtext(?))", key).fetchone()[0]:
+            log.info("[%s] another run is scraping it; waiting for it to finish", slug)
+            cursor.execute("SELECT pg_advisory_lock(hashtext(?))", key)
+        yield
+    finally:
+        conn.close()        # closing the session releases the lock
+
+
+def scrape_store(slug, accept_drop, force, light):
+    """run_store's work, with the store's lock held."""
     hours = hours_since_last_success(slug)
     if not force and hours is not None and hours < MIN_HOURS_BETWEEN_RUNS:
         raise RanRecently(f"[{slug}] last successful run {hours:.1f} h ago (minimum {MIN_HOURS_BETWEEN_RUNS} h); "

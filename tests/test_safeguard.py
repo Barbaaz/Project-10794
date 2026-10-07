@@ -1,6 +1,9 @@
-"""The half-broken scraper safeguard in scheduler/jobs.py (no database needed)."""
+"""The half-broken scraper safeguard in scheduler/jobs.py (no database needed, except the lock test)."""
+from contextlib import nullcontext
+
 import pytest
 
+import db
 from scheduler import jobs
 
 
@@ -33,6 +36,7 @@ def run(monkeypatch):
         monkeypatch.setitem(jobs.SCRAPERS, "test_store", lambda **_: FakeScraper(found))
         monkeypatch.setattr(jobs, "fresh_release_urls", lambda slug: set())
         monkeypatch.setattr(jobs, "known_detail_urls", lambda slug: set())
+        monkeypatch.setattr(jobs, "store_lock", lambda slug: nullcontext())
         monkeypatch.setattr(jobs, "hours_since_last_success", lambda slug: hours_ago)
         monkeypatch.setattr(jobs, "start_run", lambda slug: 1)
         monkeypatch.setattr(jobs, "previous_product_count", lambda slug: previous)
@@ -83,3 +87,24 @@ def test_force_runs_anyway(run):
 def test_daily_schedule_is_allowed(run):
     calls = run(found=3000, previous=3076, hours_ago=21)
     assert calls["status"] == "success"
+
+
+def test_a_store_is_scraped_by_one_run_at_a_time(test_db, monkeypatch):
+    """Another process can't take the store's lock while a run holds it; other stores are free."""
+    monkeypatch.setattr(db, "DB_CONNECTION_STRING", test_db.url)
+
+    def free(slug):
+        other = db.connect(test_db.url, autocommit=True)
+        try:
+            cursor = other.cursor()
+            taken = cursor.execute("SELECT pg_try_advisory_lock(hashtext(?))", f"scrape_store:{slug}").fetchone()[0]
+            if taken:
+                cursor.execute("SELECT pg_advisory_unlock(hashtext(?))", f"scrape_store:{slug}")
+            return taken
+        finally:
+            other.close()
+
+    with jobs.store_lock("cstech"):
+        assert not free("cstech")
+        assert free("press_start")
+    assert free("cstech")

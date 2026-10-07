@@ -5,7 +5,8 @@ Scrape every active store into the database.
     python -m scheduler.run_all_scrapers --light    # the evening run: LIGHT_STORES, listing pages only
 
 Runs daily via the Windows task set up by scheduler/register_daily_task.ps1.
-A store scraped successfully less than 12 hours ago is skipped (see MIN_HOURS_BETWEEN_RUNS).
+A store scraped successfully less than 8 hours ago is skipped (see MIN_HOURS_BETWEEN_RUNS); a store
+another run is scraping is waited for first (store_lock), then skipped the same way.
 """
 import logging
 import sys

@@ -124,6 +124,15 @@ def test_blocked_stops_immediately(clock, status):
         client(session).get_text("https://shop.test/a")
 
 
+def test_session_never_retries_a_block():
+    """The real session's retries: 429 with Retry-After isn't waited out and asked again (CSTech, 10-07)."""
+    retry = HttpClient().session.get_adapter("https://shop.test/").max_retries
+    assert not retry.is_retry("GET", 429, has_retry_after=True)
+    assert not retry.is_retry("GET", 403, has_retry_after=True)
+    assert retry.is_retry("GET", 503, has_retry_after=True)
+    assert retry.is_retry("GET", 502)
+
+
 def test_post_follows_the_same_rules(clock):
     session = FakeSession(robots="User-agent: *\nDisallow: /private",
                           responses={"https://shop.test/ajax": FakeResponse(status=429)})

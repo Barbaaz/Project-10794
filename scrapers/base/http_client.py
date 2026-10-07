@@ -42,6 +42,14 @@ class RobotsDisallowed(Exception):
     """The site's robots.txt asks crawlers not to fetch this URL."""
 
 
+class ServerErrorRetry(Retry):
+    """
+    urllib3 also retries 429 / 413 when they carry Retry-After, sleeping it out each time (CSTech,
+    2026-10-07: three 60 s waits, four requests on a 429). Only a 503's Retry-After is waited for.
+    """
+    RETRY_AFTER_STATUS_CODES = frozenset({503})
+
+
 class HttpClient:
     def __init__(self, timeout=30, retries=3, min_interval=MIN_INTERVAL, jitter=JITTER, max_requests=MAX_REQUESTS):
         self.timeout = timeout
@@ -58,7 +66,7 @@ class HttpClient:
 
         # Retries only for temporary server errors, with growing waits (2, 4, 8 s).
         # 403 / 429 are not retried here: they mean "slow down / go away".
-        retry = Retry(
+        retry = ServerErrorRetry(
             total=retries,
             backoff_factor=2,
             status_forcelist=[500, 502, 503, 504],
