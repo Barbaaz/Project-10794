@@ -21,8 +21,10 @@ from .robots import RobotsRules
 
 log = logging.getLogger(__name__)
 
+# Who we are, honestly (user, 2026-10-07): a bot with a page saying what it does. A store's robots.txt
+# group for "Project10794-bot" applies to us; one that refuses bots gets a 403 and we stop
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    "User-Agent": "Project10794-bot/1.0 (+https://github.com/Barbaaz/Project-10794)"
 }
 
 MIN_INTERVAL = 3.0      # seconds between requests to the same site
@@ -137,8 +139,10 @@ class HttpClient:
             try:
                 response = self.session.get(f"https://{host}/robots.txt", timeout=self.timeout)
                 self._last_request[host] = time.monotonic()
-                if response.status_code in (401, 403):
-                    parser.disallow_all = True      # the site refuses even robots.txt: crawl nothing
+                # the site refuses even robots.txt, or can't serve it (5xx: RFC 9309 says assume
+                # everything is disallowed): crawl nothing
+                if response.status_code in (401, 403) or response.status_code >= 500:
+                    parser.disallow_all = True
                     self._rules[host] = RobotsRules.parse("User-agent: *\nDisallow: /", HEADERS["User-Agent"])
                 else:
                     # No robots.txt (404) means everything is allowed

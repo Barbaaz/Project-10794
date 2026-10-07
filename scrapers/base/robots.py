@@ -34,8 +34,9 @@ class RobotsRules:
         if agents:
             groups.append((agents, rules))
 
-        ours = user_agent.lower()
-        named = [r for a, r in groups if any(x != "*" and x in ours for x in a)]
+        # a group names us by our product token, the User-Agent before the "/" (RFC 9309)
+        ours = user_agent.split("/")[0].strip().lower()
+        named = [r for a, r in groups if ours in a]
         chosen = named or [r for a, r in groups if "*" in a]
         return cls((allow, pattern, _regex(pattern)) for rules in chosen for allow, pattern in rules)
 
