@@ -156,6 +156,7 @@ function renderAbout() {
     renderVideos();
 
     document.getElementById("about-text").innerHTML = parts.join("");
+    document.getElementById("igdb-credit").classList.toggle("d-none", !game.igdb_id);
     const hasFacts = Boolean(document.getElementById("facts").children.length);
     document.getElementById("about").classList.toggle("d-none", !hasFacts && !parts.length && !pictures.length && !game.videos.length);
     bindClampToggles(document.getElementById("about"));

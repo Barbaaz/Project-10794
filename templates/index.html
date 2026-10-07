@@ -124,7 +124,11 @@
     <div id="results"></div>
 
     <!-- When each store's prices were last updated; ⚠ when a run failed or a store is out of date -->
-    <footer id="store-status" class="small text-body-secondary border-top mt-5 pt-3"></footer>
+    <footer class="small text-body-secondary border-top mt-5 pt-3">
+        <div id="store-status"></div>
+        <!-- IGDB's terms ask for a visible credit where its data is shown -->
+        <div class="mt-1"><span data-i18n="igdb_credit"></span> <a href="https://www.igdb.com" target="_blank" rel="noopener">IGDB.com</a></div>
+    </footer>
 </div>
 
 <script src="/static/pages/index.js"></script>
