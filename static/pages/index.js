@@ -282,10 +282,13 @@ async function loadCatalogPage(special, platform, page, hardware = false) {
 // Market tab: every game users sell (active listings), 48 at a time, newest first or by price
 // ---------------------------------------------------------------------------
 let marketSort = saved("marketSort", "newest");
+// games, consoles / controllers / headsets, or both ("")
+let marketKind = saved("marketKind", "");
 
 async function loadMarketPage(platform, page) {
     const params = new URLSearchParams({ sort: marketSort, page, per_page: CATALOG_PAGE });
     if (platform) params.set("platform", platform);
+    if (marketKind) params.set("kind", marketKind);
     const data = await fetch(`/api/listings?${params}`).then(r => r.json());
     return { ...data, platform };
 }
@@ -304,6 +307,11 @@ function renderMarket(data) {
             <span class="small text-body-secondary me-auto">${esc(t("market_count",
                 { count: fmtNumber(data.total), page: data.page, pages: data.pages }))}</span>
             <a href="/sell" class="btn btn-sm btn-success">${t("market_sell")}</a>
+            <select id="market-kind" class="form-select form-select-sm w-auto" aria-label="${esc(t("type_filter"))}">
+                <option value="">${t("market_kind_all")}</option>
+                <option value="game">${t("market_kind_games")}</option>
+                <option value="hardware">${t("market_kind_hardware")}</option>
+            </select>
             <label class="small text-body-secondary" for="market-sort">${t("sort")}</label>
             <select id="market-sort" class="form-select form-select-sm w-auto">
                 <option value="newest">${t("sort_newest")}</option>
@@ -320,6 +328,13 @@ function renderMarket(data) {
     select.onchange = () => {
         marketSort = select.value;
         save("marketSort", marketSort);
+        showMarketPage(1);
+    };
+    const kindSelect = wrap.querySelector("#market-kind");
+    kindSelect.value = marketKind;
+    kindSelect.onchange = () => {
+        marketKind = kindSelect.value;
+        save("marketKind", marketKind);
         showMarketPage(1);
     };
     wrap.appendChild(pagination(data.page, data.pages, showMarketPage));
@@ -573,7 +588,8 @@ function renderFront() {
         const data = frontData[frontTab];
         const hasGroups = Boolean(data?.groups?.length);
         // nothing with the chosen filters: keep them on screen so they can be changed
-        const filtered = extraFilters().some(([, value]) => value);
+        // (the Used tab has only its type: the catalogue's filters don't apply to it)
+        const filtered = frontTab === "market" ? Boolean(marketKind) : extraFilters().some(([, value]) => value);
         if (hasGroups || filtered) content.appendChild(config.render(data));
         empty.textContent = t(filtered ? "empty_filtered" : config.empty);
         empty.classList.toggle("d-none", hasGroups);

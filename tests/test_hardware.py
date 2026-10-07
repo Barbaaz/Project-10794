@@ -112,3 +112,35 @@ def test_the_plain_model_is_standard():
 
 def test_display_name():
     assert display_name("Comando DualSense [USADO] (PT)") == "Comando DualSense"
+
+
+def test_a_shopify_feed_sorts_its_hardware_without_extra_requests():
+    """CSTech: its feed has everything; non-games are sorted as hardware, kept only when switched on."""
+    from scrapers.cstech.scraper import CSTechScraper
+
+    def item(handle, title, product_type):
+        return {"handle": handle, "title": title, "product_type": product_type, "vendor": "", "tags": [], "images": [],
+                "body_html": "", "variants": [{"price": "59.99", "compare_at_price": None, "available": True}]}
+
+    feed = [item("g", "Astro Bot PS5", "Jogos PS5"), item("c", "Comando DualSense Branco PS5", "Comandos PS5"),
+            item("k", "Consola PS5 Slim", "Consolas"), item("x", "Cabo USB-C PS5", "Acessórios PS5"),
+            item("f", "Figura Funko Pop Kratos", "Merchandising")]
+
+    class FakeHttp:
+        request_count = 0
+
+        def get_json(self, url, params=None):
+            self.request_count += 1
+            return {"products": feed if params["page"] == 1 else []}
+
+    scraper = CSTechScraper(http=FakeHttp())
+    games = scraper.scrape_catalog()
+    assert [(p["external_name"], p["kind"]) for p in games] == [("Astro Bot PS5", "game")]
+    assert sorted((p["external_name"], p["kind"]) for p in scraper.hardware_preview) == [
+        ("Comando DualSense Branco PS5", "controller"), ("Consola PS5 Slim", "console")]
+    assert "Cabo USB-C PS5" in scraper.hardware_left_out
+
+    scraper = CSTechScraper(http=FakeHttp())
+    scraper.read_hardware = True
+    assert sorted(p["kind"] for p in scraper.scrape_catalog()) == ["console", "controller", "game"]
+    assert scraper.http.request_count == 2          # the same feed pages as before

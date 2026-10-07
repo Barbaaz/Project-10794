@@ -55,6 +55,9 @@ class BaseScraper:
         # Products whose description was already read (read once)
         self.known_detail_urls = set(known_detail_urls)
         self.hardware_left_out = []
+        # A store whose hardware costs no extra request (a feed) sorts it anyway while not switched on:
+        # what it would keep, to check first (scheduler/jobs.py writes it to logs/hardware_check_<store>.txt)
+        self.hardware_preview = None
 
     # --- implemented by each store -------------------------------------
 

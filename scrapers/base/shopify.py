@@ -41,8 +41,26 @@ class ShopifyScraper(BaseScraper):
             items.update((i["handle"], i) for i in self.fetch_items(path))
 
         products = [p for p in map(self.parse_item, items.values()) if p]
+        for p in products:
+            p["kind"] = "game"
         log.info("[%s] %d products", self.store_slug, len(products))
+
+        # The feed has the store's consoles, controllers and headsets too (core/hardware.py), so sorting them
+        # costs no request: kept with read_hardware, otherwise only noted (hardware_preview) to be checked
+        hardware = []
+        for page_kind in ("console", "accessory"):
+            hardware += self.keep_hardware(
+                [p for p in (self.parse_item(i, games_only=False) for i in items.values()
+                             if not self.is_game(i) and self.type_page_kind(i) == page_kind) if p], page_kind)
+        if self.read_hardware:
+            return hardware + products
+        self.hardware_preview = hardware
         return products
+
+    @staticmethod
+    def type_page_kind(item):
+        """Its product_type as the kind of page it would be on: consoles, or accessories (everything else)."""
+        return "console" if "consol" in (item.get("product_type") or "").lower() else "accessory"
 
     def fetch_items(self, path):
         """Every product of one listing, 250 per request."""
@@ -64,8 +82,8 @@ class ShopifyScraper(BaseScraper):
             return True
         return (item.get("product_type") or "").lower().startswith(self.game_type_prefix)
 
-    def parse_item(self, item):
-        if not self.is_game(item):
+    def parse_item(self, item, games_only=True):
+        if games_only and not self.is_game(item):
             return None
 
         variants = item.get("variants") or []

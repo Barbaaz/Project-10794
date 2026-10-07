@@ -100,11 +100,12 @@ def get_listing(listing_id, viewer_id=None):
         return as_dicts([listing])[0]
 
 
-def browse(platform=None, sort="newest", page=1, per_page=48):
+def browse(platform=None, sort="newest", page=1, per_page=48, kind=None):
     """
     The market tab: one group per game edition users sell (a game can have several sellers),
     each with its active listings, cheapest first; editions with the newest listing first, or
-    by their cheapest price. Paged by edition.
+    by their cheapest price. Paged by edition. kind: "game", "hardware" (consoles, controllers,
+    headsets: core/hardware.py) or None for both.
     """
     used = (select(Listing.edition_id, func.min(Listing.price).label("min_price"),
                    func.max(Listing.created_at).label("newest"))
@@ -115,6 +116,10 @@ def browse(platform=None, sort="newest", page=1, per_page=48):
                 .join(Game, Game.id == GameEdition.game_id).join(Platform, Platform.id == Game.platform_id))
     if platform:
         editions = editions.where(Platform.code == platform)
+    if kind == "game":
+        editions = editions.where(Game.kind == "game")
+    elif kind == "hardware":
+        editions = editions.where(Game.kind != "game")
     order = {"newest": (used.c.newest.desc(), Game.title, used.c.edition_id),
              "price_asc": (used.c.min_price, Game.title, used.c.edition_id),
              "price_desc": (used.c.min_price.desc(), Game.title, used.c.edition_id)}[sort if sort in BROWSE_SORTS else "newest"]
@@ -128,7 +133,7 @@ def browse(platform=None, sort="newest", page=1, per_page=48):
                                       .order_by(Listing.price, Listing.created_at, Listing.id)).unique().all()) if ids else []
     groups = [card_group({"edition_id": edition.id, "game_id": game.id, "title": game.title,
                           "edition_key": edition.edition_key, "edition": edition.name,
-                          "console": platform_.code, "platform_name": platform_.name},
+                          "console": platform_.code, "platform_name": platform_.name, "kind": game.kind},
                          [], image=game.image_url, listings=[l for l in listings if l["edition_id"] == edition.id])
               for edition, game, platform_ in rows]
     return page_result(page, per_page, total, groups=groups)

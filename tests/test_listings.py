@@ -150,3 +150,16 @@ def test_photos_can_be_added_and_removed_within_the_limits(market):
     after = client.delete(f"/api/listings/{listing['id']}/photos/{first['id']}", headers=HEADERS).get_json()
     assert len(after["photos"]) == 3
     assert not (market["dir"] / first["photo_key"]).exists()        # its files are deleted too
+
+
+def test_the_market_tab_filters_games_and_hardware(market):
+    """/api/listings?kind=game|hardware: a used controller is listed apart from games (core/hardware.py)."""
+    client, c = market["client"], market["db"]
+    c.execute("UPDATE games SET kind = 'controller' WHERE id = ?", market["other_game"])
+    sign_up(client, "seller_kinds")
+    new_listing(market)
+    new_listing(market, game_id=market["other_game"], edition_id=market["other_edition"])
+    titles = lambda kind="": sorted(g["name"] for g in client.get(f"/api/listings?kind={kind}").get_json()["groups"])
+    assert titles() == ["Market Test Game", "Other Game"]
+    assert titles("game") == ["Market Test Game"]
+    assert titles("hardware") == ["Other Game"]

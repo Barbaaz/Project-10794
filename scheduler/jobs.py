@@ -131,6 +131,8 @@ def scrape_store(slug, accept_drop, force, light):
         if scraper.read_hardware:
             kinds = Counter(p.get("kind", "game") for p in products)
             log.info("[%s] hardware: %s; %d left out", slug, dict(kinds), len(scraper.hardware_left_out))
+        elif getattr(scraper, "hardware_preview", None) is not None:
+            write_hardware_check(slug, scraper.hardware_preview, scraper.hardware_left_out)
         if not products:
             raise RuntimeError("Scraper returned 0 products, the site's HTML may have changed")
 
@@ -162,6 +164,16 @@ def scrape_store(slug, accept_drop, force, light):
         log.exception("[%s] failed", slug)
         finish_run(run_id, "failed", error_message=str(e))
         raise
+
+
+def write_hardware_check(slug, kept, left_out):
+    """What a store not in HARDWARE_STORES would keep and leave out, to read before switching it on."""
+    path = LOG_DIR / f"hardware_check_{slug}.txt"
+    lines = [f"{p['kind']:10} {p['console']:10} {p['condition']:4} {p['price']} | {p['external_name']}"
+             for p in sorted(kept, key=lambda p: (p["kind"], p["console"], p["external_name"]))]
+    path.write_text("\n".join([f"KEPT ({len(kept)})", *lines, "", f"LEFT OUT ({len(left_out)})", *sorted(set(left_out))]),
+                    encoding="utf-8")
+    log.info("[%s] hardware check (not saved): %d kept, %d left out → %s", slug, len(kept), len(left_out), path.name)
 
 
 def is_suspicious_drop(found, previous, min_ratio=MIN_PRODUCT_RATIO):

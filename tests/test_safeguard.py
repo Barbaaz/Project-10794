@@ -108,3 +108,12 @@ def test_a_store_is_scraped_by_one_run_at_a_time(test_db, monkeypatch):
         assert not free("cstech")
         assert free("press_start")
     assert free("cstech")
+
+
+def test_a_store_not_switched_on_writes_its_hardware_check(tmp_path, monkeypatch):
+    """CSTech's feed sorts its hardware without saving it: the names go to logs/hardware_check_<store>.txt."""
+    monkeypatch.setattr(jobs, "LOG_DIR", tmp_path)
+    kept = [{"kind": "controller", "console": "PS5", "condition": "new", "price": 69.99, "external_name": "Comando DualSense"}]
+    jobs.write_hardware_check("cstech", kept, ["Cabo USB-C", "Cabo USB-C"])
+    assert (tmp_path / "hardware_check_cstech.txt").read_text(encoding="utf-8").splitlines() == [
+        "KEPT (1)", "controller PS5        new  69.99 | Comando DualSense", "", "LEFT OUT (2)", "Cabo USB-C"]
