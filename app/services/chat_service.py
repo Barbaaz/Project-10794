@@ -78,7 +78,7 @@ def send_message(user_id, conversation_id, body, photos=()):
     """A message: text, photos (the uploaded files' bytes, up to MAX_MESSAGE_PHOTOS), or both."""
     body = (body or "").strip()
     with session() as s:
-        _participant(s, user_id, conversation_id)
+        _not_deleted(_participant(s, user_id, conversation_id), user_id)
     if not body and not photos:
         raise ChatError("message_empty")
     if len(body) > MAX_MESSAGE:
@@ -129,6 +129,7 @@ def deal_step(user_id, conversation_id, action):
     """Move the purchase one step (see STEPS / CANCEL_FROM); its effects on the listing included."""
     with session() as s:
         conversation = _participant(s, user_id, conversation_id)
+        _not_deleted(conversation, user_id)
         role = _role(conversation, user_id)
         if action not in available_steps(conversation.deal_status, role, conversation.listing.status):
             raise ChatError("step_not_allowed", 409)
@@ -256,6 +257,16 @@ def _role(conversation, user_id):
     return "buyer" if conversation.buyer_id == user_id else "seller"
 
 
+def _other(conversation, user_id):
+    return conversation.seller if _role(conversation, user_id) == "buyer" else conversation.buyer
+
+
+def _not_deleted(conversation, user_id):
+    """The other side deleted their account: the conversation stays to read, nothing more is sent."""
+    if _other(conversation, user_id).deleted_at:
+        raise ChatError("user_deleted", 409)
+
+
 def _mark_read(conversation, user_id, up_to=NOW):
     """This side has read the conversation up to `up_to` (the newest message seen; now for one's own)."""
     if conversation.buyer_id == user_id:
@@ -301,7 +312,7 @@ def _complete(s, conversation, listing):
 def _as_dict(c, user_id):
     """What one side sees: the conversation, the listing, the other side, the steps it can take."""
     role = _role(c, user_id)
-    other = c.seller if role == "buyer" else c.buyer
+    other = _other(c, user_id)
     listing = c.listing
     thumb = listing.photos[0].thumb_key if listing.photos else None
     return fields(
@@ -312,6 +323,7 @@ def _as_dict(c, user_id):
         buyer_username=c.buyer.username, buyer_name=c.buyer.display_name,
         seller_username=c.seller.username, seller_name=c.seller.display_name,
         role=role, other_username=other.username, other_name=other.display_name,
+        other_deleted=other.deleted_at is not None,
         thumb_url=storage.url(thumb) if thumb else None,
-        steps=available_steps(c.deal_status, role, listing.status),
+        steps=[] if other.deleted_at else available_steps(c.deal_status, role, listing.status),
     )

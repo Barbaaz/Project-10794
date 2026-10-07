@@ -20,13 +20,13 @@ async function loadList() {
     list.innerHTML = conversations.map(c => `
         <a href="?c=${c.id}" data-id="${c.id}" class="list-group-item list-group-item-action d-flex gap-2 align-items-center
             ${open && open.id === c.id ? "active" : ""}">
-            <img src="${esc(c.thumb_url || "")}" alt="">
+            <img src="${esc(c.thumb_url || "")}" alt="" class="${c.thumb_url ? "" : "invisible"}">
             <div class="flex-fill overflow-hidden">
                 <div class="d-flex justify-content-between gap-1">
                     <strong class="text-truncate">${esc(c.title)}</strong>
                     ${c.unread ? `<span class="badge rounded-pill text-bg-danger">${c.unread}</span>` : ""}
                 </div>
-                <div class="small">@${esc(c.other_username)} · ${t(c.role === "buyer" ? "you_buy" : "you_sell")}</div>
+                <div class="small">${esc(userLabel(c.other_username))} ·${t(c.role === "buyer" ? "you_buy" : "you_sell")}</div>
                 <div class="small preview opacity-75">${esc(c.last_event ? eventText(c.last_event) : c.last_body || (c.last_photos ? t("chat_photo") : ""))}</div>
             </div>
         </a>`).join("");
@@ -65,12 +65,16 @@ function eventText(event) {
 }
 
 function renderChat(newMessages) {
-    document.getElementById("chat-thumb").src = open.thumb_url || "";
+    const thumb = document.getElementById("chat-thumb");
+    thumb.src = open.thumb_url || "";
+    thumb.classList.toggle("invisible", !open.thumb_url);      // a deleted seller's listing has no photos left
     const listing = document.getElementById("chat-listing");
     listing.href = `/listing/${open.listing_id}`;
     listing.textContent = `${open.title} · ${eur.format(open.price)}`;
     document.getElementById("chat-with").innerHTML =
-        `${esc(t(open.role === "buyer" ? "you_buy_from" : "you_sell_to"))} <a href="/user/${encodeURIComponent(open.other_username)}">@${esc(open.other_username)}</a> · ${esc(open.platform_name)}`;
+        `${esc(t(open.role === "buyer" ? "you_buy_from" : "you_sell_to"))} ${userLink(open.other_username)} · ${esc(open.platform_name)}`;
+    // the other side deleted their account: the conversation stays to read, nothing more can be sent
+    document.getElementById("chat-form").classList.toggle("d-none", open.other_deleted);
     const status = document.getElementById("chat-status");
     status.className = `badge ${STATUS_STYLES[open.deal_status] || "d-none"}`;
     status.textContent = open.deal_status !== "none" ? t(`deal_${open.deal_status}`) : "";
@@ -112,23 +116,26 @@ function renderRating() {
     const box = document.getElementById("chat-rating");
     if (!open.ratings) { box.innerHTML = ""; return; }
     const { mine, theirs } = open.ratings;
+    const user = userLabel(open.other_username);
     const theirsHtml = theirs
-        ? `<div class="small mb-2">${esc(t("their_rating", { user: open.other_username }))} ${stars(theirs.stars)}
+        ? `<div class="small mb-2">${esc(t("their_rating", { user }))} ${stars(theirs.stars)}
              ${theirs.comment ? `<span class="fst-italic">“${esc(theirs.comment)}”</span>` : ""}</div>`
-        : `<div class="small text-body-secondary mb-2">${esc(t("their_rating_pending", { user: open.other_username }))}</div>`;
+        : open.other_deleted ? ""
+        : `<div class="small text-body-secondary mb-2">${esc(t("their_rating_pending", { user }))}</div>`;
 
-    if (mine && !editingRating) {
-        box.innerHTML = `<div class="alert alert-success py-2 mb-2 small">
-            ${esc(t("your_rating", { user: open.other_username }))} ${stars(mine.stars)}
+    // a deleted account can't be rated any more: what was given stays, without the form
+    if ((mine && !editingRating) || open.other_deleted) {
+        box.innerHTML = `${mine ? `<div class="alert alert-success py-2 mb-2 small">
+            ${esc(t("your_rating", { user }))} ${stars(mine.stars)}
             ${mine.comment ? `<span class="fst-italic">“${esc(mine.comment)}”</span>` : ""}
-            ${mine.editable ? `<button type="button" id="edit-rating" class="btn btn-sm btn-secondary ms-2">${t("change_rating")}</button>` : ""}
-        </div>${theirsHtml}`;
+            ${mine.editable && !open.other_deleted ? `<button type="button" id="edit-rating" class="btn btn-sm btn-secondary ms-2">${t("change_rating")}</button>` : ""}
+        </div>` : ""}${theirsHtml}`;
         box.querySelector("#edit-rating")?.addEventListener("click", () => { editingRating = true; renderRating(); });
         return;
     }
     box.innerHTML = `
         <form id="rating-form" class="card card-body py-2 mb-2">
-            <div class="fw-semibold small mb-1">${esc(t("rate_user", { user: open.other_username }))}</div>
+            <div class="fw-semibold small mb-1">${esc(t("rate_user", { user }))}</div>
             <div class="star-input mb-2" role="radiogroup" aria-label="${esc(t("rating_stars"))}">
                 ${[5, 4, 3, 2, 1].map(n => `<input type="radio" name="stars" id="star-${n}" value="${n}"
                     ${mine?.stars === n ? "checked" : ""}><label for="star-${n}" title="${esc(t("stars_n", { n }))}">★</label>`).join("")}

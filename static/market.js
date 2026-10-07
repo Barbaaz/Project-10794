@@ -17,6 +17,7 @@ function statusBadge(status) {
 }
 
 function sellerName(listing) {
+    if (!listing.seller_username) return t("deleted_user");     // the seller deleted their account since
     return listing.seller_name && listing.seller_name !== listing.seller_username
         ? `${listing.seller_name} (@${listing.seller_username})` : `@${listing.seller_username}`;
 }
@@ -93,7 +94,7 @@ function listingCard(listing, { showSeller = true } = {}) {
     return `
         <div class="col">
             <a href="/listing/${listing.id}" class="card h-100 shadow-sm text-decoration-none listing-card">
-                <img src="${esc(photo?.thumb_url || "")}" alt="" loading="lazy" class="card-img-top">
+                <img src="${esc(photo?.thumb_url || "")}" alt="" loading="lazy" class="card-img-top ${photo ? "" : "invisible"}">
                 <div class="card-body p-2 d-flex flex-column">
                     <div class="fw-semibold listing-title" title="${esc(name)}">${esc(name)}</div>
                     <div class="small text-body-secondary mb-1">${esc(listing.platform_name)}</div>

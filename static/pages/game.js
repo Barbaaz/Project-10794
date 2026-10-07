@@ -628,7 +628,7 @@ function reviewItem(r) {
             ${r.title ? `<strong>${esc(r.title)}</strong>` : ""}</div>
         ${r.body ? clampedText(r.body, 5) : ""}
         <div class="small text-body-secondary mt-1">
-            <a href="/user/${encodeURIComponent(r.username)}">@${esc(r.username)}</a>
+            ${userLink(r.username)}
             ${r.owner ? `<span class="badge bg-body-secondary text-body border" title="${esc(t("review_owner_hint"))}">📚 ${esc(t("review_owner"))}</span>` : ""}
             · ${fmtDate(r.created_at)}${r.edited ? ` (${esc(t("review_edited"))})` : ""}
             ${r.mine ? "" : `· ${reportButton("review", r.id)}`}

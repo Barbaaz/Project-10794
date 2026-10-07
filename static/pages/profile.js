@@ -28,12 +28,12 @@ async function load() {
         <div class="list-group-item">
             <div class="d-flex justify-content-between flex-wrap gap-1">
                 <span>${stars(r.stars)} <span class="small text-body-secondary">
-                    ${esc(t(r.rated_as === "seller" ? "rated_as_seller" : "rated_as_buyer", { user: r.rater_username, game: r.title }))}</span></span>
+                    ${esc(t(r.rated_as === "seller" ? "rated_as_seller" : "rated_as_buyer", { user: userLabel(r.rater_username), game: r.title }))}</span></span>
                 <span class="small text-body-secondary">${new Date(r.created_at).toLocaleDateString(LOCALE)}
-                    ${currentUser?.username !== r.rater_username ? `· ${reportButton("rating", r.id)}` : ""}</span>
+                    ${currentUser?.username !== r.rater_username ? `·${reportButton("rating", r.id)}` : ""}</span>
             </div>
             ${r.comment ? `<div class="mt-1">${esc(r.comment)}</div>` : ""}
-            ${r.reply ? `<div class="mt-1 ms-3 small border-start ps-2"><strong>${esc(t("reply_from", { user: user.username }))}</strong> ${esc(r.reply)}</div>` : ""}
+            ${r.reply ? `<div class="mt-1 ms-3 small border-start ps-2"><strong>${esc(t("reply_from", { user: userLabel(user.username) }))}</strong> ${esc(r.reply)}</div>` : ""}
             ${mine ? `<form class="reply-form d-flex gap-1 mt-2" data-id="${r.id}">
                 <input name="reply" maxlength="500" class="form-control form-control-sm" value="${esc(r.reply || "")}"
                        placeholder="${esc(t("reply_placeholder"))}" aria-label="${esc(t("reply_placeholder"))}">

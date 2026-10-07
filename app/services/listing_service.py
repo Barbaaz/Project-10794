@@ -95,8 +95,8 @@ def get_listing(listing_id, viewer_id=None):
             Conversation.listing_id == listing_id, Conversation.buyer_id == viewer_id).limit(1))
         if listing.status not in VISIBLE and listing.user_id != viewer_id and not talked:
             return None
-        if not listing.seller.is_active and listing.user_id != viewer_id:
-            return None                       # a blocked seller's listing
+        if not listing.seller.is_active and listing.user_id != viewer_id and not (listing.seller.deleted_at and talked):
+            return None                       # a blocked seller's listing (a deleted one's: for who talked to them)
         return as_dicts([listing])[0]
 
 

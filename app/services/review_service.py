@@ -6,7 +6,7 @@ users, aren't shown or counted. A hidden review can't be changed or deleted by i
 hidden listing: otherwise deleting and writing it again would undo the hide). When games are
 merged, reviews follow (pipeline/rematch.py).
 """
-from sqlalchemy import Numeric, cast, func, select
+from sqlalchemy import Numeric, cast, func, or_, select
 
 from app.models import NOW, CollectionItem, Game, GameReview, User, fields
 from db import session
@@ -24,8 +24,10 @@ class ReviewError(Exception):
 
 
 def _visible(game_id):
-    """Shown and counted: this game's reviews (any game's with None), not hidden, by users who aren't blocked."""
-    query = select(GameReview).join(User, User.id == GameReview.user_id).where(~GameReview.hidden, User.is_active)
+    """Shown and counted: this game's reviews (any game's with None), not hidden, by users who aren't
+    blocked; a deleted account's stay, without the name (user, 2026-10-07: anonymised)."""
+    query = select(GameReview).join(User, User.id == GameReview.user_id).where(
+        ~GameReview.hidden, or_(User.is_active, User.deleted_at.is_not(None)))
     return query if game_id is None else query.where(GameReview.game_id == game_id)
 
 

@@ -17,10 +17,6 @@ function date(value) {
     return value ? new Date(value).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) : "";
 }
 
-function userLink(username) {
-    return `<a href="/user/${encodeURIComponent(username)}">@${esc(username)}</a>`;
-}
-
 // --- reports ----------------------------------------------------------------------------------
 function targetSummary(kind, target) {
     if (!target) return `<em class="text-body-secondary">${esc(t("mod_target_gone"))}</em>`;
@@ -34,7 +30,7 @@ function targetSummary(kind, target) {
     }
     if (kind === "user") {
         const blocked = target.is_active ? "" : ` <span class="badge text-bg-danger">${esc(t("mod_blocked"))}</span>`;
-        return `<div>${userLink(target.username)} ${target.display_name !== target.username ? `(${esc(target.display_name)})` : ""}
+        return `<div>${userLink(target.username)} ${target.display_name && target.display_name !== target.username ?`(${esc(target.display_name)})` : ""}
                     <span class="badge text-bg-secondary">${esc(t(`role_${target.role}`))}</span>${blocked}</div>
                 <div class="small text-body-secondary">${esc(t("member_since"))} ${new Date(target.created_at).toLocaleDateString(LOCALE)}</div>`;
     }
@@ -49,7 +45,7 @@ function targetSummary(kind, target) {
     return `<div><span class="text-warning">${"★".repeat(target.stars)}${"☆".repeat(5 - target.stars)}</span>${hidden}
                 <span class="small">${userLink(target.rater)} → ${userLink(target.rated)} (${esc(target.title)})</span></div>
             ${target.comment ? `<div>${esc(target.comment)}</div>` : ""}
-            ${target.reply ? `<div class="small ms-3 border-start ps-2">${esc(t("reply_from", { user: target.rated }))} ${esc(target.reply)}</div>` : ""}`;
+            ${target.reply ? `<div class="small ms-3 border-start ps-2">${esc(t("reply_from", { user: userLabel(target.rated) }))} ${esc(target.reply)}</div>` : ""}`;
 }
 
 function reportCard(group) {
@@ -107,7 +103,7 @@ async function loadProblems() {
     list.innerHTML = problems.map(p => `
         <button type="button" class="list-group-item list-group-item-action" data-conversation="${p.id}">
             <div class="d-flex justify-content-between"><strong>${esc(p.title)}</strong><span>${eur.format(p.price)}</span></div>
-            <div class="small">${esc(t("mod_buyer_seller", { buyer: p.buyer, seller: p.seller }))} ·
+            <div class="small">${esc(t("mod_buyer_seller", { buyer: userLabel(p.buyer), seller: userLabel(p.seller) }))} ·
                 ${esc(t("deal_sent"))} ${date(p.sent_at)}</div>
         </button>`).join("");
     document.getElementById("no-problems").classList.toggle("d-none", problems.length > 0);
@@ -122,7 +118,7 @@ async function showConversation(id) {
         <h2 class="h6">${esc(c.title)} · ${esc(t(`deal_${c.deal_status}`))}</h2>
         ${c.messages.map(m => m.event
             ? `<div class="small text-body-secondary text-center my-1">${esc(t(`event_${m.event}`))} · ${date(m.created_at)}</div>`
-            : `<div class="small my-1"><strong>@${esc(m.sender_id === c.buyer_id ? c.buyer : c.seller)}</strong>
+            : `<div class="small my-1"><strong>${esc(userLabel(m.sender_id === c.buyer_id ? c.buyer : c.seller))}</strong>
                    <span class="text-body-secondary">${date(m.created_at)}</span><div style="white-space: pre-line;">${esc(m.body || "")}</div>
                    ${(m.photos || []).map(p => `<a href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.thumb_url)}" alt=""
                        style="width: 96px; height: 72px; object-fit: cover;" class="rounded me-1 mt-1"></a>`).join("")}</div>`).join("")}`;
@@ -133,7 +129,7 @@ async function showConversation(id) {
 async function loadLog() {
     const entries = await getJSON("/api/mod/log");
     document.getElementById("log").innerHTML = entries.length ? entries.map(e => `
-        <tr><td class="text-nowrap">${date(e.created_at)}</td><td>@${esc(e.moderator)}</td>
+        <tr><td class="text-nowrap">${date(e.created_at)}</td><td>${esc(userLabel(e.moderator))}</td>
             <td>${esc(t(`action_${e.action}`))}</td><td>${esc(t(`mod_kind_${e.kind}`))} #${e.target_id}</td>
             <td>${esc(e.note || "")}</td></tr>`).join("")
         : `<tr><td colspan="5" class="text-body-secondary">${esc(t("mod_no_log"))}</td></tr>`;

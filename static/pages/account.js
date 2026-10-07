@@ -49,6 +49,11 @@ handleForm("password-form", "/api/auth/password", { done: message => {
     message.className = "alert alert-success py-2";
     message.textContent = t("password_changed");
 } });
+handleForm("delete-form", "/api/auth/delete", { done: () => location.assign("/") });
+// the button (and Enter in the password box) only works once the box is ticked
+const deleteConfirm = document.getElementById("delete-confirm");
+deleteConfirm.onchange = () =>
+    document.querySelector("#delete-form button[type=submit]").disabled = !deleteConfirm.checked;
 
 async function load() {
     const user = await fetch("/api/auth/me").then(r => r.json()).catch(() => null);

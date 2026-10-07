@@ -111,6 +111,8 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `POST /api/auth/login` `{login, password, lang?}` | Log in with username or email; locked for 15 min after 5 wrong passwords |
 | `POST /api/auth/forgot` `{email, lang}` | E-mail a link to choose a new password (valid 1 hour, works once); the same answer whether or not the email has an account. Sent by SMTP once `SMTP_HOST` is set (`.env.example`), else only logged |
 | `POST /api/auth/reset` `{token, password}` | The new password from that link; logs in |
+| `POST /api/auth/password` `{current, password}` | A new password; other sessions are logged out |
+| `POST /api/auth/delete` `{password}` | Delete the account: anonymised (e-mail, password, names, collection, listing photos gone; ratings, reviews and messages kept as "deleted user"); not while a purchase is under way, not for an admin; logs out |
 | `POST /api/auth/logout` · `GET /api/auth/me` | Log out · the logged-in user (or `null`) |
 | `GET /api/listings?game_id=` · `GET /api/listings/<id>` | Pre-owned copies people sell (active / reserved), with photos; never the seller's email |
 | `GET /api/listings?platform=&sort=newest\|price_asc\|price_desc&page=` | The "Used" tab: one group per game edition with its sellers' active listings, paged |

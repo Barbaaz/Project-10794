@@ -12,12 +12,13 @@ import re
 import threading
 import time
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, or_, select
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import config
-from app.models import NOW, User, fields
+from app.models import NOW, CollectionItem, Conversation, Listing, Message, User, fields
 from app.services import mail_service
+from app.services.photo_storage import storage
 from db import session
 
 log = logging.getLogger(__name__)
@@ -116,15 +117,71 @@ def change_password(user_id, current, new, ip="?"):
     _check_password(new)
     with session() as s:
         user = s.get(User, user_id)
-        key = (ip, (user.username or user.email).lower())
-        if _locked(key):
-            raise AccountError("login_locked")
-        current = current or ""
-        if not (user.password_hash and len(current) <= MAX_PASSWORD and check_password_hash(user.password_hash, current)):
-            _note_failure(key)
-            raise AccountError("password_wrong")
+        _check_current_password(user, current, ip)
         user.password_hash = generate_password_hash(new)
     return get_user(user_id)
+
+
+def _check_current_password(user, password, ip):
+    """A logged-in user retyping their password (to change it, to delete the account): counts like a login."""
+    key = (ip, (user.username or user.email).lower())
+    if _locked(key):
+        raise AccountError("login_locked")
+    password = password or ""
+    if not (user.password_hash and len(password) <= MAX_PASSWORD and check_password_hash(user.password_hash, password)):
+        _note_failure(key)
+        raise AccountError("password_wrong")
+
+
+def delete_account(user_id, password, ip="?"):
+    """
+    Delete the account, given its password: anonymised, not removed (user, 2026-10-07). Gone: e-mail,
+    password, names, location, the collection and wishlist, every listing photo; listings on sale are
+    removed, open purchase requests cancelled / declined. Kept without a name: ratings (given and
+    received), game reviews, messages and finished purchases, which are the other side's history too.
+    Refused while a purchase is under way (finish or cancel it first), and for an admin (admins are
+    named from the command line).
+    """
+    from app.services.listing_service import DEAL_UNDER_WAY     # listing_service needs more of the app
+    with session() as s:
+        user = s.scalars(select(User).where(User.id == user_id, User.is_active)).first()
+        if user is None:
+            raise AccountError("not_found")
+        _check_current_password(user, password, ip)
+        if user.role == "admin":
+            raise AccountError("admin_cannot_delete")
+        mine = or_(Conversation.buyer_id == user_id, Conversation.seller_id == user_id)
+        if s.scalar(select(Conversation.id).where(mine, Conversation.deal_status.in_(DEAL_UNDER_WAY)).limit(1)):
+            raise AccountError("account_in_deal")
+
+        for conversation in s.scalars(select(Conversation).where(mine, Conversation.deal_status == "requested")):
+            conversation.deal_status = "cancelled" if conversation.buyer_id == user_id else "declined"
+        for conversation in s.scalars(select(Conversation).where(mine, Conversation.deal_status.not_in(("completed",)))):
+            # the other side sees why nothing more comes (a finished purchase keeps its last message)
+            s.add(Message(conversation_id=conversation.id, sender_id=None, event="account_deleted"))
+            conversation.last_message_at = NOW
+
+        photo_keys = []
+        for listing in s.scalars(select(Listing).where(Listing.user_id == user_id)):
+            photo_keys += [key for p in listing.photos for key in (p.photo_key, p.thumb_key)]
+            listing.photos.clear()            # delete-orphan: the rows go too
+            if listing.status in ("active", "reserved"):
+                listing.status, listing.updated_at = "removed", NOW
+        s.execute(delete(CollectionItem).where(CollectionItem.user_id == user_id))
+
+        logins = {(user.username or "").lower(), user.email}
+        user.username = user.password_hash = user.location = None
+        user.email = f"deleted-{user.id}@deleted.invalid"         # unique and never a real address
+        user.display_name = ""
+        user.is_active = user.collection_public = user.wish_alerts = False
+        user.role = "user"
+        user.deleted_at = NOW
+
+    for key in photo_keys:
+        storage.delete(key)
+    with _failures_lock:
+        for key in [k for k in _failures if k[1] in logins]:
+            _failures.pop(key, None)
 
 
 # --- forgotten password: a link by e-mail ---------------------------------------------------

@@ -26,7 +26,7 @@ function render() {
     document.getElementById("condition").textContent = conditionLabel(listing.condition);
     // the seller links to their profile (ratings, other listings)
     document.getElementById("seller").innerHTML =
-        `<a href="/user/${encodeURIComponent(listing.seller_username)}">${esc(sellerName(listing))}</a>
+        `${listing.seller_username ? `<a href="/user/${encodeURIComponent(listing.seller_username)}">${esc(sellerName(listing))}</a>` : esc(sellerName(listing))}
          ${ratingBadge(listing.seller_rating, listing.seller_rating_count)}
          <div class="text-body-secondary">${esc(t("member_since").toLowerCase())} ${new Date(listing.seller_since).toLocaleDateString(LOCALE)}</div>`;
     document.getElementById("published").textContent = new Date(listing.created_at).toLocaleDateString(LOCALE);
@@ -41,7 +41,7 @@ function render() {
     if (currentUser && currentUser.id === listing.user_id) {
         if (listing.removed_by_moderator) document.getElementById("removed-notice").classList.remove("d-none");
         else renderOwner();
-    } else {
+    } else if (listing.seller_username) {       // a deleted seller's: nothing to ask or report any more
         renderBuyerActions();
         document.getElementById("report").innerHTML = reportButton("listing", listing.id);
     }
@@ -51,6 +51,7 @@ function render() {
 function renderGallery(selected) {
     const photo = listing.photos[selected];
     document.getElementById("main-photo").src = photo?.url || "";
+    document.getElementById("main-photo").classList.toggle("d-none", !photo);    // a deleted seller's: none left
     document.getElementById("main-photo").alt = t("photo_n", { n: selected + 1 });
     const thumbs = document.getElementById("thumbs");
     thumbs.innerHTML = listing.photos.map((p, i) => `

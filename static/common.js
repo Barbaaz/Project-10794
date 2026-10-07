@@ -31,6 +31,16 @@ function esc(text) {
     return String(text ?? "").replace(/[&<>"']/g, c => ESCAPES[c]);
 }
 
+// "@name"; "utilizador removido" for an account deleted since (no username or page any more)
+function userLabel(username) {
+    return username ? `@${username}` : t("deleted_user");
+}
+
+// The same, linked to the user's page
+function userLink(username) {
+    return username ? `<a href="/user/${encodeURIComponent(username)}">@${esc(username)}</a>` : esc(t("deleted_user"));
+}
+
 // `stores` ({slug: store}) is filled by each page from /api/stores
 function storeName(slug) {
     return stores[slug]?.name || slug;
@@ -257,7 +267,7 @@ async function showPendingRatings() {
     banner.className = `alert ${overdue ? "alert-danger" : "alert-warning"} py-2 small`;
     banner.setAttribute("role", "status");
     banner.innerHTML = `<strong>${esc(t(overdue ? "ratings_overdue_title" : "ratings_pending_title", { count: pending.length }))}</strong>
-        ${pending.map(p => `<a href="/messages?c=${p.conversation_id}" class="ms-2">${esc(t("rate_link", { user: p.other_username, game: p.title }))}</a>`).join("")}`;
+        ${pending.map(p => `<a href="/messages?c=${p.conversation_id}" class="ms-2">${esc(t("rate_link", { user: userLabel(p.other_username), game: p.title }))}</a>`).join("")}`;
     const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl");
     container?.querySelector(":scope > div")?.after(banner);
 }

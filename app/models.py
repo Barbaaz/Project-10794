@@ -164,6 +164,7 @@ class User(Base):
     lang: Mapped[str] = mapped_column(String(2), server_default="pt", nullable=False)   # pt / en, for e-mails
     last_login_at = mapped_column(DateTime)
     created_at = created_at()
+    deleted_at = mapped_column(DateTime)      # the user deleted their account: anonymised (auth_service.delete_account)
 
     @property
     def is_moderator(self):

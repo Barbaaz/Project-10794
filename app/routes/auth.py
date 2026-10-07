@@ -126,6 +126,19 @@ def change_password():
     return jsonify(user)
 
 
+@bp.post("/delete")
+@login_required
+def delete_account():
+    """{password}: delete (anonymise) the account, then log out (auth_service.delete_account)."""
+    data = request.get_json(silent=True) or {}
+    try:
+        auth_service.delete_account(current_user()["id"], data.get("password"), request.remote_addr or "?")
+    except AccountError as e:
+        return account_error(e)
+    session.clear()
+    return jsonify(ok=True)
+
+
 @bp.post("/logout")
 def logout():
     session.clear()
