@@ -59,7 +59,7 @@ class Game(Base):
     platform_id: Mapped[int] = mapped_column(ForeignKey("platforms.id"))
     title: Mapped[str] = mapped_column(Unicode(300))
     normalized_title: Mapped[str] = mapped_column(Unicode(300))     # the game key (core/editions.py)
-    kind: Mapped[str] = mapped_column(String(12), server_default="game")   # game / console / controller / headset
+    kind: Mapped[str] = mapped_column(String(12), server_default="game")   # game / console (core/hardware.py)
     title_en: Mapped[str | None] = mapped_column(Unicode(300))      # English name (IGDB / moderators)
     title_fixed: Mapped[bool] = mapped_column(Boolean, default=False)  # title corrected by a moderator: kept
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))

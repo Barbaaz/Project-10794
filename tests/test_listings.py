@@ -153,9 +153,9 @@ def test_photos_can_be_added_and_removed_within_the_limits(market):
 
 
 def test_the_market_tab_filters_games_and_hardware(market):
-    """/api/listings?kind=game|hardware: a used controller is listed apart from games (core/hardware.py)."""
+    """/api/listings?kind=game|hardware: a used console is listed apart from games (core/hardware.py)."""
     client, c = market["client"], market["db"]
-    c.execute("UPDATE games SET kind = 'controller' WHERE id = ?", market["other_game"])
+    c.execute("UPDATE games SET kind = 'console' WHERE id = ?", market["other_game"])
     sign_up(client, "seller_kinds")
     new_listing(market)
     new_listing(market, game_id=market["other_game"], edition_id=market["other_edition"])

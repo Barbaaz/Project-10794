@@ -28,7 +28,7 @@ def for_game_or_all():
     """
     /api/listings?game_id=12: that game's listings everyone can see (a list).
     /api/listings?platform=PS5&sort=newest|price_asc|price_desc&page=1&per_page=48&kind=game|hardware: every
-    active listing, paged (the market tab); kind: only games, or only consoles / controllers / headsets.
+    active listing, paged (the market tab); kind: only games, or only consoles.
     """
     game_id = int_arg("game_id", None, minimum=1)
     if game_id:

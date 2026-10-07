@@ -172,15 +172,12 @@ const MAX_TAGS = 5;      // as many as /api/games/catalog takes
 let filtersOpen = false;
 
 function extraFilters() {
-    // the hardware tab has no game filters (category, tags, PEGI), but a type (/?tab=hardware&type=console)
-    if (onHardwareTab()) return [["store", catalogStore], ["type", hardwareType]];
+    // the consoles tab has no game filters (category, tags, PEGI)
+    if (onHardwareTab()) return [["store", catalogStore]];
     return [["store", catalogStore], ["genre", catalogGenre], ["tags", catalogTag], ["pegi", catalogPegi]];
 }
 
-// Consoles, controllers and headsets (user, 2026-10-07): their own tab, with a type filter
-let hardwareType = new URLSearchParams(location.search).get("type") || "";
-const HARDWARE_TYPES = ["console", "controller", "headset"];
-
+// Consoles (user, 2026-10-07): their own tab
 function onHardwareTab() {
     return frontTab === "hardware" && !document.getElementById("q").value.trim();     // a search lists games
 }
@@ -266,10 +263,7 @@ function catalogParams(page, platform, extra = {}) {
 
 async function loadCatalogPage(special, platform, page, hardware = false) {
     const params = catalogParams(page, platform, special ? { editions: "special" } : {});
-    if (hardware) {          // the type filter is the API's kind
-        params.delete("type");
-        params.set("kind", HARDWARE_TYPES.includes(hardwareType) ? hardwareType : "hardware");
-    }
+    if (hardware) params.set("kind", "hardware");
     const data = await fetch(`/api/games/catalog?${params}`).then(r => r.json());
     // pages is computed here too, in case the server is older than this page
     const pages = data.pages || Math.max(1, Math.ceil(data.total / (data.per_page || CATALOG_PAGE)));
@@ -282,7 +276,7 @@ async function loadCatalogPage(special, platform, page, hardware = false) {
 // Market tab: every game users sell (active listings), 48 at a time, newest first or by price
 // ---------------------------------------------------------------------------
 let marketSort = saved("marketSort", "newest");
-// games, consoles / controllers / headsets, or both ("")
+// games, consoles, or both ("")
 let marketKind = saved("marketKind", "");
 
 async function loadMarketPage(platform, page) {
@@ -358,17 +352,12 @@ function renderCatalog(data, showPage = showCatalogPage) {
             <button type="button" class="btn-close btn-close-white" style="font-size: .55rem;" data-remove-tag="${esc(tag)}"
                     aria-label="${esc(t("remove_tag", { tag: t(`tag_${tag}`) }))}"></button></span>`).join("");
     const pegiOptions = PEGI_AGES.map(age => `<option value="${age}">${esc(t("pegi_up_to", { age }))}</option>`).join("");
-    const typeOptions = HARDWARE_TYPES.map(type => `<option value="${type}">${esc(t(`kind_${type}`))}</option>`).join("");
     const hardware = data.hardware && !data.query;
     const wrap = document.createElement("div");
-    const activeFilters = hardware ? [catalogStore, hardwareType].filter(Boolean).length
+    const activeFilters = hardware ? [catalogStore].filter(Boolean).length
         : [catalogGenre, catalogPegi, catalogStore].filter(Boolean).length + chosenTags.length;
-    // the game filters (category, tags, PEGI) or, on the hardware tab, the type
-    const kindFilters = hardware ? `
-            <div><label class="form-label small text-body-secondary mb-1" for="catalog-type">${t("type_filter")}</label>
-                <select id="catalog-type" class="form-select form-select-sm">
-                    <option value="">${t("all_types")}</option>${typeOptions}
-                </select></div>` : `
+    // the game filters (category, tags, PEGI); the consoles tab only has the store's
+    const kindFilters = hardware ? "" : `
             <div><label class="form-label small text-body-secondary mb-1" for="catalog-genre">${t("genre_filter")}</label>
                 <select id="catalog-genre" class="form-select form-select-sm">
                     <option value="">${t("all_genres")}</option>${genreOptions}
@@ -425,9 +414,7 @@ function renderCatalog(data, showPage = showCatalogPage) {
         };
     };
     filterSelect("#catalog-store", catalogStore, v => catalogStore = v);
-    if (hardware) {
-        filterSelect("#catalog-type", hardwareType, v => hardwareType = v);
-    } else {
+    if (!hardware) {
         filterSelect("#catalog-genre", catalogGenre, v => catalogGenre = v);
         filterSelect("#catalog-tag", "", v => catalogTag = [...chosenTags, v].filter(Boolean).join(","));
         wrap.querySelectorAll("[data-remove-tag]").forEach(b => b.onclick = async () => {

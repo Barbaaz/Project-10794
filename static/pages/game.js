@@ -66,7 +66,7 @@ function render() {
     game.editions.forEach((edition, i) => container.appendChild(renderEdition(edition, i)));
     drawCharts();
     loadMarket();
-    // players' reviews are of games; a console, controller or headset has none (core/hardware.py)
+    // players' reviews are of games; a console has none (core/hardware.py)
     const isGame = (game.kind || "game") === "game";
     document.getElementById("reviews").classList.toggle("d-none", !isGame);
     if (isGame) loadReviewsOnce();

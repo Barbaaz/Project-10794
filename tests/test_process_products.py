@@ -89,33 +89,31 @@ def test_a_match_only_store_links_to_known_games_and_editions_only(cursor):
     assert links() == {"a": True, "b": False, "c": False} and games() == [("Test Game 1",)]
 
 
-def test_hardware_is_grouped_strictly_and_kept_apart_from_games(cursor):
-    """Consoles, controllers and headsets (core/hardware.py): their own kind, one Standard edition, the
-    same product across stores only with the same cleaned name; the catalogue lists them on their own tab."""
+def test_consoles_are_grouped_strictly_and_kept_apart_from_games(cursor):
+    """Consoles (core/hardware.py): their own kind, one Standard edition, the same console across stores
+    only with the same cleaned name; the catalogue lists them on their own tab."""
     from app.services.game_service import catalog
     from pipeline.rematch import rematch_all
 
     process_products("press_start", [
         product(1, external_name="Test Game 1 PS5"),
-        product(2, external_name="Comando sem fios DualSense PS5 Branco", kind="controller"),
-        product(3, external_name="Consola PS5 Slim Digital", kind="console", price=449.99),
+        product(2, external_name="Consola PS5 Slim Digital 1TB", kind="console", price=449.99),
     ])
     process_products("mega-mania", [
-        product("a", external_name="DualSense Wireless Controller - White (PlayStation 5)", kind="controller", price=64.99),
-        product("b", external_name="Comando sem fios DualSense PS5 Preto", kind="controller"),     # another colour
+        product("a", external_name="PlayStation 5 Slim Digital Edition 1 TB Consola", kind="console", price=459.99),
+        product("b", external_name="Consola PS5 Pro", kind="console", price=799.99),          # another model
     ])
     games = [tuple(r) for r in cursor.execute(
         "SELECT g.kind, g.normalized_title, COUNT(DISTINCT e.id) AS editions, COUNT(sp.id) AS offers FROM games g "
         "JOIN game_editions e ON e.game_id = g.id JOIN store_products sp ON sp.game_id = g.id "
         "GROUP BY g.kind, g.normalized_title ORDER BY g.kind, g.normalized_title").fetchall()]
-    assert games == [("console", "console:digital slim", 1, 1), ("controller", "controller:black dualsense", 1, 1),
-                     ("controller", "controller:dualsense white", 1, 2), ("game", "test game 1", 1, 1)]
-    assert cursor.execute("SELECT DISTINCT kind FROM store_products WHERE url LIKE '%/2'").fetchone()[0] == "controller"
+    assert games == [("console", "console:1 digital slim tb", 1, 2), ("console", "console:pro", 1, 1),
+                     ("game", "test game 1", 1, 1)]
+    assert cursor.execute("SELECT DISTINCT kind FROM store_products WHERE url LIKE '%/2'").fetchone()[0] == "console"
 
     names = lambda **kw: sorted(g["name"] for g in catalog(**kw)["groups"])
     assert names() == ["Test Game 1"]
-    assert len(names(kind="hardware")) == 3 and len(names(kind="controller")) == 2
-    assert names(kind="console") == ["Consola PS5 Slim Digital"]
+    assert names(kind="hardware") == names(kind="console") == ["Consola PS5 Pro", "Consola PS5 Slim Digital 1TB"]
     # the rematch links them the same way
     assert rematch_all()[0] == 0
 

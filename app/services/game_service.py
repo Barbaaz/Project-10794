@@ -272,8 +272,8 @@ CARD_SORTS = {
 }
 
 
-# What catalog(kind=…) lists: games, or the hardware tab's consoles / controllers / headsets (core/hardware.py)
-HARDWARE_KINDS = ("console", "controller", "headset")
+# What catalog(kind=…) lists: games, or the consoles tab's (core/hardware.py; consoles only, user 2026-10-07)
+HARDWARE_KINDS = ("console",)
 
 
 def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False, q=None, store=None, genre=None,
@@ -293,7 +293,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
     shown, to compare).
     genre: only games in this category (app/services/genre_service.py); an unknown one is ignored.
     tags: only games with all these tags; pegi: PEGI rating up to this age (app/services/tag_service.py).
-    kind: "game" (default), "hardware" (consoles, controllers and headsets) or one of HARDWARE_KINDS.
+    kind: "game" (default), or "hardware" / "console": the consoles.
     """
     order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS["name"])
     kinds = HARDWARE_KINDS if kind == "hardware" else (kind,) if kind in HARDWARE_KINDS else ("game",)

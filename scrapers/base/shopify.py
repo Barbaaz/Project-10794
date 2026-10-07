@@ -45,7 +45,7 @@ class ShopifyScraper(BaseScraper):
             p["kind"] = "game"
         log.info("[%s] %d products", self.store_slug, len(products))
 
-        # The feed has the store's consoles, controllers and headsets too (core/hardware.py), so sorting them
+        # The feed has the store's consoles too (core/hardware.py), so sorting them
         # costs no request: kept with read_hardware, otherwise only noted (hardware_preview) to be checked
         hardware = []
         for page_kind in ("console", "accessory"):

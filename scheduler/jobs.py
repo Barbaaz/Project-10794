@@ -34,7 +34,7 @@ MIN_HOURS_BETWEEN_RUNS = 8
 # answered "too many requests" before; Rádio Popular too (match-only, few of its products link).
 LIGHT_STORES = ("press_start", "mega-mania", "gaming_replay")
 
-# Stores whose consoles, controllers and headsets are read too (core/hardware.py; user, 2026-10-07):
+# Stores whose consoles are read too (core/hardware.py; user, 2026-10-07: consoles only):
 # a store is added once a check run's kept / left-out names were read (these three: 2026-10-07).
 # Not yet: CSTech (its feed has them, product_type not "Jogos …"), Techinn, Rádio Popular (match-only)
 HARDWARE_STORES = {"press_start", "mega-mania", "gaming_replay"}

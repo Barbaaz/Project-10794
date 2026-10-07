@@ -26,7 +26,7 @@ class BaseScraper:
         build_page_url(url, page)         -> needed for scrape_catalog()
         catalog_urls                      -> {category url: console code}
         hardware_urls                     -> {category url: (console code or None, "console" | "accessory")}:
-                                             consoles, controllers and headsets (core/hardware.py), read
+                                             consoles (core/hardware.py), read
                                              when read_hardware is on (scheduler/jobs.py HARDWARE_STORES)
     (Stores with another kind of catalogue, like a JSON feed, override scrape_catalog instead.)
     Every product also gets "kind": "game", or the hardware kind.
@@ -108,8 +108,8 @@ class BaseScraper:
         return hardware + products
 
     def keep_hardware(self, products, page_kind):
-        """The consoles, controllers and headsets of a hardware page, with their kind; the rest
-        (small accessories, chairs, other platforms…) left out, kept in hardware_left_out to check."""
+        """The consoles of a hardware page, with their kind; the rest
+        (controllers, accessories, other platforms…) left out, kept in hardware_left_out to check."""
         kept = []
         for p in products:
             kind = kind_of(p["external_name"], page_kind)

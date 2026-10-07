@@ -133,7 +133,7 @@ def card_group(row, offers, **extra):
         "cover": card_cover(row),
         "console": row["console"],
         "platform_name": row["platform_name"],
-        "kind": row.get("kind", "game"),        # game / console / controller / headset (core/hardware.py)
+        "kind": row.get("kind", "game"),        # game / console (core/hardware.py)
         **extra,
         "offers": offers,
     }

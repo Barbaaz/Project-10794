@@ -1,11 +1,10 @@
 """
-Consoles, controllers and headsets the stores sell, next to their games (user, 2026-10-07: those kinds
-only; no small accessories such as cases, cables, chargers or memory cards, no chairs, no PC
-peripherals, no merchandise).
+The consoles the stores sell, next to their games (user, 2026-10-07: consoles only — controllers,
+headsets and other accessories were tried that evening and dropped; no merchandise).
 
-    kind_of("Comando sem fios DualSense PS5 Branco", "accessory")   → "controller"
-    kind_of("Estação de carregamento DualSense", "accessory")       → None (a small accessory)
-    hardware_key("Comando DualSense Wireless Controller PS5 Branco", "controller") → "controller:dualsense white"
+    kind_of("Consola PS5 Slim Digital + 2 Comandos", "console")    → "console" (a bundle)
+    kind_of("Comando sem fios DualSense PS5", "console")             → None (a controller)
+    hardware_key("Consola PlayStation 5 Slim Edição Digital", "console") → "console:digital slim"
 
 A product is the same in two stores only when its cleaned name is the same (strict, user's choice):
 moderators merge the rest in /admin, as they do for games.
@@ -15,7 +14,7 @@ import unicodedata
 
 from core.normalizer import normalize_name
 
-KINDS = ("console", "controller", "headset")
+KINDS = ("console",)
 
 # The platforms a store's hardware is kept for (older ones only for games)
 PLATFORMS = {"PS5", "PS4", "Switch2", "Switch", "XboxSeries", "XboxOne"}
@@ -60,23 +59,21 @@ HEADSET = _words(
 CONSOLE = _words(r"consolas?", r"consoles?")
 
 
-def kind_of(name, page="accessory"):
+def kind_of(name, page="console"):
     """
-    The product's kind (KINDS), or None when it isn't one we keep. `page` is the kind of store
-    page it was listed on: "console" pages also carry bundles and the odd bag; "accessory" pages
-    carry everything else (controllers, headsets, and the small accessories we leave out).
+    "console", or None when it isn't one. `page` is the kind of store page it was listed on: console
+    pages also carry the odd controller, bag or bundle; on any other page only a name saying
+    "consola" counts (a store's feed: CSTech).
     """
-    # after a "+" come the extras: "DualSense + Cabo USB-C" is a controller, "Base de Carregamento + …" isn't,
-    # nor "Sponge Rings + Grips - Comando PS4": the product is what comes before it
+    # after a "+" come the extras: "Consola PS5 + 2 Comandos" is a console, "Base de Carregamento + …"
+    # isn't: the product is what comes before it
     text = _plain(name).split(" + ")[0]
     if NOT_KEPT.search(text):
         return None
-    if HEADSET.search(text):
-        return "headset"
-    if CONSOLE.search(text) and (page == "console" or not CONTROLLER.search(text)):
-        return "console"       # "Consola PS5 + 2 comandos" is a console bundle
-    if CONTROLLER.search(text):
-        return "controller"
+    if CONSOLE.search(text):
+        return "console"
+    if HEADSET.search(text) or CONTROLLER.search(text):
+        return None            # a controller, wheel or headset on a console page
     return "console" if page == "console" else None
 
 

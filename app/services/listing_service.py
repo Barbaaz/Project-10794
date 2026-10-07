@@ -104,8 +104,8 @@ def browse(platform=None, sort="newest", page=1, per_page=48, kind=None):
     """
     The market tab: one group per game edition users sell (a game can have several sellers),
     each with its active listings, cheapest first; editions with the newest listing first, or
-    by their cheapest price. Paged by edition. kind: "game", "hardware" (consoles, controllers,
-    headsets: core/hardware.py) or None for both.
+    by their cheapest price. Paged by edition. kind: "game", "hardware" (consoles:
+    core/hardware.py) or None for both.
     """
     used = (select(Listing.edition_id, func.min(Listing.price).label("min_price"),
                    func.max(Listing.created_at).label("newest"))
