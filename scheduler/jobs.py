@@ -8,6 +8,7 @@ from pathlib import Path
 import db
 from db import connection
 from pipeline.process_scraped_data import process_products
+from scrapers.base.http_client import StoreBlocked
 from scrapers.cstech.scraper import CSTechScraper
 from scrapers.gaming_replay.scraper import GamingReplayScraper
 from scrapers.mega_mania.scraper import MegaManiaScraper
@@ -26,8 +27,13 @@ MIN_PRODUCT_RATIO = 0.7
 RELEASE_DATE_RECHECK_DAYS = 7
 
 # A store isn't scraped again this soon after a successful run (unless forced), so repeated
-# manual runs don't flood it with requests. The schedule (06:00 and 18:00) is above this.
+# manual runs (and the logon task's checks every 2 hours) don't flood it with requests.
 MIN_HOURS_BETWEEN_RUNS = 8
+
+# A store that answered 403 / 429 isn't asked again this soon (unless forced): the logon task checks
+# every 2 hours, and a store that refuses us shouldn't get a request from each check
+BLOCKED_PAUSE_HOURS = 24
+BLOCKED = "Blocked: "      # error_message prefix of such a run
 
 # The evening run (run_all_scrapers --light): these stores again, listing pages only (prices and
 # stock; no product pages), so prices are at most ~12 h old. CSTech stays once a day: it has
@@ -78,6 +84,10 @@ class RanRecently(Exception):
     """The store was scraped successfully less than MIN_HOURS_BETWEEN_RUNS ago."""
 
 
+class Paused(RanRecently):
+    """The store answered 403 / 429 less than BLOCKED_PAUSE_HOURS ago; skipped like a recent run."""
+
+
 def run_store(slug, accept_drop=False, force=False, light=False):
     """
     Scrape one store's catalogue into the database, logging the run in scrape_runs.
@@ -113,6 +123,11 @@ def store_lock(slug):
 
 def scrape_store(slug, accept_drop, force, light):
     """run_store's work, with the store's lock held."""
+    blocked = hours_since_blocked(slug)
+    if not force and blocked is not None and blocked < BLOCKED_PAUSE_HOURS:
+        raise Paused(f"[{slug}] answered 403 / 429 {blocked:.1f} h ago (pause {BLOCKED_PAUSE_HOURS} h); "
+                     f"use --force to run anyway")
+
     hours = hours_since_last_success(slug)
     if not force and hours is not None and hours < MIN_HOURS_BETWEEN_RUNS:
         raise RanRecently(f"[{slug}] last successful run {hours:.1f} h ago (minimum {MIN_HOURS_BETWEEN_RUNS} h); "
@@ -162,7 +177,7 @@ def scrape_store(slug, accept_drop, force, light):
 
     except Exception as e:
         log.exception("[%s] failed", slug)
-        finish_run(run_id, "failed", error_message=str(e))
+        finish_run(run_id, "failed", error_message=(BLOCKED if isinstance(e, StoreBlocked) else "") + str(e))
         raise
 
 
@@ -199,6 +214,29 @@ def hours_since_last_success(slug):
             "FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
             "WHERE s.slug = ? AND r.status IN ('success', 'warning')",
             slug,
+        ).fetchone()
+    return float(row[0]) if row and row[0] is not None else None
+
+
+def hours_since_blocked(slug):
+    """Hours since the store's last run, when that run ended with a 403 / 429; otherwise None."""
+    with connection() as conn:
+        row = conn.cursor().execute(
+            "SELECT EXTRACT(EPOCH FROM utcnow() - r.finished_at) / 3600, r.error_message "
+            "FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
+            "WHERE s.slug = ? AND r.finished_at IS NOT NULL ORDER BY r.id DESC LIMIT 1",
+            slug,
+        ).fetchone()
+    return float(row[0]) if row and (row[1] or "").startswith(BLOCKED) else None
+
+
+def hours_since_last_run(slugs):
+    """Hours since any of these stores' runs last started (whatever its outcome); None if never."""
+    with connection() as conn:
+        row = conn.cursor().execute(
+            "SELECT EXTRACT(EPOCH FROM utcnow() - MAX(r.started_at)) / 3600 "
+            "FROM scrape_runs r JOIN stores s ON s.id = r.store_id WHERE s.slug = ANY(?)",
+            [list(slugs)],      # one parameter, the array (a lone list would be taken as the parameters)
         ).fetchone()
     return float(row[0]) if row and row[0] is not None else None
 

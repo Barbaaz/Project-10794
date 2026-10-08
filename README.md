@@ -243,25 +243,25 @@ Each run is logged in the `scrape_runs` table and in `logs\scraper.log`.
 
 ### Daily update
 
-Live prices and stock are re-checked by hand for now (the PC isn't on at fixed hours; the two
-Windows scheduled tasks were removed on 2026-10-08):
+The PC isn't on at fixed hours, so one Windows task, `Project10794-Scrapers`, starts 10 minutes
+after logon and again every 2 hours while logged on, and runs whatever is due
+(`python -m scheduler.run_all_scrapers --due`):
 
-- `python -m scheduler.run_all_scrapers`: every store (including product pages for
-  descriptions / release dates), then the IGDB lookups (new games, videos, tags, time to beat)
-- `python -m scheduler.run_all_scrapers --light`: Press Start, Mega Mania and Gaming Replay
-  again, listing pages only (~250 requests). CSTech (has answered "too many requests" before)
-  and Rádio Popular are left out
+- the **full run** (`python -m scheduler.run_all_scrapers`) if none started in the last 20 hours:
+  every store (including product pages for descriptions / release dates), then the IGDB lookups
+  (new games, videos, tags, time to beat)
+- otherwise the **light run** (`--light`): Press Start, Mega Mania and Gaming Replay again, listing
+  pages only (~250 requests). CSTech and Rádio Popular stay once a day
 
-A store isn't run again within 8 hours of a successful run (`MIN_HOURS_BETWEEN_RUNS`).
-
-The tasks can still be registered (only useful on a PC that is on at those hours):
+So the stores get no more requests than with fixed 06:00 / 18:00 runs. A store isn't run again within
+8 hours of a successful run (`MIN_HOURS_BETWEEN_RUNS`), nor within 24 hours of answering 403 / 429
+(`BLOCKED_PAUSE_HOURS`); either is skipped without a request. One copy of the task runs at a time.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1                   # 06:00 and 18:00
-powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -Time 03:30 -EveningTime 17:00
-powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -EveningTime ""   # morning only
-Start-ScheduledTask -TaskName Project10794-Scrapers                                          # run now
-Unregister-ScheduledTask -TaskName Project10794-Scrapers* -Confirm:$false                    # remove both
+powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1                # every 2 h
+powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -EveryHours 3
+Start-ScheduledTask -TaskName Project10794-Scrapers                                       # check now
+Unregister-ScheduledTask -TaskName Project10794-Scrapers -Confirm:$false                  # remove
 ```
 
 The task runs while you are logged on; if the computer was off at the scheduled time,

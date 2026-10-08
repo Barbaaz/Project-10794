@@ -1,21 +1,22 @@
-# Registers the Windows scheduled tasks that scrape the stores. Safe to re-run (replaces them).
+# Registers the Windows scheduled task that scrapes the stores. Safe to re-run (replaces it).
 # Usage, from the project folder:
 #
 #   powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1
-#   powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -Time 03:30 -EveningTime 17:00
+#   powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -EveryHours 3
 #
-# Two tasks:
-#   Project10794-Scrapers          every store, then IGDB (morning)
-#   Project10794-Scrapers-Evening  Press Start, Mega Mania, Gaming Replay again, listing pages only
-#                                  (python -m scheduler.run_all_scrapers --light); -EveningTime "" to skip
+# The PC isn't on at fixed hours (user, 2026-10-08), so there are no fixed times: the task starts
+# 10 minutes after logon and again every -EveryHours while the user is logged on, and runs
+# python -m scheduler.run_all_scrapers --due, which decides what is due:
+#   the full run (every store, then IGDB) if none started in the last 20 hours, else the light run
+#   (Press Start, Mega Mania, Gaming Replay, listing pages only). A store ran less than 8 h ago, or
+#   one that answered 403 / 429 in the last 24 h, is skipped without a request; one copy runs at a time.
 #
-# Remove them with:  Unregister-ScheduledTask -TaskName Project10794-Scrapers* -Confirm:$false
-# Run one now with:  Start-ScheduledTask -TaskName Project10794-Scrapers
-# Logs:              logs\scraper.log   and the scrape_runs table
+# Remove it with:  Unregister-ScheduledTask -TaskName Project10794-Scrapers -Confirm:$false
+# Run it now with: Start-ScheduledTask -TaskName Project10794-Scrapers
+# Logs:            logs\scraper.log   and the scrape_runs table
 
 param(
-    [string]$Time = "06:00",
-    [string]$EveningTime = "18:00",
+    [int]$EveryHours = 2,
     [string]$TaskName = "Project10794-Scrapers"
 )
 
@@ -29,34 +30,30 @@ $pythonw = Join-Path (Split-Path -Parent $python) "pythonw.exe"
 if (-not (Test-Path $pythonw)) { $pythonw = $python }
 
 $settings = New-ScheduledTaskSettingsSet `
-    -StartWhenAvailable `
     -RunOnlyIfNetworkAvailable `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -ExecutionTimeLimit (New-TimeSpan -Hours 2) `
     -MultipleInstances IgnoreNew
 
-# Runs as the current user (needed for the database's Windows authentication),
-# while that user is logged on. -StartWhenAvailable catches up on a missed run
-# as soon as the computer is on again.
-function Register-ScraperTask($name, $at, $arguments, $description) {
-    $action = New-ScheduledTaskAction -Execute $pythonw -Argument $arguments -WorkingDirectory $projectDir
-    $trigger = New-ScheduledTaskTrigger -Daily -At $at
-    Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Settings $settings `
-        -Description $description -Force | Out-Null
-    Write-Host "Task '$name' registered: daily at $at"
-    Write-Host "  $pythonw $arguments"
+# At logon (after 10 minutes, so the network and PostgreSQL are up), then every $EveryHours hours
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+$trigger.Delay = "PT10M"
+$trigger.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date) `
+    -RepetitionInterval (New-TimeSpan -Hours $EveryHours)).Repetition
+
+$arguments = "-m scheduler.run_all_scrapers --due"
+$action = New-ScheduledTaskAction -Execute $pythonw -Argument $arguments -WorkingDirectory $projectDir
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
+    -Description "Scrapes store prices and stock into the Project10794 database when due (full run about once a day)." `
+    -Force | Out-Null
+
+# The old evening task (fixed 18:00), if still there
+if (Get-ScheduledTask -TaskName "$TaskName-Evening" -ErrorAction SilentlyContinue) {
+    Unregister-ScheduledTask -TaskName "$TaskName-Evening" -Confirm:$false
+    Write-Host "Task '$TaskName-Evening' removed"
 }
 
-Register-ScraperTask $TaskName $Time "-m scheduler.run_all_scrapers" `
-    "Scrapes store prices and stock into the Project10794 database (every store), then IGDB."
-
-$evening = "$TaskName-Evening"
-if ($EveningTime) {
-    Register-ScraperTask $evening $EveningTime "-m scheduler.run_all_scrapers --light" `
-        "Refreshes prices and stock of Press Start, Mega Mania and Gaming Replay (listing pages only)."
-} elseif (Get-ScheduledTask -TaskName $evening -ErrorAction SilentlyContinue) {
-    Unregister-ScheduledTask -TaskName $evening -Confirm:$false
-    Write-Host "Task '$evening' removed"
-}
+Write-Host "Task '$TaskName' registered: at logon (+10 min), then every $EveryHours h while logged on"
+Write-Host "  $pythonw $arguments"
 Write-Host "  in $projectDir"
