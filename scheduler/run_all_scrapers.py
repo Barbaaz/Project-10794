@@ -4,7 +4,8 @@ Scrape every active store into the database.
     python -m scheduler.run_all_scrapers            # the morning run: every store, then IGDB
     python -m scheduler.run_all_scrapers --light    # the evening run: LIGHT_STORES, listing pages only
 
-Runs daily via the Windows task set up by scheduler/register_daily_task.ps1.
+Run by hand for now (the Windows tasks of scheduler/register_daily_task.ps1 were removed on 2026-10-08:
+the PC isn't on at fixed hours); on a server, scheduler/daemon.py runs it.
 A store scraped successfully less than 8 hours ago is skipped (see MIN_HOURS_BETWEEN_RUNS); a store
 another run is scraping is waited for first (store_lock), then skipped the same way.
 """

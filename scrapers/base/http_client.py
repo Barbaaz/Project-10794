@@ -21,10 +21,10 @@ from .robots import RobotsRules
 
 log = logging.getLogger(__name__)
 
-# Who we are, honestly (user, 2026-10-07): a bot with a page saying what it does. A store's robots.txt
-# group for "Project10794-bot" applies to us; one that refuses bots gets a 403 and we stop
+# A browser's User-Agent again (user, 2026-10-08): CSTech answered 429 to every request from
+# "Project10794-bot/1.0" (10-07 → 10-08) while the site still opened in a browser
 HEADERS = {
-    "User-Agent": "Project10794-bot/1.0 (+https://github.com/Barbaaz/Project-10794)"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
 
 MIN_INTERVAL = 3.0      # seconds between requests to the same site

@@ -107,11 +107,10 @@ def test_robots_txt_wildcards():
 
 
 def test_a_group_naming_our_bot_is_ours():
-    """Matched by our product token (RFC 9309), not by any word in the rest of the User-Agent."""
+    """Matched by the product token (RFC 9309), not by any word in the rest of the User-Agent."""
     from scrapers.base.robots import RobotsRules
 
-    ours = http_client.HEADERS["User-Agent"]
-    assert ours.startswith("Project10794-bot/")
+    ours = "Project10794-bot/1.0 (+https://github.com/Barbaaz/Project-10794)"
     named = "User-agent: *\nDisallow:\n\nUser-agent: project10794-bot\nDisallow: /private"
     assert not RobotsRules.parse(named, ours).allowed("https://shop.test/private/x")
     assert RobotsRules.parse(named, ours).allowed("https://shop.test/games")

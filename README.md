@@ -243,15 +243,18 @@ Each run is logged in the `scrape_runs` table and in `logs\scraper.log`.
 
 ### Daily update
 
-Live prices and stock are re-checked twice a day by two Windows scheduled tasks:
+Live prices and stock are re-checked by hand for now (the PC isn't on at fixed hours; the two
+Windows scheduled tasks were removed on 2026-10-08):
 
-- **06:00** `python -m scheduler.run_all_scrapers`: every store (including product pages for
+- `python -m scheduler.run_all_scrapers`: every store (including product pages for
   descriptions / release dates), then the IGDB lookups (new games, videos, tags, time to beat)
-- **18:00** `python -m scheduler.run_all_scrapers --light`: Press Start, Mega Mania and Gaming Replay
-  again, listing pages only (~250 requests), so their prices are at most ~12 h old. CSTech
-  (has answered "too many requests" before) and Rádio Popular stay once a day
+- `python -m scheduler.run_all_scrapers --light`: Press Start, Mega Mania and Gaming Replay
+  again, listing pages only (~250 requests). CSTech (has answered "too many requests" before)
+  and Rádio Popular are left out
 
 A store isn't run again within 8 hours of a successful run (`MIN_HOURS_BETWEEN_RUNS`).
+
+The tasks can still be registered (only useful on a PC that is on at those hours):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1                   # 06:00 and 18:00
