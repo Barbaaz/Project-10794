@@ -41,9 +41,10 @@ BLOCKED = "Blocked: "      # error_message prefix of such a run
 LIGHT_STORES = ("press_start", "mega-mania", "gaming_replay")
 
 # Stores whose consoles are read too (core/hardware.py; user, 2026-10-07: consoles only):
-# a store is added once a check run's kept / left-out names were read (these three: 2026-10-07).
-# Not yet: CSTech (its feed has them, product_type not "Jogos …"), Techinn, Rádio Popular (match-only)
-HARDWARE_STORES = {"press_start", "mega-mania", "gaming_replay"}
+# a store is added once a check run's kept / left-out names were read (the first three: 2026-10-07;
+# CSTech 2026-10-08: 40 consoles kept, all right, 455 accessories left out).
+# Not yet: Techinn, Rádio Popular (match-only)
+HARDWARE_STORES = {"press_start", "mega-mania", "gaming_replay", "cstech"}
 
 # To add a store: write its scraper, register it here and add it to database/seed_stores.sql
 SCRAPERS = {
