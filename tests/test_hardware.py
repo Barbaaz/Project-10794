@@ -10,6 +10,11 @@ from core.hardware import display_name, hardware_key, kind_of
     ("Consola Xbox Series X 1TB + 2 Comandos", "console", "console"),             # a bundle is a console
     ("Nintendo Switch OLED Branca", "console", "console"),                         # console page, no "consola"
     ("Consola PS5 Slim", "accessory", "console"),                                  # a feed: the name says so
+    # the PlayStation Portal counts as a console (user, 2026-10-08), wherever it's listed
+    ("Sony PlayStation Portal PS5", "accessory", "console"),
+    ("Consola Playstation Portal PS5", "console", "console"),
+    ("Estação Carregamento Konix RGB - PlayStation Portal & 2 DualSense PS5", "accessory", None),
+    ("POGA Lux Portable Gaming Case Preta PS5", "accessory", None),
     # controllers, wheels, headsets: not any more (user, 2026-10-07), also on a console page
     ("Comando sem fios DualSense Playstation 5 Edição Especial Icon Blue", "console", None),
     ("Volante Logitech G923 + Pedais PS5", "console", None),
@@ -32,6 +37,8 @@ def test_the_same_console_from_two_stores_has_one_key():
     assert hardware_key("Consola PS5 Slim Digital 1TB", "console") == \
         hardware_key("PlayStation 5 Slim Digital Edition 1 TB Consola", "console") == "console:1 digital slim tb"
     assert hardware_key("Consola Nintendo Switch OLED Branca", "console") == hardware_key("Nintendo Switch OLED White", "console")
+    # Mega Mania's and CSTech's names
+    assert hardware_key("Consola Playstation Portal PS5", "console") == hardware_key("Sony PlayStation Portal PS5", "console")
 
 
 def test_different_models_stay_apart():

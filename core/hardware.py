@@ -56,7 +56,8 @@ HEADSET = _words(
     r"auscultador\w*", r"headsets?", r"headphones?", r"auriculares?", r"earbuds?", r"necksets?",
     r"playstation vr\w*", r"ps ?vr\w*", r"vr ?2", r"realidade virtual",
 )
-CONSOLE = _words(r"consolas?", r"consoles?")
+# the PlayStation Portal counts as a console (user, 2026-10-08), also where its name doesn't say so
+CONSOLE = _words(r"consolas?", r"consoles?", r"playstation portal")
 
 
 def kind_of(name, page="console"):
