@@ -42,9 +42,10 @@ LIGHT_STORES = ("press_start", "mega-mania", "gaming_replay")
 
 # Stores whose consoles are read too (core/hardware.py; user, 2026-10-07: consoles only):
 # a store is added once a check run's kept / left-out names were read (the first three: 2026-10-07;
-# CSTech 2026-10-08: 40 consoles kept, all right, 455 accessories left out).
-# Not yet: Techinn, Rádio Popular (match-only)
-HARDWARE_STORES = {"press_start", "mega-mania", "gaming_replay", "cstech"}
+# CSTech 2026-10-08: 40 consoles kept, all right, 455 accessories left out; Techinn 2026-10-10: its 3
+# console pages saved once, 34 consoles kept, all right, 2 retro minis left out).
+# Not yet: Rádio Popular (match-only)
+HARDWARE_STORES = {"press_start", "mega-mania", "gaming_replay", "cstech", "techinn"}
 
 # To add a store: write its scraper, register it here and add it to database/seed_stores.sql
 SCRAPERS = {

@@ -39,7 +39,13 @@ IMPORT = re.compile(r"\s*\(?\b(?:[Ii]mport(?:ed)?|IMPORT|IMP)\b(\s+USA?\b)?\)?\s
 # taken off the front of the name once the platform is known ("Xbox 360 Batman" → "Batman")
 OLDER_PLATFORMS = [(code, re.compile(rf"^(?:{pattern})\s*", re.IGNORECASE)) for code, pattern in PLATFORM_PATTERNS
                    if code not in {"Switch2", "Switch", "PS5", "PS4", "PS3", "XboxSeries", "XboxOne", "Xbox", "PC"}]
-EDITION_AFTER_HYPHEN = re.compile(r"(?<=\w)-(?=(?:Special|Deluxe|Gold|Premium|Ultimate|Complete|Collector|Limited|"
+# Console names (its console pages, 2026-10-10): the platform repeated at the end ("Nintendo Switch OLED
+# JP switch"), the Portal without its brand ("Jogador remoto PS Portal"), an Xbox without "Xbox"
+# ("Console Series S 1TB")
+PLATFORM_AT_END = re.compile(r"(?<=\S)\s+switch$")
+PS_PORTAL = re.compile(r"^(?:playstation\s+)?(?:jogador\s+remoto\s+)?ps\s+portal\b", re.IGNORECASE)
+SERIES_WITHOUT_XBOX = re.compile(r"^console\s+series\b", re.IGNORECASE)
+EDITION_AFTER_HYPHEN =re.compile(r"(?<=\w)-(?=(?:Special|Deluxe|Gold|Premium|Ultimate|Complete|Collector|Limited|"
                                   r"Standard|Launch|Day|PlayStation\s+Hits)\b)", re.IGNORECASE)
 
 
@@ -56,6 +62,10 @@ def clean_name(name):
         name = rest
     name = re.sub(r"^xbox\s+one\s*/\s*(?!\s*(?:xbox|series))", "Xbox One ", name, flags=re.IGNORECASE)   # "Xbox One/ FIFA®21"
     name = re.sub(r"\bsmart\s+delivery\b\s*", "", name, flags=re.IGNORECASE)
+    if len(re.findall(r"\bswitch\b", name, re.IGNORECASE)) > 1:
+        name = PLATFORM_AT_END.sub("", name)
+    name = PS_PORTAL.sub("Consola PlayStation Portal PS5", name)
+    name = SERIES_WITHOUT_XBOX.sub("Console Xbox Series", name)
     name = LANGUAGE_TAG.sub("", name)
     for _ in range(2):              # "… IMP EU": the language, then the import mark
         name = LANGUAGE_END.sub("", name.strip())
