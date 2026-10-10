@@ -446,6 +446,8 @@ const crosshair = {
     },
 };
 
+const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
 function drawCharts() {
     charts.forEach(c => c.destroy());
     charts.length = 0;
@@ -461,27 +463,38 @@ function drawCharts() {
         if (!allDates.length) return;
 
         const firstDate = new Date(Math.min(...allDates));
-        const xMin = rangeStart && rangeStart > firstDate ? rangeStart : firstDate;
+        const xMin = startOfDay(rangeStart && rangeStart > firstDate ? rangeStart : firstDate);
+        const days = [];
+        for (let d = xMin; d <= now; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) days.push(d);
 
+        // One point a day per store (prices are only saved when they change): that day's last price,
+        // so hovering any day shows every store's price then; a dot where it changed that day
         const datasets = offers.map(o => {
             const color = storeColor(o.store);
-            const points = o.history.map(p => ({ x: new Date(p.date), y: p.price, in_stock: p.in_stock, date: p.date }));
-            // The last price still holds today for products the store still sells
-            const last = points[points.length - 1];
-            if (activeOffers.has(o.offer_id)) points.push({ ...last, x: now, extended: true });
+            const changes = o.history.map(p => ({ at: new Date(p.date), y: p.price, in_stock: p.in_stock, date: p.date }));
+            const end = activeOffers.has(o.offer_id) ? now : changes[changes.length - 1].at;   // gone from the store: stops
+            let next = 0, current = null;
+            const points = days.map(day => {
+                const dayEnd = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+                let changed = false;
+                while (next < changes.length && changes[next].at < dayEnd) { current = changes[next++]; changed = true; }
+                if (!current || day > end) return { x: day, y: null };
+                return { x: day, y: current.y, in_stock: current.in_stock, date: current.date, changed };
+            });
 
-            const isLow = p => low && o.offer_id === low.offer_id && p.date === low.date && !p.extended;
+            const isLow = p => low && o.offer_id === low.offer_id && p.changed && p.date === low.date;
             return {
                 label: storeName(o.store),
                 data: points,
                 stepped: true,
+                spanGaps: false,
                 borderColor: color,
                 backgroundColor: color,
                 borderWidth: 2,
                 borderCapStyle: "round",
                 borderJoinStyle: "round",
                 segment: { borderDash: ctx => ctx.p0.raw.in_stock ? undefined : [4, 4] },
-                pointRadius: ctx => isLow(ctx.raw) ? 6 : 0,
+                pointRadius: ctx => isLow(ctx.raw) ? 6 : ctx.raw.changed ? 3 : 0,
                 pointHoverRadius: 5,
                 pointBorderColor: css("--surface-1"),
                 pointBorderWidth: ctx => isLow(ctx.raw) ? 2 : 1,
@@ -516,12 +529,13 @@ function drawCharts() {
             options: {
                 maintainAspectRatio: false,
                 animation: false,
-                interaction: { mode: "nearest", axis: "x", intersect: false },
+                // every store's price on the hovered day (the points share their days)
+                interaction: { mode: "index", intersect: false },
                 scales: {
                     x: {
                         type: "time",
-                        min: xMin, max: now,
-                        time: { tooltipFormat: "dd/MM/yyyy HH:mm", displayFormats: { hour: "HH:mm", day: "dd/MM", week: "dd/MM", month: "MM/yyyy" } },
+                        min: xMin, max: days[days.length - 1],
+                        time: { minUnit: "day", tooltipFormat: "dd/MM/yyyy", displayFormats: { day: "dd/MM", week: "dd/MM", month: "MM/yyyy" } },
                         grid: { color: css("--gridline") },
                         border: { color: css("--baseline") },
                         ticks: { color: css("--text-muted"), maxTicksLimit: 8 },
@@ -540,10 +554,11 @@ function drawCharts() {
                         labels: { color: css("--text-secondary"), boxWidth: 16, boxHeight: 3 },
                     },
                     tooltip: {
+                        filter: item => item.raw.y != null,     // a store with no price that day
                         callbacks: {
                             label: ctx => {
                                 const p = ctx.raw;
-                                return `${ctx.dataset.label}: ${eur.format(p.y)}${p.in_stock ? "" : ` ${t("chart_sold_out")}`}${p.extended ? ` ${t("chart_current")}` : ""}`;
+                                return `${ctx.dataset.label}: ${eur.format(p.y)}${p.in_stock ? "" : ` ${t("chart_sold_out")}`}${p.changed ? ` ${t("chart_changed")}` : ""}`;
                             },
                         },
                     },

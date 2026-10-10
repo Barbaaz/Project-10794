@@ -674,7 +674,7 @@ const STRINGS = {
         col_date: "Data",
         chart_low: "Mínimo histórico {price}",
         chart_sold_out: "(esgotado)",
-        chart_current: "(atual)",
+        chart_changed: "(mudou neste dia)",
         // players' reviews (game page, admin page)
         reviews_title: "Avaliações dos jogadores",
         reviews_platform: "Desta versão ({platform}); cada plataforma tem as suas.",
@@ -1373,7 +1373,7 @@ const STRINGS = {
         col_date: "Date",
         chart_low: "Historical low {price}",
         chart_sold_out: "(sold out)",
-        chart_current: "(current)",
+        chart_changed: "(changed that day)",
         // players' reviews (game page, admin page)
         reviews_title: "Player reviews",
         reviews_platform: "Of this version ({platform}); each platform has its own.",
