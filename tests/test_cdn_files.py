@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGES = [*(ROOT / "templates").glob("*.html"), ROOT / "static" / "offline.html"]
+# pages, not the parts they include (_header.html)
+PAGES = [*(p for p in (ROOT / "templates").glob("*.html") if not p.name.startswith("_")), ROOT / "static" / "offline.html"]
 CDN_TAG = re.compile(r"<(?:script|link)\b[^>]*https://cdn\.jsdelivr\.net[^>]*>")
 
 

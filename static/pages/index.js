@@ -845,7 +845,7 @@ async function search(page = 1) {
         const data = await fetch(`/api/games/catalog?${params}`).then(r => r.json());
         currentData = { ...data, query };
         hasSearched = true;
-        setSectionHead(t("search_title", { q: query }), t("search_count", { count: data.total }));
+        setSectionHead(t("search_title", { q: query }), t("search_results", { count: data.total }));
         renderSearch();
         if (page > 1) document.getElementById("results").scrollIntoView({ block: "start" });
     } catch (err) {
