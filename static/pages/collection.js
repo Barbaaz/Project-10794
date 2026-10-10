@@ -130,6 +130,7 @@ function renderItems() {
         b.setAttribute("aria-selected", b.dataset.kind === kind);
     });
     document.getElementById("add-game-title").textContent = t(kind === "owned" ? "collection_add_game_owned" : "collection_add_game_wish");
+    document.getElementById("steam-import").classList.toggle("d-none", kind !== "owned");
     const status = document.getElementById("filter-status");
     status.classList.toggle("d-none", kind !== "owned");
     const words = document.getElementById("filter-text").value.toLowerCase().split(/\s+/).filter(Boolean);
@@ -253,6 +254,44 @@ const clearAddSearch = gamePicker({
     igdbButton: document.getElementById("add-igdb"),
     igdbResults: document.getElementById("add-igdb-results"),
 }, addGame, code => showMessage(false, t(`error_${code}`)));
+
+// The user's Steam games (steam_service): the ones we have on PC go in at once; the others are listed,
+// with "Adicionar" for those IGDB knows (created like any IGDB game, within its games-a-day limit)
+async function importSteam(event) {
+    event.preventDefault();
+    const form = event.target, result = document.getElementById("steam-result"), list = document.getElementById("steam-missing");
+    const button = form.querySelector("button");
+    button.disabled = true;
+    result.textContent = t("steam_importing");
+    list.innerHTML = "";
+    const { ok, data: answer } = await api("/api/collection/steam", { body: { profile: document.getElementById("steam-profile").value } });
+    button.disabled = false;
+    if (!ok) return result.textContent = t(`error_${answer?.error || "unknown"}`);
+    result.textContent = t("steam_imported", { total: answer.total, added: answer.added, updated: answer.updated,
+                                                missing: answer.missing.length });
+    const hours = h => h ? ` · ${fmtNumber(h)} h` : "";
+    list.innerHTML = answer.missing.map((m, i) => `
+        <div class="list-group-item d-flex justify-content-between align-items-center gap-2 py-1 small">
+            <span>${esc(m.name)}<span class="text-body-secondary">${hours(m.hours)}</span></span>
+            ${m.igdb_id ? `<button type="button" class="btn btn-sm btn-outline-primary" data-missing="${i}">${esc(t("steam_add"))}</button>`
+                        : `<span class="text-body-secondary">${esc(t("steam_not_in_igdb"))}</span>`}
+        </div>`).join("");
+    list.querySelectorAll("[data-missing]").forEach(b => b.onclick = async () => {
+        const m = answer.missing[b.dataset.missing];
+        b.disabled = true;
+        const made = await api("/api/igdb/games", { body: { igdb_id: m.igdb_id, platform: "PC" } });
+        const added = made.ok && await api("/api/collection", { body: { edition_id: made.data.edition_id, kind: "owned",
+                                                                         format: "digital", hours: m.hours ?? "" } });
+        if (!made.ok || !added.ok) {
+            b.disabled = false;
+            return showMessage(false, t(`error_${(made.ok ? added : made).data?.error || "unknown"}`));
+        }
+        b.replaceWith(Object.assign(document.createElement("span"), { className: "text-success", textContent: t("steam_added") }));
+        load();
+    });
+    if (answer.added || answer.updated) load();
+}
+document.getElementById("steam-form").onsubmit = importSteam;
 
 // The link in a wishlist alert e-mail (?alerts_off=…) works without logging in
 async function alertsOffFromLink() {

@@ -128,6 +128,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/igdb/games?q=` · `POST /api/igdb/games` `{igdb_id, platform}` | The sell form, for games the catalogue doesn't have (older platforms): IGDB games on our platforms · the game on that platform, created from IGDB if needed (20 per user per day) → `{game_id, edition_id}` |
 | `PUT /api/mod/games/<id>/title` `{title}` | Moderators: correct a store's typo in a game's title, kept by the processing and the rematch (`""` = the stores' title again) |
 | `PUT /api/mod/games/<id>/title-en` `{title_en}` | Moderators: a game's English name, shown when the page is in English (`""` = the store's title) |
+| `POST /api/collection/steam` `{profile}` | The user's Steam games (profile link, custom name or id; game details public) into the collection: those we have on PC as owned, digital, with Steam's hours → `{added, updated, total, missing: [{name, igdb_id, hours}]}`; one import per 10 min. Needs `STEAM_API_KEY` |
 | `POST /api/collection/import` `{ids}` | Favourites an old browser kept (before accounts; favourites are now the wishlist), put on the wishlist (merged editions followed) → `{added}` |
 | `GET /api/ratings/pending` | Completed purchases the user still has to rate (`overdue` after 14 days: buying and selling blocked until rated) |
 | `POST /api/conversations/<id>/rating` `{stars, comment?}` | Rate the other side of a completed purchase (changeable for 14 days) |

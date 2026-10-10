@@ -2,8 +2,9 @@
 from flask import Blueprint, abort, jsonify, request
 
 from app.routes.auth import current_user, login_required
-from app.services import collection_service, wish_alert_service
+from app.services import collection_service, steam_service, wish_alert_service
 from app.services.collection_service import CollectionError
+from app.services.steam_service import SteamError
 
 bp = Blueprint("collection", __name__, url_prefix="/api")
 
@@ -56,6 +57,16 @@ def import_from_browser():
     """{ids: [...]}: favourites an old browser kept (before accounts), onto the wishlist → {added}"""
     ids = body().get("ids") or []
     return jsonify(collection_service.add_wishes(current_user()["id"], ids if isinstance(ids, list) else []))
+
+
+@bp.post("/collection/steam")
+@login_required
+def import_from_steam():
+    """{profile}: the user's Steam games into the collection → {added, updated, total, missing} (steam_service)"""
+    try:
+        return jsonify(steam_service.import_games(current_user()["id"], body().get("profile")))
+    except SteamError as e:
+        return jsonify(error=e.code), e.status
 
 
 @bp.patch("/collection/<int:item_id>")

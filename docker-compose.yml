@@ -24,6 +24,8 @@ services:
       # Optional: only needed to look up new games on IGDB (pipeline/igdb.py)
       IGDB_CLIENT_ID: ${IGDB_CLIENT_ID:-}
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}
+      # Optional: /collection's Steam import
+      STEAM_API_KEY: ${STEAM_API_KEY:-}
       # Optional: e-mail (password reset). Without SMTP_HOST, e-mails are only written to the log
       SITE_URL: ${SITE_URL:-http://localhost:5000}
       SMTP_HOST: ${SMTP_HOST:-}

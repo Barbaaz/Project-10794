@@ -36,14 +36,14 @@ class IGDBGameError(Exception):
 _client = None
 
 
-def query(body):
+def query(body, endpoint="games"):
     """IGDB's answer; the client (and its token) is kept between requests, made again if refused."""
     global _client
     for attempt in range(2):
         try:
             if _client is None:
                 _client = IGDBClient()
-            return _client.query(body)
+            return _client.query(body, endpoint)
         except (requests.RequestException, RuntimeError):
             _client = None              # an expired token: a new one on the second try
     raise IGDBGameError("igdb_unavailable", 503)
