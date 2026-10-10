@@ -52,6 +52,11 @@ h4, h5, h6, .h4, .h5, .h6 { font-weight: 700; letter-spacing: -0.01em; }
 .shadow-sm { box-shadow: 0 1px 2px rgb(20 23 31 / .05), 0 4px 14px rgb(20 23 31 / .05) !important; }
 .form-control, .form-select { --bs-border-color: #d5d9e2; }
 [data-bs-theme="dark"] .form-control, [data-bs-theme="dark"] .form-select { --bs-border-color: #3a3f4d; }
+/* Switches, checkboxes and focus rings in the site's blue (Bootstrap writes its own blue there) */
+.form-check-input:checked { background-color: var(--brand-btn); border-color: var(--brand-btn); }
+.form-control:focus, .form-select:focus, .form-check-input:focus {
+    border-color: var(--bs-primary); box-shadow: 0 0 0 .2rem rgb(var(--bs-primary-rgb) / .25); }
+.btn:focus-visible { box-shadow: 0 0 0 .2rem rgb(var(--bs-primary-rgb) / .4); }
 
 /* Buttons: the main action in the blue, the rest soft grey (no heavy grey blocks) */
 .btn { font-weight: 600; }
