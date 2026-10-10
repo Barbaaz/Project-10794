@@ -51,21 +51,27 @@ function render() {
     const cover = game.image || game.editions.flatMap(e => e.offers).find(o => o.image)?.image
         || (game.cover_image_id ? igdbImage(game.cover_image_id, "t_cover_big") : null);
     if (cover) document.getElementById("cover").src = cover;
-    else document.querySelector(".game-aside").remove();      // no empty column
+    else document.getElementById("cover").remove();      // no empty space
     document.getElementById("game").classList.toggle("no-cover", !cover);
 
     renderFacts();
-    renderPriceSummary();
+    renderOtherPlatforms();
     renderAbout();
 
     const firstDate = history.flatMap(o => o.history).map(p => p.date).sort()[0];
     document.getElementById("history-note").textContent = firstDate
         ? t("tracked_since", { date: fmtDate(firstDate) })
         : "";
+    document.getElementById("history").classList.toggle("d-none", !firstDate);
 
-    const container = document.getElementById("editions");
-    container.innerHTML = "";
-    game.editions.forEach((edition, i) => container.appendChild(renderEdition(edition, i)));
+    // Each edition in three places: its stores in the buy box, what it includes beside the cover,
+    // its price history at the bottom; the edition chips show one edition everywhere
+    const parts = { editions: renderEdition, "edition-info": editionInfoPanel, "history-charts": chartPanel };
+    for (const [id, make] of Object.entries(parts)) {
+        const container = document.getElementById(id);
+        container.innerHTML = "";
+        game.editions.forEach((edition, i) => container.appendChild(make(edition, i)));
+    }
     drawCharts();
     renderEditionChips();
     loadMarket();
@@ -83,43 +89,48 @@ function render() {
     document.getElementById("game").classList.remove("d-none");
 }
 
-// "Melhor preço agora: 26,99 € · Mega Mania [Ver na loja]": the cheapest new copy in stock of any
-// edition (named when the game has several), above the fold on a phone
-function renderPriceSummary() {
-    const offers = game.editions.flatMap(e => e.offers.filter(o => o.in_stock && o.condition === "new").map(o => ({ ...o, edition: e })));
-    const best = offers.sort((a, b) => a.price - b.price)[0];
-    const box = document.getElementById("price-summary");
-    if (!best) { box.innerHTML = ""; return; }
-    const edition = game.editions.length > 1 ? ` · ${esc(localName(best.edition))}` : "";
-    box.innerHTML = `
-        <div class="best-card">
-            <span class="lbl">${esc(t("best_price_now").replace(/:$/, ""))}</span>
-            <span class="big">${eur.format(best.price)}</span>
-            <span>${esc(storeName(best.store))}${edition} · ${t("in_stock")}
-                ${best.edition.at_historical_low ? `<span class="badge badge-critics ms-1">${t("lowest_ever_now")}</span>` : ""}</span>
-            <a href="${esc(best.url)}" target="_blank" rel="noopener" class="btn btn-primary offer-link">${esc(t("view_at", { store: storeName(best.store) }))}</a>
-        </div>`;
+// The buy box's top: "Melhor preço · Deluxe Edition 69,99 € · Mega Mania [Ver na Mega Mania]",
+// the chosen edition's cheapest new copy in stock (sold out everywhere: said so)
+function renderPriceSummary(edition) {
+    const best = edition.offers.filter(o => o.in_stock && o.condition === "new").sort((a, b) => a.price - b.price)[0];
+    const name = game.editions.length > 1 ? ` · ${esc(localName(edition))}` : "";
+    document.getElementById("price-summary").innerHTML = best ? `
+        <div class="buy-label">${esc(t("best_price"))}${name}</div>
+        <div class="best-price">${eur.format(best.price)}</div>
+        <div class="text-body-secondary">${esc(storeName(best.store))} · ${t("in_stock")}
+            ${edition.at_historical_low ? `<span class="badge badge-critics ms-1">${t("lowest_ever_now")}</span>` : ""}</div>
+        <a href="${esc(best.url)}" target="_blank" rel="noopener" class="btn btn-primary w-100 mt-3">${esc(t("view_at", { store: storeName(best.store) }))}</a>`
+        : `<div class="buy-label">${esc(t("best_price"))}${name}</div><div class="best-price text-body-secondary">${t("sold_out")}</div>`;
 }
 
-// Several editions: a chip each, and only the chosen edition's prices on screen (first the one with
-// the best price in stock). Its charts are drawn while hidden, so they're resized when shown
+// One edition on screen at a time (first the one with the best price in stock), a chip each when
+// there are several. Its chart was drawn while hidden, so the charts are resized when shown
 function renderEditionChips() {
     const box = document.getElementById("edition-chips");
-    const panels = [...document.querySelectorAll("#editions > [data-edition-index]")];
-    if (panels.length < 2) { box.innerHTML = ""; return; }
+    const several = game.editions.length > 1;
+    document.getElementById("edition-pick").classList.toggle("d-none", !several);
     const cheapest = e => Math.min(...e.offers.filter(o => o.in_stock).map(o => o.price));
     const first = game.editions.reduce((best, e, i) => cheapest(e) < cheapest(game.editions[best]) ? i : best, 0);
-    box.innerHTML = game.editions.map((e, i) => `
+    box.innerHTML = several ? game.editions.map((e, i) => `
         <button type="button" class="chip-btn" data-show-edition="${i}" aria-pressed="false"
-            aria-controls="edition-${i}">${esc(localName(e))}</button>`).join("");
-    panels.forEach(p => p.querySelector("h2").classList.add("visually-hidden"));    // the chip names it
+            aria-controls="edition-${i}">${esc(localName(e))}</button>`).join("") : "";
+    const panels = [...document.querySelectorAll("[data-edition-index]")];
     const show = i => {
-        panels.forEach((p, j) => p.hidden = j !== i);
+        panels.forEach(p => p.hidden = Number(p.dataset.editionIndex) !== i);
         box.querySelectorAll("[data-show-edition]").forEach(b => b.setAttribute("aria-pressed", Number(b.dataset.showEdition) === i));
+        renderPriceSummary(game.editions[i]);
+        document.getElementById("history-edition").textContent = several ? localName(game.editions[i]) : "";
         charts.forEach(c => c.resize());
     };
     box.querySelectorAll("[data-show-edition]").forEach(b => b.onclick = () => show(Number(b.dataset.showEdition)));
     show(first);
+}
+
+// "Também para Xbox Series X|S, desde 47,89 €": the same game on our other platforms
+function renderOtherPlatforms() {
+    const others = game.other_platforms || [];
+    document.getElementById("other-platforms").innerHTML = others.length ? `${t("also_for")} ${others.map(o =>
+        `<a href="/game/${o.game_id}">${esc(o.platform_name)}</a>${o.best_price != null ? `, ${t("from_price", { price: eur.format(o.best_price) })}` : ""}`).join(" · ")}` : "";
 }
 
 function igdbImage(id, size) {
@@ -204,13 +215,17 @@ function renderAbout() {
         grid.querySelectorAll("a[hidden]").forEach(a => a.hidden = false);
         more.classList.add("d-none");
     };
+    // the first pictures under the cover too, as small squares
+    document.getElementById("cover-thumbs").innerHTML = shots.slice(0, 4).map(p => `
+        <a href="${esc(p.full)}" target="_blank" rel="noopener"><img src="${esc(p.small)}" alt="${t("screenshot")}" loading="lazy"></a>`).join("");
 
     renderVideos();
 
     document.getElementById("about-text").innerHTML = parts.join("");
     document.getElementById("igdb-credit").classList.toggle("d-none", !game.igdb_id);
     const hasFacts = Boolean(document.getElementById("facts").children.length);
-    document.getElementById("about").classList.toggle("d-none", !hasFacts && !parts.length && !pictures.length && !game.videos.length);
+    document.getElementById("about").classList.toggle("d-none", !hasFacts && !parts.length);
+    document.getElementById("media").classList.toggle("d-none", !pictures.length && !game.videos.length);
     bindClampToggles(document.getElementById("about"));
 }
 
@@ -293,7 +308,15 @@ function editionContents(text) {
         if (!m) { if (items.length) break; else continue; }
         items.push(m[1].trim());
     }
-    return items;
+    if (items.length) return items;
+    // a list without dashes ("Conteúdo Edição Deluxe:\nSteelbook\n3 veículos exclusivos:\n…"): the short
+    // lines after it, until the store's prose starts again (a line of more than 6 words)
+    for (const line of lines.slice(start + 1).map(l => l.trim())) {
+        if (!line) continue;
+        if (line.split(/\s+/).length > 6) break;
+        items.push(line);
+    }
+    return items.length >= 2 ? items : [];
 }
 
 // What a special edition includes, from the store descriptions, with the stores' photos
@@ -309,8 +332,8 @@ function editionInfo(edition) {
         text = `${body}<div class="small text-body-secondary">${esc(t("according_to", { store: storeName(source.store) }))}</div>`;
     }
     return `
-        <div class="edition-info mb-3">
-            <h3 class="h6 mb-1">${t("whats_included")}</h3>
+        <div class="edition-info">
+            <h3 class="h6 mb-1">${t("whats_included")}${game.editions.length > 1 ? ` · ${esc(localName(edition))}` : ""}</h3>
             ${text}
             ${editionPhotos(edition.photos)}
         </div>`;
@@ -326,52 +349,48 @@ function editionPhotos(photos) {
         <div class="small text-body-secondary">${esc(t("photos_from", { store: stores }))}</div>`;
 }
 
+// An edition in the buy box: its stores, the lowest price ever, Tenho / Quero
 function renderEdition(edition, i) {
-    const card = document.createElement("section");
-    card.className = "edition-panel mb-4";
-    card.id = `edition-${i}`;
-    card.dataset.editionIndex = i;
-
+    const panel = document.createElement("section");
+    panel.id = `edition-${i}`;
+    panel.dataset.editionIndex = i;
     const low = edition.lowest_price;
-    // A store dropped it to the lowest price ever: the same rule as the cards' badge and the tag
-    // (app/services/tag_service.py, AT_HISTORICAL_LOW)
-    const isLowNow = edition.at_historical_low;
+    panel.innerHTML = `
+        <h2 class="visually-hidden">${esc(localName(edition))}</h2>
+        ${edition.digital_code ? `<span class="badge text-bg-warning mb-2" title="${t("digital_code_hint")}">${t("digital_code")}</span>` : ""}
+        ${offersTable(edition)}
+        ${low ? `<div class="small text-body-secondary mt-2">${t("historical_low")} <strong class="text-body">${eur.format(low.price)}</strong>
+            · ${fmtDate(low.date)} · ${esc(storeName(low.store))}</div>` : ""}
+        <div class="d-flex flex-wrap gap-2 mt-3" data-collection="${edition.id}"></div>`;
+    return panel;
+}
 
-    // The stores first (as the mock-up: chips, then prices), then the lowest price, Tenho / Quero,
-    // what the edition includes and its price history
-    card.innerHTML = `
-        <div>
-            <h2 class="h5 mb-3">${esc(localName(edition))}
-                ${edition.digital_code ? `<span class="badge text-bg-warning ms-1 align-middle"
-                    title="${t("digital_code_hint")}">${t("digital_code")}</span>` : ""}</h2>
+// What the edition includes (special editions), beside the cover
+function editionInfoPanel(edition, i) {
+    const panel = document.createElement("div");
+    panel.dataset.editionIndex = i;
+    panel.innerHTML = editionInfo(edition);
+    bindClampToggles(panel);
+    return panel;
+}
 
-            ${offersTable(edition)}
-
-            <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
-                ${low ? `<span class="badge low-badge fw-normal text-wrap text-start">
-                    ${t("historical_low")} <strong>${eur.format(low.price)}</strong> · ${fmtDate(low.date)} · ${esc(storeName(low.store))}</span>` : ""}
-                ${isLowNow ? `<span class="badge badge-critics">${t("lowest_ever_now")}</span>` : ""}
-                <span class="d-flex flex-wrap gap-2" data-collection="${edition.id}"></span>
-            </div>
-
-            <div class="mt-3">${editionInfo(edition)}</div>
-
-            <div class="chart-panel mt-3">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                <h3 class="h6 mb-0">${t("price_history")} <span class="text-body-secondary fw-normal small">${t("new_copies")}</span></h3>
-                ${periodButtons()}
-            </div>
-            <div class="chart-box"><canvas id="chart-${i}" role="img"
-                aria-label="${esc(t("price_history_of", { name: localName(edition) }))}"></canvas></div>
-            <p class="small text-body-secondary mt-1 mb-0">${t("dashed_sold_out")}</p>
-
-            <details class="mt-2">
-                <summary class="small">${t("history_table")}</summary>
-                ${historyTable(edition)}
-            </details>
-            </div>
-        </div>`;
-    return card;
+// The edition's price history, at the bottom of the page
+function chartPanel(edition, i) {
+    const panel = document.createElement("div");
+    panel.dataset.editionIndex = i;
+    panel.innerHTML = `
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <span class="small text-body-secondary">${t("new_copies")}</span>
+            ${periodButtons()}
+        </div>
+        <div class="chart-box"><canvas id="chart-${i}" role="img"
+            aria-label="${esc(t("price_history_of", { name: localName(edition) }))}"></canvas></div>
+        <p class="small text-body-secondary mt-1 mb-0">${t("dashed_sold_out")}</p>
+        <details class="mt-2">
+            <summary class="small">${t("history_table")}</summary>
+            ${historyTable(edition)}
+        </details>`;
+    return panel;
 }
 
 // The chart period (30 days … all time): the same for every chart on the page

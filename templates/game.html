@@ -52,8 +52,44 @@
         }
 
         .chart-box { position: relative; height: 280px; background: var(--surface-1); border-radius: .5rem; padding: .5rem; }
-        .game-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 2rem; align-items: start; }
-        @media (max-width: 991.98px) { .game-layout { grid-template-columns: 220px minmax(0, 1fr); } }
+        /* The page: the game on the left, the buy box on the right (sticky, the whole way down) */
+        .gp { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 1.75rem 2rem; align-items: start;
+              grid-template-areas: "top buy" "media buy" "market buy" "reviews buy" "history buy"; }
+        .gp.d-none { display: none; }
+        .gp-top { grid-area: top; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1.75rem; align-items: start; }
+        .gp-buy { grid-area: buy; align-self: stretch; }
+        .gp-media { grid-area: media; } .gp-market { grid-area: market; } .gp-reviews { grid-area: reviews; } .gp-history { grid-area: history; }
+        .gp-panel { background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .875rem; padding: 1.25rem 1.4rem; }
+        .buy-box { position: sticky; top: 1rem; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .875rem;
+                   padding: 1.15rem 1.2rem; display: grid; gap: 1rem; }
+        .buy-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--bs-secondary-color); margin-bottom: .4rem; }
+        .best-price { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+        .buy-box .offer-row { padding: .6rem .8rem; gap: .55rem; font-size: .92rem; }
+        .buy-box .offer-row .stock { font-size: .82rem; }
+        .cover-thumbs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .4rem; margin-top: .6rem; }
+        .cover-thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: .5rem; }
+        .other-platforms { color: var(--bs-secondary-color); font-size: .92rem; }
+        .other-platforms:empty { display: none; }
+        .other-platforms a { font-weight: 700; text-decoration: none; }
+        .video-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
+        .video-grid .video-thumb, .video-grid .video-thumb img { width: 100%; height: auto; }
+        .video-grid .video-thumb img { aspect-ratio: 16 / 9; object-fit: cover; border-radius: .625rem; }
+        /* the play button in the middle of the picture (the name line under it is ~1.4rem tall) */
+        .video-grid .video-thumb .play { top: calc((100% - 1.4rem) / 2); }
+        @media (max-width: 1199.98px) { .gp-top { grid-template-columns: 200px minmax(0, 1fr); } .gp { grid-template-columns: minmax(0, 1fr) 310px; } }
+        /* Narrower: one column, in this order: cover, title, buy box, then the rest */
+        @media (max-width: 991.98px) {
+            .gp { display: flex; flex-direction: column; gap: 1.25rem; }
+            .gp-top, .gp-info { display: contents; }
+            .gp-cover { order: 1; } .gp-head { order: 2; } .gp-buy { order: 3; } .other-platforms { order: 4; } #about { order: 5; margin-top: 0 !important; }
+            #edition-info { order: 6; margin-top: 0 !important; } .gp-media { order: 7; } .gp-market { order: 8; } .gp-reviews { order: 9; } .gp-history { order: 10; }
+            .gp-cover { display: flex; gap: .75rem; align-items: flex-start; }
+            .gp-cover .game-cover { width: 150px; flex: none; }
+            .gp-cover .cover-thumbs { display: none; }
+            .buy-box { position: static; }
+            .gp-panel { padding: 1rem; }
+            .video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
         .back-link { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--bs-secondary-color); }
         .back-link:hover { color: var(--bs-emphasis-color); }
         /* An edition's stores: one row each (stock dot, store, stock, price), the whole row opens the store */
@@ -69,16 +105,9 @@
         .offer-row.out .price { color: var(--bs-secondary-color); }
         .offer-row .go { color: var(--bs-secondary-color); font-size: .85rem; }
         @media (max-width: 575.98px) { .offer-row { padding-inline: .8rem; gap: .5rem; } .offer-row .stock { font-size: .8rem; } }
-        .game-layout.d-none { display: none; }
-        .game-layout.no-cover { grid-template-columns: minmax(0, 1fr); }
-        .game-aside { position: sticky; top: 1rem; }
+        .gp.no-cover .gp-top { grid-template-columns: minmax(0, 1fr); }
         .game-cover { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--bs-secondary-bg); border-radius: .875rem;
                       box-shadow: 0 12px 30px rgb(20 23 31 / .18); }
-        @media (max-width: 767.98px) {
-            .game-layout { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-            .game-aside { position: static; }
-            .game-cover { width: 150px; }
-        }
         .game-kicker { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-primary); }
         .game-name { font-size: clamp(1.6rem, 3.5vw, 2.3rem); line-height: 1.1; margin: .2rem 0 0; }
         .d-contents { display: contents; }
@@ -132,58 +161,76 @@
 
 {% include "_header.html" %}
 
-<div class="container pb-4" style="max-width: 1140px;">
+<div class="container pb-4" style="max-width: 1240px;">
     <div class="mb-3"><a href="/" id="back-link" class="back-link" data-i18n="back"></a></div>
 
     <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
     <div id="error" class="alert alert-warning d-none"></div>
 
-    <!-- The cover on the left (it stays while the page scrolls), everything else beside it;
-         on a phone one column -->
-    <div id="game" class="d-none game-layout">
-        <div class="game-aside"><img id="cover" class="game-cover" alt=""></div>
-        <div class="game-main min-w-0">
-        <div class="mb-4">
-            <div id="platform" class="game-kicker"></div>
-            <h1 id="title" class="game-name"></h1>
-            <div class="d-flex flex-wrap gap-2 mt-2">
-                <span id="critics" class="badge badge-soft badge-critics d-none"></span>
-                <span id="release" class="badge badge-soft badge-release d-none"></span>
-                <span id="pegi" class="badge badge-soft d-none"></span>
-                <span id="year" class="badge badge-soft d-none"></span>
-                <span id="genres" class="d-contents"></span>
+    <!-- The shop page layout (user's choice of the mock-ups, 2026-10-10, "1 · Caixa de compra"): the
+         game on the left (cover and details, then its pictures and videos, used copies, reviews, and
+         the price history last), the buy box on the right, on screen all the way down. On a phone one
+         column, the buy box right after the title. -->
+    <div id="game" class="d-none gp">
+        <div class="gp-top">
+            <div class="gp-cover">
+                <img id="cover" class="game-cover" alt="">
+                <div id="cover-thumbs" class="cover-thumbs"></div>
             </div>
-            <!-- The best price of any edition, right under the title (what people come for) -->
-            <div id="price-summary" class="mt-3"></div>
+            <div class="gp-info min-w-0">
+                <div class="gp-head">
+                    <div id="platform" class="game-kicker"></div>
+                    <h1 id="title" class="game-name"></h1>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <span id="critics" class="badge badge-soft badge-critics d-none"></span>
+                        <span id="release" class="badge badge-soft badge-release d-none"></span>
+                        <span id="pegi" class="badge badge-soft d-none"></span>
+                        <span id="year" class="badge badge-soft d-none"></span>
+                        <span id="genres" class="d-contents"></span>
+                    </div>
+                </div>
+                <!-- The same game on other platforms ("Também para Xbox Series X|S, desde 47,89 €") -->
+                <div id="other-platforms" class="other-platforms mt-3"></div>
+                <!-- About the game: the store's description (Portuguese) and / or IGDB's summary, the facts
+                     (publisher, release, time to beat…), what the chosen edition includes -->
+                <section id="about" class="mt-3 d-none">
+                    <h2 class="h6 mb-2" data-i18n="about"></h2>
+                    <div id="about-text"></div>
+                    <dl id="facts" class="facts mt-3 mb-0"></dl>
+                </section>
+                <div id="edition-info" class="mt-3"></div>
+            </div>
         </div>
 
-        <!-- A game with several editions: one chip each, the chosen one's prices below -->
-        <div id="edition-chips" class="d-flex flex-wrap gap-2 mb-3"></div>
-        <div id="editions"></div>
-        <p id="history-note" class="text-body-secondary small mt-n2 mb-4"></p>
-
-        <!-- About the game: facts (publisher, release, time to beat…), the store's description
-             (Portuguese) and/or IGDB's summary, screenshots, videos -->
-        <section id="about" class="card edition-card mb-4 d-none">
-            <div class="card-body">
-                <h2 class="h5 mb-2" data-i18n="about"></h2>
-                <dl id="facts" class="facts small mb-3"></dl>
-                <div id="about-text"></div>
-                <div id="screenshots" class="shot-grid mt-3"></div>
-                <button type="button" id="shots-more" class="btn btn-sm btn-secondary mt-2 d-none"></button>
-                <div id="videos" class="mt-3 d-none">
-                    <h3 class="h6 mb-2" data-i18n="videos"></h3>
-                    <div id="video-player" class="ratio ratio-16x9 mb-2 d-none"></div>
-                    <div id="video-list" class="screenshots"></div>
-                    <div class="small text-body-secondary" data-i18n="video_source"></div>
+        <!-- The buy box: the chosen edition's best price and its store, the editions, every store's
+             price, the lowest price, Tenho / Quero -->
+        <aside class="gp-buy">
+            <div class="buy-box">
+                <div id="price-summary"></div>
+                <div id="edition-pick">
+                    <div class="buy-label" data-i18n="edition"></div>
+                    <div id="edition-chips" class="d-flex flex-wrap gap-2"></div>
                 </div>
-                <!-- IGDB's terms ask for a visible credit where its data is shown -->
-                <div id="igdb-credit" class="small text-body-secondary mt-3 d-none"><span data-i18n="igdb_credit_game"></span> <a href="https://www.igdb.com" target="_blank" rel="noopener">IGDB.com</a></div>
+                <div id="editions"></div>
             </div>
+        </aside>
+
+        <!-- The game's pictures and videos -->
+        <section id="media" class="gp-media gp-panel d-none">
+            <h2 class="h5 mb-3" data-i18n="pictures_videos"></h2>
+            <div id="screenshots" class="shot-grid"></div>
+            <button type="button" id="shots-more" class="btn btn-sm btn-secondary mt-2 d-none"></button>
+            <div id="videos" class="mt-3 d-none">
+                <div id="video-player" class="ratio ratio-16x9 mb-2 d-none"></div>
+                <div id="video-list" class="video-grid"></div>
+                <div class="small text-body-secondary mt-1" data-i18n="video_source"></div>
+            </div>
+            <!-- IGDB's terms ask for a visible credit where its data is shown -->
+            <div id="igdb-credit" class="small text-body-secondary mt-3 d-none"><span data-i18n="igdb_credit_game"></span> <a href="https://www.igdb.com" target="_blank" rel="noopener">IGDB.com</a></div>
         </section>
 
         <!-- Pre-owned copies people sell (the marketplace) -->
-        <section id="market" class="mt-4">
+        <section id="market" class="gp-market gp-panel">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h2 class="h5 mb-0" data-i18n="market_title"></h2>
                 <a id="sell-link" href="/sell" class="btn btn-sm btn-success" data-i18n="market_sell_this"></a>
@@ -193,8 +240,8 @@
         </section>
 
         <!-- Players' reviews of this game on this platform, 1–10 -->
-        <section id="reviews" class="card edition-card mt-4">
-            <div class="card-body">
+        <section id="reviews" class="gp-reviews gp-panel">
+            <div>
                 <h2 class="h5 mb-0" data-i18n="reviews_title"></h2>
                 <p id="reviews-platform" class="small text-body-secondary mb-3"></p>
                 <div id="reviews-summary" class="d-flex flex-wrap align-items-center gap-4 mb-3"></div>
@@ -204,7 +251,13 @@
                         data-i18n="reviews_more"></button>
             </div>
         </section>
-        </div>
+
+        <!-- The chosen edition's price history, last -->
+        <section id="history" class="gp-history gp-panel d-none">
+            <h2 class="h5 mb-3"><span data-i18n="price_history"></span> <span id="history-edition" class="small text-body-secondary fw-normal"></span></h2>
+            <div id="history-charts"></div>
+            <p id="history-note" class="text-body-secondary small mt-2 mb-0"></p>
+        </section>
     </div>
 </div>
 

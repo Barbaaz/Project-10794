@@ -141,7 +141,29 @@ def get_game(game_id):
     release = game_release_date(game_id) or {}
     game["release_date"] = release.get("release_date")
     game["date_is_estimate"] = release.get("date_is_estimate", False)
+    game["other_platforms"] = other_platforms(game)
     return game
+
+
+def other_platforms(game):
+    """
+    The same game on our other platforms (the same IGDB entry), for "Também para Xbox Series X|S,
+    desde 47,89 €": [{game_id, platform, platform_name, best_price}] (best_price None: none in stock).
+    """
+    if not game["igdb_id"] or game["kind"] != "game":
+        return []
+    return fetch_all(
+        """
+        SELECT g.id AS game_id, p.code AS platform, p.name AS platform_name,
+               MIN(CASE WHEN o.in_stock THEN o.price END) AS best_price
+        FROM games g JOIN platforms p ON p.id = g.platform_id
+        LEFT JOIN current_offers o ON o.game_id = g.id AND o.is_active
+        WHERE g.igdb_id = ? AND g.id <> ? AND g.kind = 'game'
+        GROUP BY g.id, p.code, p.name
+        ORDER BY p.name, g.id
+        """,
+        game["igdb_id"], game["id"],
+    )
 
 
 def store_descriptions(game_id):
