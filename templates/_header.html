@@ -1,0 +1,21 @@
+<!-- The same header on every page (included; static/common.js fills the account area): the site's
+     name, the search (on the front page its script runs it, elsewhere it opens /?q=…), the account's
+     links, language and theme. On a phone the search takes a row of its own. -->
+<header class="site-header bg-body border-bottom{% if not home %} mb-4{% endif %}">
+    <div class="container-xxl header-row">
+        {% if home %}<h1 class="site-brand m-0">{% endif %}<a href="/" {% if home %}data-go-home {% endif %}class="site-brand-link"
+            ><span class="brand-a">Game Price</span> <span class="brand-b">Tracker</span></a>{% if home %}</h1>{% endif %}
+        <form class="header-search" id="search-form" action="/" method="get" role="search">
+            <input type="search" id="q" name="q" class="form-control" autocomplete="off"
+                   data-i18n-placeholder="search_placeholder" data-i18n-aria-label="search">
+        </form>
+        <div class="header-tools d-flex align-items-center gap-1">
+            {% if home %}<!-- Back to the front page; shown while search results are on screen -->
+            <button id="home-btn" data-go-home class="btn btn-sm btn-secondary d-none" data-i18n="home"></button>{% endif %}
+            <div id="account-area" class="d-flex gap-1 align-items-center"></div>
+            <div id="lang-switch" class="btn-group header-setting" role="group" data-i18n-aria-label="language"></div>
+            <button type="button" data-toggle-dark class="btn btn-sm btn-secondary header-setting"
+                    data-i18n-aria-label="dark_mode" data-i18n-title="dark_mode">🌙</button>
+        </div>
+    </div>
+</header>

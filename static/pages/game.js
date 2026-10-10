@@ -6,6 +6,7 @@ const fmtDateTime = d => new Date(d).toLocaleString(LOCALE, { dateStyle: "short"
 
 let game, history, stores = {}, rangeDays = 90;
 const charts = [];
+const SHOTS_SHOWN = 4;      // pictures shown before "more"
 
 function css(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -66,6 +67,7 @@ function render() {
     container.innerHTML = "";
     game.editions.forEach((edition, i) => container.appendChild(renderEdition(edition, i)));
     drawCharts();
+    renderEditionChips();
     loadMarket();
     // players' reviews are of games; a console has none (core/hardware.py)
     const isGame = (game.kind || "game") === "game";
@@ -99,6 +101,27 @@ function renderPriceSummary() {
         </div>`;
 }
 
+// Several editions: a chip each, and only the chosen edition's prices on screen (first the one with
+// the best price in stock). Its charts are drawn while hidden, so they're resized when shown
+function renderEditionChips() {
+    const box = document.getElementById("edition-chips");
+    const panels = [...document.querySelectorAll("#editions > [data-edition-index]")];
+    if (panels.length < 2) { box.innerHTML = ""; return; }
+    const cheapest = e => Math.min(...e.offers.filter(o => o.in_stock).map(o => o.price));
+    const first = game.editions.reduce((best, e, i) => cheapest(e) < cheapest(game.editions[best]) ? i : best, 0);
+    box.innerHTML = game.editions.map((e, i) => `
+        <button type="button" class="chip-btn" data-show-edition="${i}" aria-pressed="false"
+            aria-controls="edition-${i}">${esc(localName(e))}</button>`).join("");
+    panels.forEach(p => p.querySelector("h2").classList.add("visually-hidden"));    // the chip names it
+    const show = i => {
+        panels.forEach((p, j) => p.hidden = j !== i);
+        box.querySelectorAll("[data-show-edition]").forEach(b => b.setAttribute("aria-pressed", Number(b.dataset.showEdition) === i));
+        charts.forEach(c => c.resize());
+    };
+    box.querySelectorAll("[data-show-edition]").forEach(b => b.onclick = () => show(Number(b.dataset.showEdition)));
+    show(first);
+}
+
 function igdbImage(id, size) {
     return `https://images.igdb.com/igdb/image/upload/${size}/${encodeURIComponent(id)}.jpg`;
 }
@@ -113,6 +136,13 @@ function renderFacts() {
         pegi.classList.remove("d-none");
     }
 
+    const released = game.first_release_date;
+    if (released && new Date(released + "T12:00:00") <= new Date()) {
+        const year = document.getElementById("year");
+        year.textContent = released.slice(0, 4);
+        year.classList.remove("d-none");
+    }
+
     const genres = (game.genres || sd["Género"] || "").split(",").map(g => g.trim()).filter(Boolean);
     document.getElementById("genres").innerHTML =
         genres.map(g => `<span class="badge badge-soft">${esc(g)}</span>`).join("");
@@ -122,7 +152,6 @@ function renderFacts() {
         critics.classList.remove("d-none");
     }
 
-    const released = game.first_release_date;
     const facts = [
         [t("publisher"), game.publishers || sd["Editora"]],
         [t("developer"), game.developers || sd["Produtora"]],
@@ -163,9 +192,18 @@ function renderAbout() {
     const shots = (game.screenshot_ids || []).map(id => ({ full: igdbImage(id, "t_1080p"), small: igdbImage(id, "t_screenshot_med") }));
     const standardPhotos = game.editions.find(e => e.name === "Standard")?.photos || [];
     const pictures = shots.length ? shots : standardPhotos.map(p => ({ full: p.url, small: p.url }));
-    document.getElementById("screenshots").innerHTML = pictures.map(p => `
-        <a href="${esc(p.full)}" target="_blank" rel="noopener">
+    const grid = document.getElementById("screenshots");
+    grid.classList.toggle("store-photos", !shots.length);
+    grid.innerHTML = pictures.map((p, i) => `
+        <a href="${esc(p.full)}" target="_blank" rel="noopener" ${i >= SHOTS_SHOWN ? "hidden" : ""}>
             <img src="${esc(p.small)}" alt="${t("screenshot")}" loading="lazy"></a>`).join("");
+    const more = document.getElementById("shots-more");
+    more.textContent = t("more_pictures", { count: pictures.length - SHOTS_SHOWN });
+    more.classList.toggle("d-none", pictures.length <= SHOTS_SHOWN);
+    more.onclick = () => {
+        grid.querySelectorAll("a[hidden]").forEach(a => a.hidden = false);
+        more.classList.add("d-none");
+    };
 
     renderVideos();
 
@@ -290,34 +328,36 @@ function editionPhotos(photos) {
 
 function renderEdition(edition, i) {
     const card = document.createElement("section");
-    card.className = "card edition-card mb-4";
+    card.className = "edition-panel mb-4";
+    card.id = `edition-${i}`;
+    card.dataset.editionIndex = i;
 
     const low = edition.lowest_price;
-    const best = edition.offers.find(o => o.in_stock);
     // A store dropped it to the lowest price ever: the same rule as the cards' badge and the tag
     // (app/services/tag_service.py, AT_HISTORICAL_LOW)
     const isLowNow = edition.at_historical_low;
 
+    // The stores first (as the mock-up: chips, then prices), then the lowest price, Tenho / Quero,
+    // what the edition includes and its price history
     card.innerHTML = `
-        <div class="card-body">
+        <div>
             <h2 class="h5 mb-3">${esc(localName(edition))}
                 ${edition.digital_code ? `<span class="badge text-bg-warning ms-1 align-middle"
                     title="${t("digital_code_hint")}">${t("digital_code")}</span>` : ""}</h2>
 
-            ${editionInfo(edition)}
-
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                ${best && game.editions.length > 1 ? `<span class="badge bg-body-secondary text-body border fs-6 fw-normal text-wrap text-start">
-                    ${t("best_price_now")} <strong>${eur.format(best.price)}</strong> · ${esc(storeName(best.store))}</span>` : ""}
-                ${low ? `<span class="badge low-badge fs-6 fw-normal text-wrap text-start">
-                    ${t("historical_low")} <strong>${eur.format(low.price)}</strong> · ${fmtDate(low.date)} · ${esc(storeName(low.store))}</span>` : ""}
-                ${isLowNow ? `<span class="badge text-bg-success fs-6 fw-normal">${t("lowest_ever_now")}</span>` : ""}
-            </div>
-            <div class="d-flex flex-wrap gap-2 mb-3" data-collection="${edition.id}"></div>
-
             ${offersTable(edition)}
 
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-4 mb-2">
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                ${low ? `<span class="badge low-badge fw-normal text-wrap text-start">
+                    ${t("historical_low")} <strong>${eur.format(low.price)}</strong> · ${fmtDate(low.date)} · ${esc(storeName(low.store))}</span>` : ""}
+                ${isLowNow ? `<span class="badge badge-critics">${t("lowest_ever_now")}</span>` : ""}
+                <span class="d-flex flex-wrap gap-2" data-collection="${edition.id}"></span>
+            </div>
+
+            <div class="mt-3">${editionInfo(edition)}</div>
+
+            <div class="chart-panel mt-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                 <h3 class="h6 mb-0">${t("price_history")} <span class="text-body-secondary fw-normal small">${t("new_copies")}</span></h3>
                 ${periodButtons()}
             </div>
@@ -329,6 +369,7 @@ function renderEdition(edition, i) {
                 <summary class="small">${t("history_table")}</summary>
                 ${historyTable(edition)}
             </details>
+            </div>
         </div>`;
     return card;
 }
@@ -341,33 +382,20 @@ function periodButtons() {
             aria-pressed="${days === rangeDays}">${t(key)}</button>`).join("")}</div>`;
 }
 
+// The edition's stores, cheapest in stock first: a row each (a green dot when in stock, the store,
+// "Em stock" / "Esgotado" / "Pré-reserva", the price), the whole row opening the store's page
 function offersTable(edition) {
-    // the cheapest copy in stock gets the blue button, the other stores a soft one
-    const lead = edition.offers.find(o => o.in_stock);
     const rows = edition.offers.map(o => `
-        <tr class="${o.in_stock ? "" : "text-body-secondary"}">
-            <td><span class="swatch" style="background:${storeColor(o.store)}"></span>${esc(storeName(o.store))}
-                ${o.condition === "used" ? `<span class="badge text-bg-secondary d-sm-none ms-1">${t("used")}</span>` : ""}</td>
-            <td class="d-none d-sm-table-cell">${o.condition === "used" ? `<span class="badge text-bg-secondary">${t("used")}</span>` : t("new")}</td>
-            <td class="text-end">
-                ${o.was_price ? `<small class="text-decoration-line-through text-body-secondary me-1">${eur.format(o.was_price)}</small>
-                    <span class="badge text-bg-danger me-1">-${o.discount_percent}%</span>` : ""}
-                <strong>${eur.format(o.price)}</strong>
-            </td>
-            <td>${o.is_preorder ? `<span class="badge text-bg-primary">${t("preorder")}</span>` : o.in_stock ? t("in_stock") : t("sold_out")}</td>
-            <td class="text-end"><a href="${esc(o.url)}" target="_blank" rel="noopener"
-                class="btn btn-sm offer-link ${o === lead ? "btn-primary" : "btn-secondary"}"
-                aria-label="${esc(t("view_at", { store: storeName(o.store) }))}"><span class="d-none d-sm-inline">${t("view_in_store")}</span><span
-                class="d-sm-none" aria-hidden="true">${t("store_short")} ↗</span></a></td>
-        </tr>`).join("");
-
-    return `
-        <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0 prices">
-                <thead><tr><th>${t("col_store")}</th><th class="d-none d-sm-table-cell">${t("col_condition")}</th><th class="text-end">${t("col_price")}</th><th>${t("col_stock")}</th><th></th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
-        </div>`;
+        <a href="${esc(o.url)}" target="_blank" rel="noopener" class="offer-row ${o.in_stock ? "" : "out"}"
+           title="${esc(t("view_at", { store: storeName(o.store) }))}">
+            <span class="dot" aria-hidden="true"></span>
+            <span class="store">${esc(storeName(o.store))}${o.condition === "used" ? ` <span class="badge badge-soft ms-1">${t("used")}</span>` : ""}</span>
+            <span class="stock">${o.is_preorder ? t("preorder") : o.in_stock ? t("in_stock") : t("sold_out")}</span>
+            <span class="price">${o.was_price ? `<s class="text-body-secondary fw-normal small me-1">${eur.format(o.was_price)}</s>
+                <span class="badge text-bg-danger me-1">-${o.discount_percent}%</span>` : ""}${eur.format(o.price)}</span>
+            <span class="go" aria-hidden="true">↗</span>
+        </a>`).join("");
+    return `<div class="offer-rows">${rows}</div>`;
 }
 
 function editionHistory(edition) {

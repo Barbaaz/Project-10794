@@ -78,9 +78,9 @@ h4, h5, h6, .h4, .h5, .h6 { font-weight: 700; letter-spacing: -0.01em; }
 /* The front page's tabs: underlined, like a shop's sections */
 .nav-pills.front-tabs { gap: 1.4rem !important; border-bottom: 1px solid var(--bs-border-color);
                         flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding-bottom: 0 !important; }
-.nav-pills.front-tabs .nav-link { white-space: nowrap; }
+.nav-pills.front-tabs .nav-link { white-space: nowrap; font-size: .95rem; padding-block: .8rem; }
 .nav-pills.front-tabs .nav-link, .nav-pills.front-tabs .nav-link:not(.active) {
-    background: none; box-shadow: none; border-radius: 0; padding: .6rem 0; color: var(--bs-secondary-color);
+    background: none; box-shadow: none; border-radius: 0; padding: .8rem 0; color: var(--bs-secondary-color);
     border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .nav-pills.front-tabs .nav-link:hover { color: var(--bs-emphasis-color); }
 .nav-pills.front-tabs .nav-link.active { background: none; color: var(--bs-emphasis-color); border-bottom-color: var(--bs-primary); }
@@ -101,17 +101,41 @@ h4, h5, h6, .h4, .h5, .h6 { font-weight: 700; letter-spacing: -0.01em; }
 
 /* The header, the same on every page: the site's name on the left, the account's buttons, language
    and theme on the right. On a phone, logged in, language and theme are in the account menu */
-.site-header .site-brand { font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
-.site-header .site-brand a { color: inherit; }
-.site-header .header-tools { flex-wrap: wrap; justify-content: flex-end; }
+.site-header .header-row { display: flex; align-items: center; gap: .5rem 1.25rem; flex-wrap: wrap; padding-block: .8rem; }
+.site-header .site-brand { font-size: inherit; font-weight: inherit; letter-spacing: inherit; }
+.site-brand-link { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap;
+                   color: var(--bs-emphasis-color); text-decoration: none; }
+.site-brand-link .brand-b { color: var(--bs-primary); }
+.site-brand-link:hover { color: var(--bs-emphasis-color); }
+/* The search: a rounded grey field in the header; on a phone a row of its own under the name */
+.header-search { flex: 1 1 18rem; min-width: 0; max-width: 46rem; }
+.header-search .form-control { border-radius: 999px; border-color: transparent; background: var(--bs-secondary-bg);
+                               padding: .55rem 1.1rem; font-size: .95rem; }
+.header-search .form-control:focus { background: var(--bs-body-bg); }
+.site-header .header-tools { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 767.98px) { .header-search { order: 3; flex-basis: 100%; max-width: none; } }
 .site-header .account-menu .dropdown-menu { right: 0; left: auto; top: calc(100% + .25rem); min-width: 13rem; }
+/* Vender / Mensagens / Coleção: icon buttons on a phone, plain words from a wide screen up */
+.header-link { --bs-btn-bg: var(--bs-secondary-bg); --bs-btn-color: var(--bs-emphasis-color); --bs-btn-border-color: transparent;
+               --bs-btn-hover-bg: var(--soft-btn-hover); --bs-btn-hover-color: var(--bs-emphasis-color); --bs-btn-hover-border-color: transparent;
+               --bs-btn-active-bg: var(--soft-btn-hover); --bs-btn-active-color: var(--bs-emphasis-color); --bs-btn-active-border-color: transparent; }
+@media (min-width: 992px) {
+    .header-link { --bs-btn-bg: transparent; --bs-btn-color: var(--bs-body-color); --bs-btn-padding-x: .55rem; font-size: .92rem; }
+    .header-link .icon { display: none; }
+}
 @media (max-width: 575.98px) {
-    .site-header .site-brand { font-size: 1.05rem; }
+    .site-brand-link { font-size: 1.05rem; }
     .logged-in .site-header .header-setting { display: none !important; }
 }
-@media (max-width: 359.98px) {
-    .site-header .site-brand span { display: none; }      /* only 🎮 on the narrowest phones */
-}
+
+/* Chips: platforms and other picks (one chosen, dark) */
+.chip-btn { border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); color: var(--bs-emphasis-color); border-radius: 999px;
+            padding: .3rem .8rem; font-size: .85rem; font-weight: 600; line-height: 1.3; }
+.chip-btn:hover { background: var(--bs-secondary-bg); }
+.chip-btn[aria-pressed="true"] { background: var(--bs-emphasis-color); border-color: var(--bs-emphasis-color); color: var(--bs-body-bg); }
+.chip-btn:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+.chip-select { width: auto; border-radius: 999px; font-weight: 600; font-size: .85rem; padding-block: .3rem; }
+.chip-select.chosen { background-color: var(--bs-emphasis-color); color: var(--bs-body-bg); border-color: var(--bs-emphasis-color); }
 
 /* Phones: tabs in one row that scrolls sideways (home page, /admin), not several rows */
 @media (max-width: 767.98px) {

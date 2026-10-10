@@ -28,18 +28,7 @@
 </head>
 <body class="bg-body-tertiary" data-listing-id="{{ listing_id }}">
 
-<!-- The same header on every page (static/common.js fills the account area) -->
-<header class="site-header bg-body border-bottom mb-4">
-    <div class="container-xxl d-flex align-items-center gap-2 py-2">
-        <a href="/" class="site-brand link-body-emphasis text-decoration-none">🎮 <span>Game Price Tracker</span></a>
-        <div class="header-tools ms-auto d-flex align-items-center gap-1">
-            <div id="account-area" class="d-flex gap-1 align-items-center"></div>
-            <div id="lang-switch" class="btn-group header-setting" role="group" data-i18n-aria-label="language"></div>
-            <button type="button" data-toggle-dark class="btn btn-sm btn-secondary header-setting"
-                    data-i18n-aria-label="dark_mode" data-i18n-title="dark_mode">🌙</button>
-        </div>
-    </div>
-</header>
+{% include "_header.html" %}
 
 <div class="container pb-4" style="max-width: 1000px;">
     <div class="mb-3"><a href="#" id="game-link" class="btn btn-sm btn-secondary d-none"></a></div>

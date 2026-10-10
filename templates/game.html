@@ -52,7 +52,23 @@
         }
 
         .chart-box { position: relative; height: 280px; background: var(--surface-1); border-radius: .5rem; padding: .5rem; }
-        .game-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 2rem; align-items: start; }
+        .game-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 2rem; align-items: start; }
+        @media (max-width: 991.98px) { .game-layout { grid-template-columns: 220px minmax(0, 1fr); } }
+        .back-link { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--bs-secondary-color); }
+        .back-link:hover { color: var(--bs-emphasis-color); }
+        /* An edition's stores: one row each (stock dot, store, stock, price), the whole row opens the store */
+        .offer-rows { border: 1px solid var(--bs-border-color); border-radius: .875rem; overflow: hidden; background: var(--bs-body-bg); }
+        .offer-row { display: flex; align-items: center; gap: .75rem; padding: .75rem 1.1rem; color: var(--bs-body-color); text-decoration: none; }
+        .offer-row + .offer-row { border-top: 1px solid var(--bs-border-color); }
+        .offer-row:hover { background: var(--bs-tertiary-bg); color: var(--bs-body-color); }
+        .offer-row .dot { width: 8px; height: 8px; border-radius: 50%; background: #1f9d5c; flex: none; }
+        .offer-row.out .dot { background: var(--bs-secondary-color); opacity: .5; }
+        .offer-row .store { flex: 1; min-width: 0; font-weight: 500; }
+        .offer-row .stock { color: var(--bs-secondary-color); font-size: .9rem; white-space: nowrap; }
+        .offer-row .price { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .offer-row.out .price { color: var(--bs-secondary-color); }
+        .offer-row .go { color: var(--bs-secondary-color); font-size: .85rem; }
+        @media (max-width: 575.98px) { .offer-row { padding-inline: .8rem; gap: .5rem; } .offer-row .stock { font-size: .8rem; } }
         .game-layout.d-none { display: none; }
         .game-layout.no-cover { grid-template-columns: minmax(0, 1fr); }
         .game-aside { position: sticky; top: 1rem; }
@@ -75,20 +91,27 @@
         .best-card .lbl { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-secondary-color); }
         .best-card .big { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
         .best-card .btn { margin-top: .6rem; }
+        /* An edition's price history: a panel of its own under the stores */
+        .chart-panel { border: 1px solid var(--bs-border-color); border-radius: .875rem; background: var(--bs-body-bg); padding: 1rem 1.1rem; }
+        .chart-box { background: var(--bs-body-bg) !important; }
         /* Editions: panels with a border, no shadow */
         .edition-card { border: 1px solid var(--bs-border-color); border-radius: .875rem; background: var(--bs-body-bg); }
         .swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
         .low-badge { background: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); border: 1px solid var(--bs-success-border-subtle); }
         table.prices td, table.prices th { font-variant-numeric: tabular-nums; }
-        .facts { display: grid; grid-template-columns: auto 1fr; column-gap: .75rem; row-gap: .15rem; }
-        @media (min-width: 768px) { .facts { grid-template-columns: auto 1fr auto 1fr; } }
+        .facts { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 1.25rem; row-gap: .35rem; font-size: .92rem; }
         .offer-link { white-space: nowrap; }
-        .facts dt { font-weight: 600; color: var(--bs-secondary-color); }
-        .facts dd { margin: 0; }
+        .facts dt { font-weight: 400; color: var(--bs-secondary-color); }
+        .facts dd { margin: 0; font-weight: 600; }
         .clamped { display: -webkit-box; -webkit-line-clamp: var(--lines); -webkit-box-orient: vertical; overflow: hidden; }
         .clamped.open { display: block; }
         .screenshots { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .25rem; }
         .screenshots img { height: 120px; border-radius: .375rem; }
+        /* The game's pictures: two a row, 16:9, rounded; the rest behind "more" */
+        .shot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+        .shot-grid img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: .625rem; background: var(--bs-secondary-bg); }
+        .shot-grid.store-photos img { object-fit: contain; background: #fff; }
+        .shot-grid a[hidden] { display: none; }
         .edition-info ul { padding-left: 1.2rem; }
         .video-thumb { position: relative; flex-shrink: 0; width: 213px; padding: 0; border: 0; background: none; text-align: left; }
         .video-thumb img { width: 213px; height: 120px; object-fit: cover; }
@@ -107,21 +130,10 @@
 </head>
 <body class="bg-body-tertiary" data-game-id="{{ game_id }}">
 
-<!-- The same header on every page (static/common.js fills the account area) -->
-<header class="site-header bg-body border-bottom mb-4">
-    <div class="container-xxl d-flex align-items-center gap-2 py-2">
-        <a href="/" class="site-brand link-body-emphasis text-decoration-none">🎮 <span>Game Price Tracker</span></a>
-        <div class="header-tools ms-auto d-flex align-items-center gap-1">
-            <div id="account-area" class="d-flex gap-1 align-items-center"></div>
-            <div id="lang-switch" class="btn-group header-setting" role="group" data-i18n-aria-label="language"></div>
-            <button type="button" data-toggle-dark class="btn btn-sm btn-secondary header-setting"
-                    data-i18n-aria-label="dark_mode" data-i18n-title="dark_mode">🌙</button>
-        </div>
-    </div>
-</header>
+{% include "_header.html" %}
 
 <div class="container pb-4" style="max-width: 1140px;">
-    <div class="mb-3"><a href="/" id="back-link" class="btn btn-sm btn-secondary" data-i18n="back"></a></div>
+    <div class="mb-3"><a href="/" id="back-link" class="back-link" data-i18n="back"></a></div>
 
     <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
     <div id="error" class="alert alert-warning d-none"></div>
@@ -138,12 +150,15 @@
                 <span id="critics" class="badge badge-soft badge-critics d-none"></span>
                 <span id="release" class="badge badge-soft badge-release d-none"></span>
                 <span id="pegi" class="badge badge-soft d-none"></span>
+                <span id="year" class="badge badge-soft d-none"></span>
                 <span id="genres" class="d-contents"></span>
             </div>
             <!-- The best price of any edition, right under the title (what people come for) -->
             <div id="price-summary" class="mt-3"></div>
         </div>
 
+        <!-- A game with several editions: one chip each, the chosen one's prices below -->
+        <div id="edition-chips" class="d-flex flex-wrap gap-2 mb-3"></div>
         <div id="editions"></div>
         <p id="history-note" class="text-body-secondary small mt-n2 mb-4"></p>
 
@@ -154,7 +169,8 @@
                 <h2 class="h5 mb-2" data-i18n="about"></h2>
                 <dl id="facts" class="facts small mb-3"></dl>
                 <div id="about-text"></div>
-                <div id="screenshots" class="screenshots mt-3"></div>
+                <div id="screenshots" class="shot-grid mt-3"></div>
+                <button type="button" id="shots-more" class="btn btn-sm btn-secondary mt-2 d-none"></button>
                 <div id="videos" class="mt-3 d-none">
                     <h3 class="h6 mb-2" data-i18n="videos"></h3>
                     <div id="video-player" class="ratio ratio-16x9 mb-2 d-none"></div>

@@ -1,5 +1,4 @@
 // The index page (templates/index.html). A file, not inline: the site's CSP only runs scripts from files.
-const MAX_OFFERS = 3;   // offers shown on a card; the game page has all of them
 // t(), eur, LOCALE, fmtNumber: static/i18n.js
 
 let currentData = null;     // the search results on screen (a catalogue page)
@@ -15,7 +14,7 @@ function handleSearch(event) {
     search();
 }
 
-// A card: cover, title, platform and up to MAX_OFFERS store prices.
+// A card: cover, platform, title and edition, the best store price (the game page has them all).
 // group = {name, console, platform_name, game_id, edition_id, offers: [...]}
 // extraLine: null = no extra line; "" = keep the space, so cards in the same grid line up
 // Short platform names for the cards' chips (three fit on a phone's card)
@@ -31,16 +30,13 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
     const best = offers[0];
     const gameUrl = `/game/${group.game_id}`;
 
-    // The best store price leads, large; the next stores and the copies users sell (see usedLine) follow
-    // as lines, in price order. Each opens the product on the store's site
+    // The best store price, large, with its store and how many stores sell it (all of them on the game
+    // page); the copies users sell on a line of their own (see usedLine)
     const used = group.used;
-    const lineSpots = used ? MAX_OFFERS - 2 : MAX_OFFERS - 1;
-    const lines = offers.slice(1, 1 + lineSpots).map(o => ({ price: o.price, html: offerLine(o, coverBadge) }));
-    if (used) lines.push({ price: used.price, html: usedLine(group) });
-    const shown = 1 + Math.min(lineSpots, Math.max(offers.length - 1, 0));
-    const more = offers.length > shown
-        ? `<a href="${gameUrl}" class="more-stores">${t("see_all_stores", { count: offers.length - shown })}</a>`
-        : offers.length || used ? "" : `<div class="small text-body-secondary">${t("no_offers")}</div>`;
+    const [title, edition] = splitEdition(localName(group));
+    const stock = offers.filter(o => o.in_stock).length;
+    const lead = best ? leadOffer(best, coverBadge, offers.length > 1 ? t("in_stores", { count: stock || offers.length }) : "") : "";
+    const none = offers.length || used ? "" : `<div class="small text-body-secondary">${t("no_offers")}</div>`;
 
     const col = document.createElement("div");
     col.className = "col";
@@ -57,9 +53,10 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
             </div>
             <div class="card-text d-flex flex-column flex-grow-1">
                 ${platformLine(group)}
-                <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(localName(group))}">${esc(localName(group))}</a>
+                <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(localName(group))}">${esc(title)}</a>
+                <div class="card-edition">${esc(edition) || "&nbsp;"}</div>
                 ${extraLine === null ? "" : `<div class="small card-extra">${extraLine}</div>`}
-                <div class="mt-auto pt-2">${best ? leadOffer(best, coverBadge) : ""}${lines.sort((a, b) => a.price - b.price).map(r => r.html).join("")}${more}</div>
+                <div class="mt-auto pt-2">${lead}${used ? usedLine(group) : ""}${none}</div>
             </div>
         </div>`;
     col.querySelector(".fav-btn").onclick = e => toggleCardMenu(e.currentTarget, group);
@@ -99,54 +96,42 @@ function platformLine(group) {
 const discountTag = (o, coverBadge) => o.discount_percent && !coverBadge
     ? `<span class="badge text-bg-danger me-1">-${o.discount_percent}%</span>` : "";
 
-// The best offer: its price large, the store (and "used" / "sold out") under it
-function leadOffer(o, coverBadge) {
+// "Metroid Ravenous — Special Edition" → ["Metroid Ravenous", "Special Edition"] (the API joins them so)
+function splitEdition(name) {
+    const at = (name || "").lastIndexOf(" — ");
+    return at < 0 ? [name || "", ""] : [name.slice(0, at), name.slice(at + 3)];
+}
+
+// The best offer: its price large, the store (and "used" / "sold out", how many stores) under it
+function leadOffer(o, coverBadge, stores = "") {
     return `
         <a href="${esc(o.url)}" target="_blank" rel="noopener" class="lead-offer ${o.in_stock ? "" : "out"}"
            title="${esc(t("view_at", { store: storeName(o.store) }))}">
             <span class="amount">${discountTag(o, coverBadge)}${eur.format(o.price)}${o.was_price ? ` <s class="was">${eur.format(o.was_price)}</s>` : ""}</span>
-            <span class="where">${esc(storeName(o.store))}${o.condition === "used" ? ` · ${t("used")}` : ""}${o.in_stock ? "" : ` · ${t("sold_out")}`}</span>
+            <span class="where">${esc(storeName(o.store))}${o.condition === "used" ? ` · ${t("used")}` : ""}${o.in_stock ? "" : ` · ${t("sold_out")}`}${stores ? ` · ${esc(stores)}` : ""}</span>
         </a>`;
 }
 
-// Another store's offer: one quiet line
-function offerLine(o, coverBadge) {
-    return `
-        <a href="${esc(o.url)}" target="_blank" rel="noopener" class="offer-line ${o.in_stock ? "" : "out"}"
-           title="${esc(t("view_at", { store: storeName(o.store) }))}">
-            <span class="store">${esc(storeName(o.store))}${o.condition === "used" ? ` · ${t("used")}` : ""}${o.in_stock ? "" : ` · ${t("sold_out")}`}</span>
-            <span class="price">${discountTag(o, coverBadge)}${eur.format(o.price)}</span>
-        </a>`;
-}
-
-// "👤 Usados (2) 18,99 €": the copies users sell; one → that listing, several → the game page's list
+// "Usados desde 18,99 €": the copies users sell; one → that listing, several → the game page's list
 function usedLine(group) {
     const { count, price, listing_id } = group.used;
     const href = count === 1 ? `/listing/${listing_id}` : `/game/${group.game_id}#market`;
-    return `
-        <a href="${href}" class="offer-line used" title="${esc(t("used_title", { count }))}">
-            <span class="store">👤 ${esc(t("used_from_users", { count }))}</span>
-            <span class="price">${eur.format(price)}</span>
-        </a>`;
+    return `<a href="${href}" class="used-line" title="${esc(t("used_title", { count }))}">${esc(t("used_from_price", { price: eur.format(price) }))}</a>`;
 }
 
 // A game edition users sell, like the catalogue cards: cover, platform, name, then the cheapest copy
 // large (seller and rating, condition) and the next sellers as lines, each opening that listing
 function marketCard(group) {
     const seller = l => `@${esc(l.seller_username)}${l.seller_rating_count ? ` ★${fmtNumber(l.seller_rating)}` : ""}`;
-    const [first, ...others] = group.listings;
+    const first = group.listings[0];
+    const [title, edition] = splitEdition(localName(group));
     const lead = `
-        <a href="/listing/${first.id}" class="lead-offer used" title="${esc(`${sellerName(first)} · ${conditionLabel(first.condition)}`)}">
+        <a href="/listing/${first.id}" class="lead-offer" title="${esc(`${sellerName(first)} · ${conditionLabel(first.condition)}`)}">
             <span class="amount">${eur.format(first.price)}</span>
             <span class="where">${seller(first)} · ${esc(conditionLabel(first.condition))}</span>
         </a>`;
-    const lines = others.slice(0, MAX_OFFERS - 1).map(l => `
-        <a href="/listing/${l.id}" class="offer-line" title="${esc(`${sellerName(l)} · ${conditionLabel(l.condition)}`)}">
-            <span class="store">${seller(l)} · ${esc(conditionLabel(l.condition))}</span>
-            <span class="price">${eur.format(l.price)}</span>
-        </a>`).join("");
-    const more = group.listings.length > MAX_OFFERS
-        ? `<a href="/game/${group.game_id}#market" class="more-stores">${t("see_all_sellers", { count: group.listings.length - MAX_OFFERS })}</a>` : "";
+    const more = group.listings.length > 1
+        ? `<a href="/game/${group.game_id}#market" class="used-line">${t("sellers_count", { count: group.listings.length })}</a>` : "";
     const cover = group.image || first.photos[0]?.thumb_url || "";
     const col = document.createElement("div");
     col.className = "col";
@@ -154,10 +139,11 @@ function marketCard(group) {
         <div class="h-100 game-card d-flex flex-column">
             <a href="/game/${group.game_id}#market" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(cover)}" alt="" loading="lazy"></a>
             <div class="card-text d-flex flex-column flex-grow-1">
-                <div class="card-platform">${esc(group.platform_name)} · ${esc(t("sellers_count", { count: group.listings.length }))}</div>
+                <div class="card-platform">${esc(group.platform_name)}</div>
                 <a href="/game/${group.game_id}#market" class="link-body-emphasis text-decoration-none game-title"
-                   title="${esc(localName(group))}">${esc(localName(group))}</a>
-                <div class="mt-auto pt-2">${lead}${lines}${more}</div>
+                   title="${esc(localName(group))}">${esc(title)}</a>
+                <div class="card-edition">${esc(edition) || "&nbsp;"}</div>
+                <div class="mt-auto pt-2">${lead}${more}</div>
             </div>
         </div>`;
     return col;
@@ -582,6 +568,7 @@ async function selectFrontTab(tab) {
 // The platform filter applies to the front page too
 function renderFront() {
     const config = FRONT_TABS[frontTab];
+    if (!document.getElementById("q").value.trim()) frontSectionHead();
     const content = document.getElementById("front-content");
     const empty = document.getElementById("front-empty");
     content.innerHTML = "";
@@ -624,7 +611,7 @@ function renderFront() {
 
 function cardGrid() {
     const grid = document.createElement("div");
-    grid.className = "row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 row-cols-xxl-6 gx-3 gy-4";
+    grid.className = "row row-cols-2 row-cols-md-3 row-cols-lg-4 card-grid";
     return grid;
 }
 
@@ -709,14 +696,9 @@ function renderRestockAlerts(alerts) {
 // Biggest real discounts (from our own price history, never the store's crossed-out price),
 // or, while there are none yet, the biggest price gaps between stores
 function renderDiscounts(offers) {
+    // (while there are no real discounts, the section's line says these are gaps between stores)
     const wrap = document.createElement("div");
     const storeDeals = offers[0]?.isStoreDeal;
-
-    if (storeDeals) {
-        wrap.innerHTML = `
-            <p class="small text-body-secondary mb-3">${t("store_deals_intro")}</p>`;
-    }
-
     const grid = cardGrid();
     offers.forEach(o => {
         // o.offers: this store's offer plus the other stores' prices, each shown as a button
@@ -801,8 +783,8 @@ function releaseItem(g, note = "") {
                 <div class="small text-body-secondary">${esc(g.platform_name)}${editions}${note ? ` · ${esc(note)}` : ""}</div>
             </div>
             ${g.best_price != null ? `<a href="${esc(g.url)}" target="_blank" rel="noopener"
-                class="btn btn-sm btn-success flex-shrink-0" title="${esc(t("view_at", { store: storeName(g.store) }))}">
-                ${eur.format(g.best_price)}<span class="d-none d-sm-inline"> · ${esc(storeName(g.store))}</span></a>` : ""}
+                class="release-price" title="${esc(t("view_at", { store: storeName(g.store) }))}">
+                <span class="amount">${eur.format(g.best_price)}</span><span class="where">${esc(storeName(g.store))}</span></a>` : ""}
         </div>`;
     return col;
 }
@@ -819,7 +801,14 @@ function goHome() {
     window.scrollTo({ top: 0 });
 }
 
-document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => selectFrontTab(b.dataset.tab)));
+// A section's tab also leaves a search (the tabs stay on screen while results are shown)
+document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", async () => {
+    if (document.getElementById("q").value.trim()) {
+        document.getElementById("q").value = "";
+        await search();
+    }
+    selectFrontTab(b.dataset.tab);
+}));
 
 let isSearching = false;
 
@@ -837,11 +826,13 @@ async function search(page = 1) {
         document.getElementById("empty").classList.add("d-none");
         setPageUrl(FRONT_TABS[frontTab].paged ? listUrl({ tab: frontTab }) : `/?tab=${frontTab}`);
         showFront(true);
+        frontSectionHead();
         return;
     }
 
     isSearching = true;
     showFront(false);
+    setSectionHead(t("search_title", { q: query }));
 
     document.getElementById("loading").classList.remove("d-none");
     document.getElementById("empty").classList.add("d-none");
@@ -854,6 +845,7 @@ async function search(page = 1) {
         const data = await fetch(`/api/games/catalog?${params}`).then(r => r.json());
         currentData = { ...data, query };
         hasSearched = true;
+        setSectionHead(t("search_title", { q: query }), t("search_count", { count: data.total }));
         renderSearch();
         if (page > 1) document.getElementById("results").scrollIntoView({ block: "start" });
     } catch (err) {
@@ -893,11 +885,60 @@ async function loadFilters() {
         tags = tagList;
         const select = document.getElementById("consoleFilter");
         platforms.forEach(p => select.add(new Option(p.name, p.code)));
+        renderPlatformPicker(platforms);
         storeList.forEach(s => stores[s.slug] = s);
         renderStoreStatus(storeList);
     } catch (e) {
         console.error("Erro a carregar filtros:", e);
     }
+}
+
+// The platform filter: the current platforms as chips ("Todas" first), the older ones in an "Outras"
+// list; both set #consoleFilter, which the rest of the page reads
+const MAIN_PLATFORMS = ["PS5", "PS4", "Switch2", "Switch", "XboxSeries", "XboxOne", "PC"];
+
+function renderPlatformPicker(platforms) {
+    const filter = document.getElementById("consoleFilter");
+    const main = MAIN_PLATFORMS.map(code => platforms.find(p => p.code === code)).filter(Boolean);
+    const others = platforms.filter(p => !MAIN_PLATFORMS.includes(p.code));
+    const chips = document.getElementById("platform-chips");
+    chips.innerHTML = [{ code: "", name: t("all_short") }, ...main].map(p => `
+        <button type="button" class="chip-btn" data-platform="${esc(p.code)}" title="${esc(p.name)}"
+            aria-pressed="false">${esc(p.code ? PLATFORM_SHORT[p.code] || p.name : p.name)}</button>`).join("");
+    const more = document.getElementById("more-platforms");
+    more.innerHTML = `<option value="">${esc(t("more_platforms"))}</option>`
+        + others.map(p => `<option value="${esc(p.code)}">${esc(p.name)}</option>`).join("");
+    more.classList.toggle("d-none", !others.length);
+
+    const choose = code => {
+        filter.value = code;
+        filter.dispatchEvent(new Event("change"));
+        markPlatform();
+    };
+    chips.querySelectorAll("[data-platform]").forEach(b => b.onclick = () => choose(b.dataset.platform));
+    more.onchange = () => choose(more.value);
+    markPlatform();
+}
+
+function markPlatform() {
+    const code = document.getElementById("consoleFilter").value;
+    document.querySelectorAll("#platform-chips [data-platform]").forEach(b => b.setAttribute("aria-pressed", b.dataset.platform === code));
+    const more = document.getElementById("more-platforms");
+    const isOther = Boolean(code) && !MAIN_PLATFORMS.includes(code);
+    more.value = isOther ? code : "";
+    more.classList.toggle("chosen", isOther);
+}
+
+// The title over the cards: the open section and a line about it, or the search
+function setSectionHead(title, sub = "") {
+    document.getElementById("section-title").textContent = title;
+    document.getElementById("section-sub").textContent = sub;
+}
+
+function frontSectionHead() {
+    const storeDeals = frontTab === "discounts" && frontData.discounts?.[0]?.isStoreDeal;
+    const active = Object.values(stores).filter(s => s.is_active !== false).length;
+    setSectionHead(t(`tab_${frontTab}`), t(storeDeals ? "sub_store_deals" : `sub_${frontTab}`, { stores: active }));
 }
 
 function timeAgo(iso) {

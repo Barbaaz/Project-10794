@@ -25,14 +25,13 @@
         .game-card img.store-photo { object-fit: contain; background: #fff; }
         .game-card:hover img { transform: scale(1.03); }
         @media (prefers-reduced-motion: reduce) { .game-card img { transition: none; } .game-card:hover img { transform: none; } }
-        .game-card .card-text { padding-top: .6rem; font-size: .85rem; }
+        .game-card .card-text { padding-top: .65rem; font-size: .9rem; }
         /* Every card has the same layout: platform 1 line, title always 2 lines tall,
            extra line (release date, historical low...) 2 lines; longer text ends in "…" */
         .card-platform { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-primary);
                          line-height: 1.4; height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .game-title {
-            font-size: .95rem; font-weight: 700; line-height: 1.25; margin-top: .1rem;
-            height: 2.5em;
+            font-size: 1rem; font-weight: 700; line-height: 1.25; margin-top: .1rem;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
         .platform-chip { --bs-btn-padding-y: .05rem; --bs-btn-padding-x: .45rem; --bs-btn-font-size: .72rem; border-radius: 999px; }
@@ -42,25 +41,21 @@
         }
         /* Prices: the best one large, the others quiet lines; each opens the store's page */
         .lead-offer { display: block; color: inherit; text-decoration: none; border-radius: .4rem; }
-        .lead-offer .amount { display: block; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.01em;
+        .lead-offer .amount { display: block; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em;
                               font-variant-numeric: tabular-nums; line-height: 1.2; }
         .lead-offer .amount .badge { font-size: .7rem; vertical-align: 3px; }
         .lead-offer .was { font-size: .8rem; font-weight: 500; color: var(--bs-secondary-color); }
         .lead-offer .where { display: block; color: var(--bs-secondary-color); font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lead-offer:hover .amount { color: var(--bs-link-hover-color); }
-        .lead-offer.used .amount { color: var(--used); }
         .lead-offer.out .amount { color: var(--bs-secondary-color); }
-        .offer-line { display: flex; justify-content: space-between; gap: .5rem; padding: .3rem 0 0; margin-top: .3rem;
-                      border-top: 1px solid var(--bs-border-color); color: var(--bs-secondary-color); text-decoration: none; font-size: .8rem; }
-        .offer-line:first-of-type { margin-top: .45rem; }
-        .offer-line .store { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-        .offer-line .price { font-weight: 700; color: var(--bs-body-color); white-space: nowrap; font-variant-numeric: tabular-nums; }
-        .offer-line .price .badge { font-size: .65rem; }
-        .offer-line:hover .store, .offer-line:hover .price { color: var(--bs-link-hover-color); }
-        .offer-line.used .store, .offer-line.used .price { color: var(--used); }
-        .offer-line.out .price { color: var(--bs-secondary-color); font-weight: 500; }
-        .more-stores { display: block; margin-top: .45rem; font-size: .8rem; font-weight: 700; text-decoration: none; }
-        .more-stores:hover { text-decoration: underline; }
+        .card-edition { color: var(--bs-secondary-color); font-size: .85rem; line-height: 1.35; height: 1.35em;
+                        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* Copies users sell: a line in their own colour under the store price */
+        .used-line { display: block; margin-top: .3rem; font-size: .82rem; font-weight: 600; color: var(--used); text-decoration: none; }
+        .used-line:hover { text-decoration: underline; color: var(--used); }
+        /* Room between the cards, as in the mock-up */
+        .card-grid { --bs-gutter-x: 1.25rem; --bs-gutter-y: 1.75rem; }
+        @media (max-width: 767.98px) { .card-grid { --bs-gutter-x: .875rem; --bs-gutter-y: 1.4rem; } }
         /* Cover badges: savings white with green text, a discount red, a pre-order dark */
         .badge-save { background: #fff; color: #0f7a4a; }
         .badge-pre { background: #14171f; color: #fff; }
@@ -73,9 +68,31 @@
         /* The star's menu (favourite, collection, wishlist), inside the cover so the card doesn't clip it */
         .card-menu { top: 2.4rem; right: .4rem; min-width: 9rem; font-size: .85rem; z-index: 5; }
         .card-menu .check { display: inline-block; width: 1.1rem; }
-        /* The search: rounded, like a shop's */
-        #search-form .form-control, #search-form .form-select, #search-form .btn { border-radius: 999px; min-height: 2.75rem; }
-        #search-form .form-control { padding-inline: 1.1rem; background: var(--bs-body-bg); }
+        /* The page is as wide as the mock-up's shop (four big covers a row) */
+        .front-wrap { max-width: 1240px; }
+        /* The sections' tabs: a white band under the header, edge to edge (the shadow / clip pair
+           paints it past the container without widening the page) */
+        .tabs-band { background: var(--bs-body-bg); box-shadow: 0 0 0 100vmax var(--bs-body-bg); clip-path: inset(0 -100vmax);
+                     border-bottom: 1px solid var(--bs-border-color); margin-bottom: 1.6rem; }
+        .tabs-band .front-tabs { border-bottom: 0; }
+        /* "Melhores preços" and its line, the platform chips on the right */
+        .section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: .75rem 1.5rem; margin-bottom: 1.25rem; }
+        .section-title { font-size: 1.65rem; margin: 0; }
+        .section-sub { margin: .15rem 0 0; color: var(--bs-secondary-color); font-size: .95rem; max-width: 60ch; }
+        .section-sub:empty { display: none; }
+        .platform-picker { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+        /* On a phone the chips are one row that scrolls sideways */
+        @media (max-width: 767.98px) {
+            .platform-picker { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; width: 100%; padding-bottom: 2px; }
+            .platform-picker #platform-chips { flex-wrap: nowrap !important; }
+            .platform-picker .chip-btn, .platform-picker .chip-select { flex-shrink: 0; white-space: nowrap; }
+        }
+        /* The release calendar: the price as text, the store under it */
+        .release-price { flex-shrink: 0; text-align: right; text-decoration: none; color: var(--bs-body-color); line-height: 1.2; }
+        .release-price .amount { display: block; font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+        .release-price .where { display: block; font-size: .78rem; color: var(--bs-secondary-color); }
+        .release-price:hover .amount { color: var(--bs-link-hover-color); }
+        .release-item img { border-radius: .4rem !important; }
         .discount-badge { position: absolute; top: .5rem; left: .5rem; font-size: .78rem; font-weight: 800; border-radius: .4rem;
                           box-shadow: 0 1px 3px rgb(0 0 0 / .2); }
         .low-price-badge { position: absolute; bottom: .5rem; left: .5rem; font-size: .75rem; border-radius: .4rem;
@@ -92,43 +109,15 @@
 
 <body class="bg-body-tertiary">
 
-<!-- The same header on every page (static/common.js fills the account area) -->
-<header class="site-header bg-body border-bottom mb-4">
-    <div class="container-xxl d-flex align-items-center gap-2 py-2">
-        <h1 class="site-brand m-0"><a href="/" data-go-home class="link-body-emphasis text-decoration-none">🎮 <span>Game Price Tracker</span></a></h1>
-        <div class="header-tools ms-auto d-flex align-items-center gap-1">
-            <!-- Back to the front page; shown while search results are on screen -->
-            <button id="home-btn" data-go-home class="btn btn-sm btn-primary d-none" data-i18n="home">🏠 Início</button>
-            <div id="account-area" class="d-flex gap-1 align-items-center"></div>
-            <div id="lang-switch" class="btn-group header-setting" role="group" data-i18n-aria-label="language"></div>
-            <button type="button" data-toggle-dark class="btn btn-sm btn-secondary header-setting"
-                    data-i18n-aria-label="dark_mode" data-i18n-title="dark_mode">🌙</button>
-        </div>
-    </div>
-</header>
+{% set home = true %}
+{% include "_header.html" %}
 
-<div class="container-xxl pb-4">
+<div class="container-xxl front-wrap pb-4">
 
-    <form class="row g-2 mb-4" id="search-form">
-        <div class="col-md-6">
-            <input type="text" id="q" class="form-control" data-i18n-placeholder="search_placeholder" autofocus>
-        </div>
-        <div class="col-md-3">
-            <select id="consoleFilter" class="form-select" data-i18n-aria-label="platform">
-                <option value="" data-i18n="all_platforms"></option>
-            </select>
-        </div>
-        <div class="col-md-3 d-grid">
-            <button type="submit" class="btn btn-primary" data-i18n="search"></button>
-        </div>
-    </form>
-
-    <!-- Favourites that came back in stock (filled by loadRestockAlerts) -->
-    <div id="alerts"></div>
-
-    <!-- Front page: the visitor picks what to see; the choice is remembered in this browser -->
-    <section id="front" class="mb-4">
-        <ul class="nav nav-pills mb-3 gap-1 front-tabs scroll-tabs" role="tablist">
+    <!-- The front page's sections, in a white band under the header; the visitor's choice is
+         remembered in this browser -->
+    <nav class="tabs-band" data-i18n-aria-label="sections">
+        <ul class="nav nav-pills front-tabs" role="tablist">
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="discounts" role="tab" data-i18n="tab_discounts"></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="preorders" role="tab" data-i18n="tab_preorders"></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="releases" role="tab" data-i18n="tab_releases"></button></li>
@@ -138,6 +127,28 @@
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="market" role="tab" data-i18n="tab_market"></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="wishlist" role="tab" data-i18n="tab_wishlist"></button></li>
         </ul>
+    </nav>
+
+    <!-- Favourites that came back in stock (filled by loadRestockAlerts) -->
+    <div id="alerts"></div>
+
+    <!-- What's on screen (the section, or the search) and the platform: main platforms as chips,
+         the older ones in "Outras"; #consoleFilter holds the choice for the page's script -->
+    <div class="section-head">
+        <div class="min-w-0">
+            <h2 id="section-title" class="section-title"></h2>
+            <p id="section-sub" class="section-sub"></p>
+        </div>
+        <div class="platform-picker" role="group" data-i18n-aria-label="platform">
+            <div id="platform-chips" class="d-flex flex-wrap gap-2"></div>
+            <select id="more-platforms" class="form-select form-select-sm chip-select d-none" data-i18n-aria-label="more_platforms"></select>
+            <select id="consoleFilter" class="d-none" aria-hidden="true" tabindex="-1">
+                <option value="" data-i18n="all_platforms"></option>
+            </select>
+        </div>
+    </div>
+
+    <section id="front" class="mb-4">
         <div id="front-loading" class="text-center my-4 d-none"><div class="spinner-border text-primary"></div></div>
         <div id="front-content"></div>
         <p id="front-empty" class="text-body-secondary small d-none mb-0"></p>

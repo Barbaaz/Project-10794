@@ -98,16 +98,16 @@ async function renderAccountArea() {
     }
     const staff = ["moderator", "admin"].includes(currentUser.role);
     const name = currentUser.username || currentUser.display_name;
-    const navButton = (href, icon, label, extra = "", style = "btn-secondary") => `
-        <a href="${href}" class="btn btn-sm ${style} position-relative" ${extra}
-           title="${esc(label)}" aria-label="${esc(label)}">${icon}<span class="d-none d-lg-inline ms-1">${esc(label)}</span></a>`;
+    const navButton = (href, icon, label, extra = "") => `
+        <a href="${href}" class="btn btn-sm header-link position-relative" ${extra}
+           title="${esc(label)}" aria-label="${esc(label)}"><span class="icon">${icon}</span><span class="d-none d-lg-inline">${esc(label)}</span></a>`;
     box.innerHTML = `
-        ${navButton("/sell", "🏷️", t("nav_sell"), "", "btn-success")}
+        ${navButton("/sell", "🏷️", t("nav_sell"))}
         ${navButton("/messages", "💬", t("messages"), 'id="messages-link"')}
         ${navButton("/collection", "📚", t("nav_collection"), 'id="collection-link"')}
         <div class="account-menu position-relative">
-            <button type="button" class="btn btn-sm btn-secondary" id="account-menu-btn" aria-haspopup="menu" aria-expanded="false"
-                    aria-controls="account-menu" title="${esc(t("account_menu"))}">👤<span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
+            <button type="button" class="btn btn-sm header-link" id="account-menu-btn" aria-haspopup="menu" aria-expanded="false"
+                    aria-controls="account-menu" title="${esc(t("account_menu"))}"><span class="icon">👤</span><span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
             <div class="dropdown-menu shadow" id="account-menu" role="menu">
                 <span class="dropdown-header">@${esc(name)}</span>
                 <a class="dropdown-item" role="menuitem" href="/account">${t("my_account")}</a>
