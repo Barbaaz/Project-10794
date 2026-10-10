@@ -50,7 +50,8 @@ function render() {
     const cover = game.image || game.editions.flatMap(e => e.offers).find(o => o.image)?.image
         || (game.cover_image_id ? igdbImage(game.cover_image_id, "t_cover_big") : null);
     if (cover) document.getElementById("cover").src = cover;
-    else document.getElementById("cover").classList.add("d-none");
+    else document.querySelector(".game-aside").remove();      // no empty column
+    document.getElementById("game").classList.toggle("no-cover", !cover);
 
     renderFacts();
     renderPriceSummary();
@@ -89,11 +90,12 @@ function renderPriceSummary() {
     if (!best) { box.innerHTML = ""; return; }
     const edition = game.editions.length > 1 ? ` · ${esc(localName(best.edition))}` : "";
     box.innerHTML = `
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            <span class="fs-5">${t("best_price_now")} <strong>${eur.format(best.price)}</strong></span>
-            <span class="text-body-secondary">${esc(storeName(best.store))}${edition}</span>
-            <a href="${esc(best.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-primary offer-link">${t("view_in_store")}</a>
-            ${best.edition.at_historical_low ? `<span class="badge text-bg-success">${t("lowest_ever_now")}</span>` : ""}
+        <div class="best-card">
+            <span class="lbl">${esc(t("best_price_now").replace(/:$/, ""))}</span>
+            <span class="big">${eur.format(best.price)}</span>
+            <span>${esc(storeName(best.store))}${edition} · ${t("in_stock")}
+                ${best.edition.at_historical_low ? `<span class="badge badge-critics ms-1">${t("lowest_ever_now")}</span>` : ""}</span>
+            <a href="${esc(best.url)}" target="_blank" rel="noopener" class="btn btn-primary offer-link">${esc(t("view_at", { store: storeName(best.store) }))}</a>
         </div>`;
 }
 
@@ -113,14 +115,18 @@ function renderFacts() {
 
     const genres = (game.genres || sd["Género"] || "").split(",").map(g => g.trim()).filter(Boolean);
     document.getElementById("genres").innerHTML =
-        genres.map(g => `<span class="badge rounded-pill text-bg-secondary me-1">${esc(g)}</span>`).join("");
+        genres.map(g => `<span class="badge badge-soft">${esc(g)}</span>`).join("");
+    if (game.rating) {
+        const critics = document.getElementById("critics");
+        critics.textContent = `${t("critics_score")} ${game.rating}/100 · ${t("critics_source", { count: game.rating_count })}`;
+        critics.classList.remove("d-none");
+    }
 
     const released = game.first_release_date;
     const facts = [
         [t("publisher"), game.publishers || sd["Editora"]],
         [t("developer"), game.developers || sd["Produtora"]],
         [t("released"), released && new Date(released + "T12:00:00") <= new Date() ? fmtDate(released + "T12:00:00") : null],
-        [t("critics_score"), game.rating ? `${game.rating}/100 (${t("critics_source", { count: game.rating_count })})` : null],
         [t("time_to_beat"), timeToBeat()],
     ].filter(([, value]) => value);
     document.getElementById("facts").innerHTML =
@@ -284,7 +290,7 @@ function editionPhotos(photos) {
 
 function renderEdition(edition, i) {
     const card = document.createElement("section");
-    card.className = "card shadow-sm mb-4";
+    card.className = "card edition-card mb-4";
 
     const low = edition.lowest_price;
     const best = edition.offers.find(o => o.in_stock);
@@ -336,6 +342,8 @@ function periodButtons() {
 }
 
 function offersTable(edition) {
+    // the cheapest copy in stock gets the blue button, the other stores a soft one
+    const lead = edition.offers.find(o => o.in_stock);
     const rows = edition.offers.map(o => `
         <tr class="${o.in_stock ? "" : "text-body-secondary"}">
             <td><span class="swatch" style="background:${storeColor(o.store)}"></span>${esc(storeName(o.store))}
@@ -348,7 +356,7 @@ function offersTable(edition) {
             </td>
             <td>${o.is_preorder ? `<span class="badge text-bg-primary">${t("preorder")}</span>` : o.in_stock ? t("in_stock") : t("sold_out")}</td>
             <td class="text-end"><a href="${esc(o.url)}" target="_blank" rel="noopener"
-                class="btn btn-sm offer-link ${o.in_stock ? "btn-primary" : "btn-secondary"}"
+                class="btn btn-sm offer-link ${o === lead ? "btn-primary" : "btn-secondary"}"
                 aria-label="${esc(t("view_at", { store: storeName(o.store) }))}"><span class="d-none d-sm-inline">${t("view_in_store")}</span><span
                 class="d-sm-none" aria-hidden="true">${t("store_short")} ↗</span></a></td>
         </tr>`).join("");

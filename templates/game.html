@@ -52,7 +52,31 @@
         }
 
         .chart-box { position: relative; height: 280px; background: var(--surface-1); border-radius: .5rem; padding: .5rem; }
-        .game-cover { width: 140px; aspect-ratio: 3 / 4; object-fit: cover; background: #000; border-radius: .5rem; }
+        .game-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 2rem; align-items: start; }
+        .game-layout.d-none { display: none; }
+        .game-layout.no-cover { grid-template-columns: minmax(0, 1fr); }
+        .game-aside { position: sticky; top: 1rem; }
+        .game-cover { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--bs-secondary-bg); border-radius: .875rem;
+                      box-shadow: 0 12px 30px rgb(20 23 31 / .18); }
+        @media (max-width: 767.98px) {
+            .game-layout { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+            .game-aside { position: static; }
+            .game-cover { width: 150px; }
+        }
+        .game-kicker { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-primary); }
+        .game-name { font-size: clamp(1.6rem, 3.5vw, 2.3rem); line-height: 1.1; margin: .2rem 0 0; }
+        .d-contents { display: contents; }
+        .badge-soft { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); font-weight: 700; font-size: .8rem; border-radius: .4rem; }
+        .badge-critics { background: var(--save-bg); color: var(--save); }
+        .badge-release { background: var(--bs-primary-bg-subtle); color: var(--bs-primary-text-emphasis); }
+        /* The best price of any edition: one card, the price large */
+        .best-card { background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .875rem; padding: 1rem 1.25rem;
+                     display: grid; gap: .15rem; justify-items: start; }
+        .best-card .lbl { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-secondary-color); }
+        .best-card .big { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+        .best-card .btn { margin-top: .6rem; }
+        /* Editions: panels with a border, no shadow */
+        .edition-card { border: 1px solid var(--bs-border-color); border-radius: .875rem; background: var(--bs-body-bg); }
         .swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
         .low-badge { background: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); border: 1px solid var(--bs-success-border-subtle); }
         table.prices td, table.prices th { font-variant-numeric: tabular-nums; }
@@ -96,24 +120,28 @@
     </div>
 </header>
 
-<div class="container pb-4" style="max-width: 1000px;">
+<div class="container pb-4" style="max-width: 1140px;">
     <div class="mb-3"><a href="/" id="back-link" class="btn btn-sm btn-secondary" data-i18n="back"></a></div>
 
     <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
     <div id="error" class="alert alert-warning d-none"></div>
 
-    <div id="game" class="d-none">
-        <div class="d-flex gap-3 align-items-start mb-4">
-            <img id="cover" class="game-cover flex-shrink-0" alt="">
-            <div>
-                <h1 id="title" class="h3 mb-1"></h1>
-                <span id="platform" class="badge text-bg-secondary"></span>
-                <span id="release" class="badge text-bg-primary d-none"></span>
-                <span id="pegi" class="badge text-bg-dark border d-none"></span>
-                <div id="genres" class="mt-2"></div>
-                <!-- The best price of any edition, right under the title (what people come for) -->
-                <div id="price-summary" class="mt-3"></div>
+    <!-- The cover on the left (it stays while the page scrolls), everything else beside it;
+         on a phone one column -->
+    <div id="game" class="d-none game-layout">
+        <div class="game-aside"><img id="cover" class="game-cover" alt=""></div>
+        <div class="game-main min-w-0">
+        <div class="mb-4">
+            <div id="platform" class="game-kicker"></div>
+            <h1 id="title" class="game-name"></h1>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+                <span id="critics" class="badge badge-soft badge-critics d-none"></span>
+                <span id="release" class="badge badge-soft badge-release d-none"></span>
+                <span id="pegi" class="badge badge-soft d-none"></span>
+                <span id="genres" class="d-contents"></span>
             </div>
+            <!-- The best price of any edition, right under the title (what people come for) -->
+            <div id="price-summary" class="mt-3"></div>
         </div>
 
         <div id="editions"></div>
@@ -121,7 +149,7 @@
 
         <!-- About the game: facts (publisher, release, time to beat…), the store's description
              (Portuguese) and/or IGDB's summary, screenshots, videos -->
-        <section id="about" class="card shadow-sm mb-4 d-none">
+        <section id="about" class="card edition-card mb-4 d-none">
             <div class="card-body">
                 <h2 class="h5 mb-2" data-i18n="about"></h2>
                 <dl id="facts" class="facts small mb-3"></dl>
@@ -149,7 +177,7 @@
         </section>
 
         <!-- Players' reviews of this game on this platform, 1–10 -->
-        <section id="reviews" class="card shadow-sm mt-4">
+        <section id="reviews" class="card edition-card mt-4">
             <div class="card-body">
                 <h2 class="h5 mb-0" data-i18n="reviews_title"></h2>
                 <p id="reviews-platform" class="small text-body-secondary mb-3"></p>
@@ -160,6 +188,7 @@
                         data-i18n="reviews_more"></button>
             </div>
         </section>
+        </div>
     </div>
 </div>
 
