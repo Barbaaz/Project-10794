@@ -17,7 +17,7 @@ import sys
 from scheduler.jobs import (LIGHT_STORES, SCRAPERS, RanRecently, active_store_slugs, hours_since_last_run,
                             run_store, setup_logging)
 from scheduler.notify import notify, run_summary
-from pipeline.igdb import enrich_games, fill_names, fill_tags, fill_time_to_beat, fill_videos
+from pipeline.igdb import enrich_games, fill_names, fill_tags, fill_time_to_beat, fill_videos, refresh_critic_scores
 from app.services.chat_service import complete_overdue
 from app.services.wish_alert_service import check_all as wish_alerts
 
@@ -65,6 +65,7 @@ def main(light=False, due=False):
             fill_tags()
             fill_names()
             fill_time_to_beat()
+            refresh_critic_scores()
         except Exception as e:
             log.warning("IGDB lookup skipped: %s", e)
 

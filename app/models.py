@@ -73,7 +73,8 @@ class Game(Base):
     publishers: Mapped[str | None] = mapped_column(Unicode(500))
     developers: Mapped[str | None] = mapped_column(Unicode(500))
     first_release_date = mapped_column(Date)
-    rating: Mapped[int | None] = mapped_column(Integer)
+    rating: Mapped[int | None] = mapped_column(Integer)          # critics' score 0-100
+    rating_count: Mapped[int | None] = mapped_column(Integer)    # critics' reviews it's made of
     pegi: Mapped[str | None] = mapped_column(Unicode(10))
     cover_image_id: Mapped[str | None] = mapped_column(Unicode(50))
     screenshot_ids: Mapped[str | None] = mapped_column(UnicodeText)

@@ -85,7 +85,7 @@ def get_game(game_id):
         """
         SELECT g.id, g.title, NULLIF(g.title_en, '') AS title_en, p.code AS platform, p.name AS platform_name,
                g.kind, g.image_url AS image, g.igdb_id, g.summary, g.genres, g.publishers, g.developers, g.first_release_date,
-               g.rating, g.pegi, g.cover_image_id, g.screenshot_ids, g.video_ids AS videos,
+               g.rating, g.rating_count, g.pegi, g.cover_image_id, g.screenshot_ids, g.video_ids AS videos,
                g.ttb_hastily, g.ttb_normally, g.ttb_completely, g.ttb_count
         FROM games g JOIN platforms p ON p.id = g.platform_id
         WHERE g.id = ?

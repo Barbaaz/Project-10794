@@ -101,13 +101,54 @@ def test_game_info():
         "age_ratings": [{"organization": {"name": "ESRB"}, "rating_category": {"rating": "M"}},
                         {"organization": {"name": "PEGI"}, "rating_category": {"rating": "16"}}],
         "cover": {"image_id": "co123"}, "screenshots": [{"image_id": "sc1"}, {"image_id": "sc2"}],
-        "total_rating": 77.4,
+        "total_rating": 81.0, "aggregated_rating": 77.4, "aggregated_rating_count": 12,
     })
     assert info["genres"] == "Adventure, Horror"
     assert (info["publishers"], info["developers"]) == ("Konami", "Screen Burn")
-    assert (info["pegi"], info["rating"], info["first_release_date"]) == ("16", 77, "2026-01-01")
+    assert (info["pegi"], info["first_release_date"]) == ("16", "2026-01-01")
+    assert (info["rating"], info["rating_count"]) == (77, 12)     # critics only, not total_rating
     assert json.loads(info["screenshot_ids"]) == ["sc1", "sc2"]
     assert json.loads(info["video_ids"]) == []      # "[]": looked up, IGDB has none
+
+
+def test_critic_score_without_critics():
+    from pipeline.igdb import critic_score
+    assert critic_score({"total_rating": 70.0}) == {"rating": None, "rating_count": 0}
+
+
+def test_refresh_critic_scores_keeps_games_igdb_did_not_return(monkeypatch):
+    import pipeline.igdb as igdb
+
+    class FakeCursor:
+        def __init__(self):
+            self.updates = []
+        def execute(self, sql, *params):
+            if sql.startswith("SELECT"):
+                self.rows = [(1,), (2,), (3,)]
+            else:
+                self.updates.append(params)
+            return self
+        def fetchall(self):
+            return self.rows
+
+    class FakeConn:
+        def __init__(self):
+            self.c = FakeCursor()
+        def cursor(self):
+            return self.c
+        def commit(self): pass
+        def rollback(self): pass
+        def close(self): pass
+
+    class FakeClient:
+        def query(self, body):
+            return [{"id": 1, "aggregated_rating": 88.6, "aggregated_rating_count": 30}, {"id": 2}]
+
+    conn = FakeConn()
+    import db
+    monkeypatch.setattr(db, "get_connection", lambda: conn)
+    assert igdb.refresh_critic_scores(FakeClient()) == 3
+    assert {params[-1]: params[:-1] for params in conn.c.updates} == {1: (89, 30), 2: (None, 0)}
 
 
 def test_videos_trailers_first():

@@ -1,5 +1,5 @@
 """
-Game information from IGDB (summary, genres, publisher, developer, PEGI, rating, cover,
+Game information from IGDB (summary, genres, publisher, developer, PEGI, critics' score, cover,
 screenshots, YouTube trailers, game modes, themes, time to beat) for the game page and the filters. Each game is looked up once; new games each day.
 
     python -m pipeline.igdb                  # games not looked up yet (up to 300)
@@ -8,6 +8,7 @@ screenshots, YouTube trailers, game modes, themes, time to beat) for the game pa
     python -m pipeline.igdb --tags           # game modes / themes for games matched before they were kept
     python -m pipeline.igdb --time-to-beat   # time to beat (rushed / normal / 100%) of matched games
     python -m pipeline.igdb --names          # English names of games matched before they were kept
+    python -m pipeline.igdb --critics        # critics' scores of matched games (also each full run)
 
 Credentials: a Twitch developer app, in the environment variables IGDB_CLIENT_ID and
 IGDB_CLIENT_SECRET (never in the code). IGDB allows 4 requests per second; we stay under it.
@@ -75,7 +76,8 @@ PORTUGUESE_WORDS = {"parte", "edicao", "versao", "colecao", "fim", "ladrao", "re
 FIELDS = ("name,version_parent.name,game_type,first_release_date,summary,genres.name,"
           "involved_companies.company.name,involved_companies.publisher,involved_companies.developer,"
           "age_ratings.rating_category.rating,age_ratings.organization.name,"
-          "cover.image_id,screenshots.image_id,videos.video_id,videos.name,total_rating,game_modes.name,themes.name")
+          "cover.image_id,screenshots.image_id,videos.video_id,videos.name,game_modes.name,themes.name,"
+          "aggregated_rating,aggregated_rating_count")
 MAX_VIDEOS = 6
 BATCH = 500                 # games per request when filling columns by IGDB id (IGDB's maximum)
 
@@ -188,7 +190,7 @@ def best_match(game_key, results):
 
 # The games columns filled from IGDB (game_info() gives a value for each)
 IGDB_COLUMNS = ("igdb_id", "summary", "genres", "publishers", "developers", "first_release_date", "rating",
-                "pegi", "cover_image_id", "screenshot_ids", "video_ids", "game_modes", "themes")
+                "rating_count", "pegi", "cover_image_id", "screenshot_ids", "video_ids", "game_modes", "themes")
 
 
 def game_info(g):
@@ -205,7 +207,7 @@ def game_info(g):
         "publishers": names("publisher"),
         "developers": names("developer"),
         "first_release_date": time.strftime("%Y-%m-%d", time.gmtime(released)) if released else None,
-        "rating": round(g["total_rating"]) if g.get("total_rating") else None,
+        **critic_score(g),
         "pegi": pegi,
         "cover_image_id": (g.get("cover") or {}).get("image_id"),
         "screenshot_ids": json.dumps([s["image_id"] for s in g.get("screenshots", [])][:12]) or None,
@@ -226,6 +228,16 @@ def english_name(g):
     if g.get("game_type") in NOT_THE_GAMES_NAME:
         return ""
     return g.get("name") or ""
+
+
+def critic_score(g):
+    """
+    {rating, rating_count}: IGDB's score from critics' reviews only (aggregated_rating), not its
+    total_rating, which mixes in IGDB's own users. No critics yet: (None, 0).
+    """
+    count = g.get("aggregated_rating_count") or 0
+    return {"rating": round(g["aggregated_rating"]) if count and g.get("aggregated_rating") else None,
+            "rating_count": count}
 
 
 def tag_lists(g):
@@ -325,6 +337,33 @@ def fill_tags(client=None):
     return fill_missing("game_modes", "game_modes.name,themes.name", tag_lists, client)
 
 
+def refresh_critic_scores(client=None):
+    """
+    Critics' scores of every matched game, asked again each full run: reviews come out around a
+    game's release, after it was matched. 500 games per request (~8 for 4,000 games).
+    """
+    with connection() as conn:
+        cursor = conn.cursor()
+        ids = [r[0] for r in cursor.execute(
+            "SELECT DISTINCT igdb_id FROM games WHERE igdb_id IS NOT NULL ORDER BY igdb_id").fetchall()]
+        if not ids:
+            return 0
+        client = client or IGDBClient()
+        for start in range(0, len(ids), BATCH):
+            batch = ids[start:start + BATCH]
+            found = {g["id"]: g for g in client.query(
+                f"fields id,aggregated_rating,aggregated_rating_count; where id = ({','.join(map(str, batch))}); "
+                f"limit {BATCH};")}
+            for igdb_id in batch:
+                if igdb_id in found:     # a game IGDB didn't return keeps its score
+                    score = critic_score(found[igdb_id])
+                    cursor.execute("UPDATE games SET rating = ?, rating_count = ? WHERE igdb_id = ?",
+                                   score["rating"], score["rating_count"], igdb_id)
+            conn.commit()
+    log.info("IGDB: critics' scores refreshed for %d games", len(ids))
+    return len(ids)
+
+
 def english_title(title, igdb_name):
     """
     The English name shown for a game: IGDB's when the store's title is Portuguese ("The Last of Us
@@ -405,9 +444,12 @@ if __name__ == "__main__":
     parser.add_argument("--tags", action="store_true", help="only fill game modes / themes of games already matched")
     parser.add_argument("--time-to-beat", action="store_true", help="only fill the time to beat of matched games")
     parser.add_argument("--names", action="store_true", help="only fill the English names of matched games")
+    parser.add_argument("--critics", action="store_true", help="only refresh the critics' scores of matched games")
     args = parser.parse_args()
     setup_logging()
-    if args.names:
+    if args.critics:
+        refresh_critic_scores()
+    elif args.names:
         fill_names()
     elif args.videos:
         fill_videos()

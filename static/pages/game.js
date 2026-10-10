@@ -120,7 +120,7 @@ function renderFacts() {
         [t("publisher"), game.publishers || sd["Editora"]],
         [t("developer"), game.developers || sd["Produtora"]],
         [t("released"), released && new Date(released + "T12:00:00") <= new Date() ? fmtDate(released + "T12:00:00") : null],
-        [t("rating"), game.rating ? `${game.rating}/100 (IGDB)` : null],
+        [t("critics_score"), game.rating ? `${game.rating}/100 (${t("critics_source", { count: game.rating_count })})` : null],
         [t("time_to_beat"), timeToBeat()],
     ].filter(([, value]) => value);
     document.getElementById("facts").innerHTML =
