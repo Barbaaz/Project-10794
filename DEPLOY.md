@@ -157,7 +157,7 @@ The stores now see requests from a data centre instead of a home connection, and
 differently. After the first 06:00 and 18:00 runs:
 
 ```bash
-grep -E "WARNING|ERROR|403|429| done:" logs/scraper.log | tail -40
+grep -E "WARNING|ERROR|403|429| done:" logs/scraper-$(date +%F).log | tail -40
 ```
 
 Every store should end with `done:` and no 403 / 429. The scrapers already stop at the first 403 /
@@ -175,7 +175,7 @@ All on the **server**, in `~/Project-10794`:
 |-------|-----|
 | See whether it's running | `docker compose ps` |
 | The site's log | `docker compose logs --tail 100 web` |
-| The scraper runs' log | `tail -100 logs/scraper.log` (kept 30 days) |
+| The scraper runs' log | `tail -100 logs/scraper-$(date +%F).log` (one file per day, kept 30 days) |
 | Run one store by hand (gently: the 8 h gap applies) | `docker compose exec scheduler python -m scheduler.run_single_store press_start` |
 | Make someone a moderator / admin | `docker compose exec web python -m database.users role <username> moderator` |
 | Open the database | `docker compose exec db psql -U project10794` |

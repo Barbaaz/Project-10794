@@ -13,7 +13,7 @@
 #
 # Remove it with:  Unregister-ScheduledTask -TaskName Project10794-Scrapers -Confirm:$false
 # Run it now with: Start-ScheduledTask -TaskName Project10794-Scrapers
-# Logs:            logs\scraper.log   and the scrape_runs table
+# Logs:            logs\scraper-<date>.log (one per day)   and the scrape_runs table
 
 param(
     [int]$EveryHours = 2,

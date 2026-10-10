@@ -2,7 +2,7 @@ import logging
 import sys
 from collections import Counter
 from contextlib import contextmanager
-from logging.handlers import TimedRotatingFileHandler
+from datetime import date, timedelta
 from pathlib import Path
 
 import db
@@ -58,10 +58,48 @@ SCRAPERS = {
 }
 
 
+LOG_DAYS = 30
+
+
+class DailyFileHandler(logging.FileHandler):
+    """
+    logs/scraper-<date>.log, the file of the day each line is written on, appended to by every process.
+    Nothing is renamed: with a rotating log, two runs at once each rotated it at midnight and lines were
+    lost (and Windows can't rename a file another process has open).
+    """
+
+    def __init__(self, directory):
+        self.directory, self.day = Path(directory), date.today()
+        super().__init__(self._path(), encoding="utf-8")
+
+    def _path(self):
+        return self.directory / f"scraper-{self.day.isoformat()}.log"
+
+    def emit(self, record):
+        if date.today() != self.day:            # a run going on past midnight, or the server's daemon
+            self.acquire()
+            try:
+                self.close()
+                self.day = date.today()
+                self.baseFilename = str(self._path())
+            finally:
+                self.release()
+        super().emit(record)
+
+
+def remove_old_logs(directory=LOG_DIR, days=LOG_DAYS):
+    """Day files (and the old rotating log's copies) older than `days`."""
+    oldest = date.today() - timedelta(days=days)
+    for path in [*Path(directory).glob("scraper-*.log"), *Path(directory).glob("scraper.log.*")]:
+        if date.fromtimestamp(path.stat().st_mtime) < oldest:
+            path.unlink(missing_ok=True)
+
+
 def setup_logging():
-    # Scheduled runs have no console, so also keep a log file (last 30 days)
+    # Scheduled runs have no console, so also keep a log file per day (last 30 days)
     LOG_DIR.mkdir(exist_ok=True)
-    handlers = [TimedRotatingFileHandler(LOG_DIR / "scraper.log", when="midnight", backupCount=30, encoding="utf-8")]
+    remove_old_logs()
+    handlers = [DailyFileHandler(LOG_DIR)]
 
     # sys.stdout is None under pythonw.exe (used by the scheduled task)
     if sys.stdout is not None:

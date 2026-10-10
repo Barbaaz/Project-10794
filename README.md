@@ -240,7 +240,7 @@ python -m scheduler.run_all_scrapers            # every active store
 python -m scheduler.run_single_store cstech     # one store
 ```
 
-Each run is logged in the `scrape_runs` table and in `logs\scraper.log`.
+Each run is logged in the `scrape_runs` table and in `logs\scraper-<date>.log` (one file per day, kept 30 days).
 
 ### Daily update
 
