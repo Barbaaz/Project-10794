@@ -84,6 +84,47 @@ def test_cancelling_an_accepted_purchase_puts_the_listing_back(deal):
     assert step(client, conversation_id, "request").get_json()["deal_status"] == "requested"
 
 
+def change_listing(client, m, **changes):
+    return client.patch(f"/api/listings/{m['listing']['id']}", json=changes, headers=HEADERS)
+
+
+def test_a_listing_in_a_deal_cant_be_changed_by_its_seller(deal):
+    """Once a purchase is accepted, the seller can't put the copy back on sale for someone else, nor change
+    what the buyer agreed to (price, condition, photos): cancelling the purchase comes first."""
+    client = deal["client"]
+    conversation_id = start(client, deal["listing"]["id"], buy=True).get_json()["id"]
+    log_in(client, "seller")
+    assert change_listing(client, deal, price="25.00").status_code == 200      # only requested: still free
+    step(client, conversation_id, "accept")
+
+    for changes in ({"status": "active"}, {"status": "removed"}, {"price": "99.00"}, {"condition": "poor"}):
+        response = change_listing(client, deal, **changes)
+        assert (response.status_code, response.get_json()["error"]) == (409, "listing_in_deal"), changes
+    photo = deal["listing"]["photos"][0]["id"]
+    deleted = client.delete(f"/api/listings/{deal['listing']['id']}/photos/{photo}", headers=HEADERS)
+    assert deleted.get_json()["error"] == "listing_in_deal"
+    assert listing_status(deal) == "reserved"
+    step(client, conversation_id, "sent")
+    assert change_listing(client, deal, status="active").get_json()["error"] == "listing_in_deal"
+
+    log_in(client, "buyer")
+    step(client, conversation_id, "received")
+    log_in(client, "seller")
+    assert change_listing(client, deal, status="active").status_code == 200    # done: the seller's to manage
+
+
+def test_a_restored_listing_stays_reserved_for_its_buyer(deal):
+    client = deal["client"]
+    conversation_id = start(client, deal["listing"]["id"], buy=True).get_json()["id"]
+    log_in(client, "seller")
+    step(client, conversation_id, "accept")
+    sign_up(client, "mod")
+    deal["db"].execute("UPDATE users SET role = 'moderator' WHERE username = 'mod'")
+    for action in ("hide_listing", "restore_listing"):
+        client.post("/api/mod/actions", json={"action": action, "target_id": deal["listing"]["id"]}, headers=HEADERS)
+    assert listing_status(deal) == "reserved"
+
+
 def test_two_buyers_one_copy(deal):
     client = deal["client"]
     first = start(client, deal["listing"]["id"], buy=True).get_json()["id"]
@@ -148,6 +189,31 @@ def test_unread_messages(deal):
     assert reply.get_json()["messages"][-1]["body"] == "Sim!"
 
 
+def test_reading_marks_up_to_the_newest_message_seen(deal):
+    """
+    The read mark is the newest message the reader saw, not the time of the request: a message that
+    was being saved at that moment (its time a little earlier than the request's) still counts as
+    unread. And polling without anything new writes nothing.
+    """
+    client = deal["client"]
+    conversation_id = start(client, deal["listing"]["id"], message="Olá!").get_json()["id"]
+    db = deal["db"]
+    log_in(client, "seller")
+    client.get(f"/api/conversations/{conversation_id}")
+    read_at, seen = db.execute("SELECT c.seller_read_at, max(m.created_at) FROM conversations c "
+                               "JOIN messages m ON m.conversation_id = c.id WHERE c.id = ? GROUP BY c.id",
+                               conversation_id).fetchone()
+    assert read_at == seen
+    client.get(f"/api/conversations/{conversation_id}")                              # a poll: nothing new
+    assert db.execute("SELECT seller_read_at FROM conversations WHERE id = ?", conversation_id).fetchone()[0] == read_at
+
+    # the buyer's message saved in a transaction that began before the seller's last poll, finished after it
+    buyer_id = db.execute("SELECT buyer_id FROM conversations WHERE id = ?", conversation_id).fetchone()[0]
+    db.execute("INSERT INTO messages (conversation_id, sender_id, body, created_at) VALUES (?, ?, ?, "
+               "?::timestamp + interval '1 millisecond')", conversation_id, buyer_id, "E o preço?", seen)
+    assert client.get("/api/conversations/unread").get_json()["count"] == 1
+
+
 def test_conversations_are_private(deal):
     client = deal["client"]
     conversation_id = start(client, deal["listing"]["id"], message="Olá").get_json()["id"]
@@ -199,6 +265,9 @@ def test_photos_in_a_conversation(deal):
     # not through /media (anyone with the address), not for others, not from another conversation's address
     key = deal["db"].execute("SELECT photo_key FROM message_photos ORDER BY id LIMIT 1").fetchone()[0]
     assert key.startswith(f"chats/{conversation_id}/") and client.get(f"/media/{key}").status_code == 404
+    # nor through a path that only looks different (these got through a "starts with chats/" check)
+    for disguised in (f"./{key}", f"listings/../{key}", key.replace("chats/", "Chats/"), key.replace("chats/", "CHATS/")):
+        assert client.get(f"/media/{disguised}").status_code == 404, disguised
     sign_up(client, "stranger")
     assert client.get(sent["photos"][0]["url"]).status_code == 404
     deal["db"].execute("UPDATE users SET role = 'moderator' WHERE username = 'stranger'")

@@ -24,10 +24,21 @@ function save(key, value, storage = "localStorage") {
     try { window[storage].setItem(key, typeof value === "string" ? value : JSON.stringify(value)); } catch (e) {}
 }
 
+// Text for HTML, in content and in attributes (title="…", value="…"): quotes too, or a display
+// name like x" onmouseover="… would add its own attribute (tests/test_escaping.py)
+const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 function esc(text) {
-    const div = document.createElement("div");
-    div.textContent = text ?? "";
-    return div.innerHTML;
+    return String(text ?? "").replace(/[&<>"']/g, c => ESCAPES[c]);
+}
+
+// "@name"; "utilizador removido" for an account deleted since (no username or page any more)
+function userLabel(username) {
+    return username ? `@${username}` : t("deleted_user");
+}
+
+// The same, linked to the user's page
+function userLink(username) {
+    return username ? `<a href="/user/${encodeURIComponent(username)}">@${esc(username)}</a>` : esc(t("deleted_user"));
 }
 
 // `stores` ({slug: store}) is filled by each page from /api/stores
@@ -65,6 +76,10 @@ async function showDemoBanner() {
 }
 
 document.addEventListener("DOMContentLoaded", showDemoBanner);
+// Every theme button (the header's, the account menu's on a phone): one listener, no onclick="…" (the CSP)
+document.addEventListener("click", event => {
+    if (event.target.closest("[data-toggle-dark]")) toggleDark();
+});
 
 // Calls to our API that change something: JSON in and out, with the header the server
 // requires on such requests (it can't be added by another site: app/web.py).
@@ -98,16 +113,16 @@ async function renderAccountArea() {
     }
     const staff = ["moderator", "admin"].includes(currentUser.role);
     const name = currentUser.username || currentUser.display_name;
-    const navButton = (href, icon, label, extra = "", style = "btn-secondary") => `
-        <a href="${href}" class="btn btn-sm ${style} position-relative" ${extra}
-           title="${esc(label)}" aria-label="${esc(label)}">${icon}<span class="d-none d-lg-inline ms-1">${esc(label)}</span></a>`;
+    const navButton = (href, icon, label, extra = "") => `
+        <a href="${href}" class="btn btn-sm header-link position-relative" ${extra}
+           title="${esc(label)}" aria-label="${esc(label)}"><span class="icon">${icon}</span><span class="d-none d-lg-inline">${esc(label)}</span></a>`;
     box.innerHTML = `
-        ${navButton("/sell", "🏷️", t("nav_sell"), "", "btn-success")}
+        ${navButton("/sell", "🏷️", t("nav_sell"))}
         ${navButton("/messages", "💬", t("messages"), 'id="messages-link"')}
         ${navButton("/collection", "📚", t("nav_collection"), 'id="collection-link"')}
         <div class="account-menu position-relative">
-            <button type="button" class="btn btn-sm btn-secondary" id="account-menu-btn" aria-haspopup="menu" aria-expanded="false"
-                    aria-controls="account-menu" title="${esc(t("account_menu"))}">👤<span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
+            <button type="button" class="btn btn-sm header-link" id="account-menu-btn" aria-haspopup="menu" aria-expanded="false"
+                    aria-controls="account-menu" title="${esc(t("account_menu"))}"><span class="icon">👤</span><span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
             <div class="dropdown-menu shadow" id="account-menu" role="menu">
                 <span class="dropdown-header">@${esc(name)}</span>
                 <a class="dropdown-item" role="menuitem" href="/account">${t("my_account")}</a>
@@ -134,7 +149,6 @@ async function renderAccountArea() {
         save("lang", LANG === "pt" ? "en" : "pt");
         location.reload();
     };
-    box.querySelector("[data-toggle-dark]").onclick = () => toggleDark();
 }
 
 // The account menu: opens on click; Esc, Tab out or a click elsewhere closes it; arrows move
@@ -268,7 +282,7 @@ async function showPendingRatings() {
     banner.className = `alert ${overdue ? "alert-danger" : "alert-warning"} py-2 small`;
     banner.setAttribute("role", "status");
     banner.innerHTML = `<strong>${esc(t(overdue ? "ratings_overdue_title" : "ratings_pending_title", { count: pending.length }))}</strong>
-        ${pending.map(p => `<a href="/messages?c=${p.conversation_id}" class="ms-2">${esc(t("rate_link", { user: p.other_username, game: p.title }))}</a>`).join("")}`;
+        ${pending.map(p => `<a href="/messages?c=${p.conversation_id}" class="ms-2">${esc(t("rate_link", { user: userLabel(p.other_username), game: p.title }))}</a>`).join("")}`;
     const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl");
     container?.querySelector(":scope > div")?.after(banner);
 }

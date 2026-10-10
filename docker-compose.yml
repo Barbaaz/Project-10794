@@ -26,6 +26,8 @@ services:
       IGDB_CLIENT_SECRET: ${IGDB_CLIENT_SECRET:-}
       # 1 = a test copy on demo data (set by the teste/ launchers): banner on every page, demo users
       DEMO_MODE: ${DEMO_MODE:-}
+      # Optional: /collection's Steam import
+      STEAM_API_KEY: ${STEAM_API_KEY:-}
       # Optional: e-mail (password reset). Without SMTP_HOST, e-mails are only written to the log
       SITE_URL: ${SITE_URL:-http://localhost:5000}
       SMTP_HOST: ${SMTP_HOST:-}

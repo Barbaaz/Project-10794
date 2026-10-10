@@ -20,6 +20,21 @@ class MegaManiaScraper(BaseScraper):
         "https://mega-mania.com.pt/pt/catalogo/2-xbox-one/159-jogos": "XboxOne",
         "https://mega-mania.com.pt/pt/catalogo/10-pc/278-jogos": "PC",
     }
+    # Consoles, new and used (core/hardware.py). Nintendo's used page mixes Switch and Switch 2: the
+    # platform from the name there
+    hardware_urls = {f"https://mega-mania.com.pt/pt/catalogo/{path}": hint for path, hint in {
+        "456-ps/460-consolas/478-consolas-novas": ("PS5", "console"),
+        "456-ps/460-consolas/479-consolas-ps5-usadas": ("PS5", "console"),
+        "1-ps/156-consolas/157-consolas-ps4": ("PS4", "console"),
+        "1-ps/156-consolas/158-consolas-ps4": ("PS4", "console"),
+        "480-xbox-one-x/484-consolas/499-consolas-novas": ("XboxSeries", "console"),
+        "480-xbox-one-x/484-consolas/500-consolas-usadas": ("XboxSeries", "console"),
+        "2-xbox-one/179-consolas/180-consolas-novas": ("XboxOne", "console"),
+        "2-xbox-one/179-consolas/181-consolas-usadas": ("XboxOne", "console"),
+        "5-nintendo/275-consolas/534-consolas-nitendo-switch": ("Switch2", "console"),
+        "5-nintendo/275-consolas/276-consolas-nitendo-switch": ("Switch", "console"),
+        "5-nintendo/275-consolas/277-consolas-usadas": (None, "console"),
+    }.items()}
 
     def build_search_url(self, query, page):
         return f"{self.base_url}/pt/catalogo/?p={page}&f={quote(query)}&ppage=50"

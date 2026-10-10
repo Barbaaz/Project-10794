@@ -8,39 +8,38 @@
     <!-- installable on a phone (static/manifest.webmanifest, static/sw.js) -->
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
-    <meta name="theme-color" content="#0d6efd">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <meta name="theme-color" content="#2346d0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
     <link href="/static/common.css" rel="stylesheet">
     <script src="/static/common.js"></script>
     <script src="/static/i18n.js"></script>
     <script src="/static/market.js"></script>
     <style>
         .item-cover { width: 64px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: var(--bs-secondary-bg); }
-        .stat { min-width: 8rem; }
+        .stat { min-width: 7.5rem; flex: 1 1 7.5rem; max-width: 11rem; }
+        .item-facts { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: center; }
     </style>
 </head>
 <body class="bg-body-tertiary">
 
-<!-- The same header on every page (static/common.js fills the account area) -->
-<header class="site-header bg-body border-bottom mb-4">
-    <div class="container-xxl d-flex align-items-center gap-2 py-2">
-        <a href="/" class="site-brand link-body-emphasis text-decoration-none">🎮 <span>Game Price Tracker</span></a>
-        <div class="header-tools ms-auto d-flex align-items-center gap-1">
-            <div id="account-area" class="d-flex gap-1 align-items-center"></div>
-            <div id="lang-switch" class="btn-group header-setting" role="group" data-i18n-aria-label="language"></div>
-            <button type="button" onclick="toggleDark()" class="btn btn-sm btn-secondary header-setting"
-                    data-i18n-aria-label="dark_mode" data-i18n-title="dark_mode">🌙</button>
-        </div>
-    </div>
-</header>
+{% include "_header.html" %}
 
 <div class="container pb-4" style="max-width: 1000px;">
 
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h1 class="h3 mb-0" data-i18n="collection_title"></h1>
-        <div class="form-check form-switch mb-0">
-            <input class="form-check-input" type="checkbox" role="switch" id="public-switch">
-            <label class="form-check-label small" for="public-switch" data-i18n="collection_public"></label>
+        <div class="d-flex flex-wrap gap-3">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="public-switch">
+                <label class="form-check-label small" for="public-switch" data-i18n="collection_public"></label>
+            </div>
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="alerts-switch"
+                       aria-describedby="alerts-hint">
+                <label class="form-check-label small" for="alerts-switch" data-i18n="collection_wish_alerts"
+                       data-i18n-title="collection_wish_alerts_hint"></label>
+                <span id="alerts-hint" class="visually-hidden" data-i18n="collection_wish_alerts_hint"></span>
+            </div>
         </div>
     </div>
     <div id="public-link" class="small mb-3 d-none"></div>
@@ -56,6 +55,31 @@
             <li class="nav-item" role="presentation"><button class="nav-link active" data-kind="owned" role="tab"></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-kind="wishlist" role="tab"></button></li>
         </ul>
+        <!-- Add a game to the open tab (owned / wishlist): the catalogue's, or IGDB's for a game we don't have -->
+        <details id="add-game" class="card card-body py-2 mb-3">
+            <summary id="add-game-title" class="fw-semibold"></summary>
+            <div class="mt-2">
+                <input id="add-search" class="form-control form-control-sm" autocomplete="off"
+                       data-i18n-placeholder="sell_game_search" data-i18n-aria-label="sell_game_search">
+                <div id="add-results" class="list-group mt-1"></div>
+                <button type="button" id="add-igdb" class="btn btn-sm btn-secondary mt-2 d-none" data-i18n="sell_search_igdb"></button>
+                <div id="add-igdb-results" class="list-group mt-1"></div>
+            </div>
+        </details>
+        <!-- The user's Steam games (steam_service): only on the owned tab -->
+        <details id="steam-import" class="card card-body py-2 mb-3">
+            <summary class="fw-semibold" data-i18n="steam_import"></summary>
+            <form id="steam-form" class="mt-2" novalidate>
+                <p class="small mb-2" data-i18n="steam_import_help"></p>
+                <div class="input-group input-group-sm">
+                    <input id="steam-profile" class="form-control" autocomplete="off" required
+                           data-i18n-placeholder="steam_profile_placeholder" data-i18n-aria-label="steam_profile">
+                    <button type="submit" class="btn btn-primary" data-i18n="steam_import_button"></button>
+                </div>
+            </form>
+            <div id="steam-result" class="small mt-2"></div>
+            <div id="steam-missing" class="list-group mt-1" style="max-height: 320px; overflow-y: auto;"></div>
+        </details>
         <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
             <input id="filter-text" type="search" class="form-control form-control-sm w-auto"
                    data-i18n-placeholder="collection_filter" data-i18n-aria-label="collection_filter">
@@ -66,233 +90,6 @@
     </div>
 </div>
 
-<script>
-const STATUSES = ["backlog", "playing", "completed", "platinum", "abandoned"];
-let data = null;
-let kind = new URLSearchParams(location.search).get("tab") === "wishlist" ? "wishlist" : "owned";
-
-function showMessage(ok, text) {
-    const box = document.getElementById("message");
-    box.className = `alert ${ok ? "alert-success" : "alert-warning"} py-2 small`;
-    box.textContent = text;
-}
-
-function stat(label, value) {
-    return `<div class="card stat"><div class="card-body p-2">
-        <div class="small text-body-secondary">${esc(label)}</div><div class="fs-5 fw-semibold">${value}</div></div></div>`;
-}
-
-function renderStats() {
-    const s = data.stats;
-    const statuses = STATUSES.filter(x => s.statuses[x]).map(x => `${t(`status_play_${x}`)} ${s.statuses[x]}`).join(" · ");
-    document.getElementById("stats").innerHTML = [
-        stat(t("collection_owned_count"), fmtNumber(s.owned)),
-        stat(t("collection_wishlist_count"), fmtNumber(s.wishlist)),
-        stat(t("collection_completed"), s.owned ? `${fmtNumber(s.completed)} <span class="small fw-normal">(${Math.round(100 * s.completed / s.owned)}%)</span>` : "—"),
-        stat(t("collection_hours"), fmtNumber(Math.round(s.hours * 10) / 10)),
-        stat(t("collection_achievements"), s.achievements_total
-            ? `${fmtNumber(s.achievements)} / ${fmtNumber(s.achievements_total)} <span class="small fw-normal">(${Math.round(100 * s.achievements / s.achievements_total)}%)</span>` : "—"),
-        stat(t("collection_worth_new"), s.priced_new ? `${eur.format(s.worth_new)} <span class="small fw-normal text-body-secondary">(${s.priced_new})</span>` : "—"),
-        stat(t("collection_worth_used"), s.priced_used ? `${eur.format(s.worth_used)} <span class="small fw-normal text-body-secondary">(${s.priced_used})</span>` : "—"),
-    ].join("") + (s.platforms.length ? `<div class="w-100 small text-body-secondary">${s.platforms.map(([p, n]) => `${esc(p)} ${n}`).join(" · ")}${statuses ? ` — ${esc(statuses)}` : ""}</div>` : "");
-    document.querySelector('[data-kind="owned"]').textContent = `${t("collection_tab_owned")} (${s.owned})`;
-    document.querySelector('[data-kind="wishlist"]').textContent = `${t("collection_tab_wishlist")} (${s.wishlist})`;
-}
-
-// What it costs now: best store price (with a sale / historical low badge) and the cheapest used copy
-function priceLine(item) {
-    const parts = [];
-    if (item.best_price !== null) {
-        parts.push(`${t("collection_best_now")} <strong>${eur.format(item.best_price)}</strong> · ${esc(item.best_store)}
-            ${item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}</span>` : ""}
-            ${item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : ""}
-            ${item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : ""}`);
-    } else {
-        parts.push(`<span class="text-body-secondary">${t("collection_no_store_price")}</span>`);
-    }
-    if (item.used) parts.push(`<a href="/listing/${item.used.listing_id}">${esc(t("used_from", { price: eur.format(item.used.price) }))}</a>`);
-    return parts.join(" · ");
-}
-
-function ownedControls(item) {
-    return `
-        <div class="row g-2 mt-1">
-            <div class="col-6 col-sm-auto">
-                <select class="form-select form-select-sm" data-field="status" aria-label="${esc(t("collection_status"))}">
-                    <option value="">${t("collection_no_status")}</option>
-                    ${STATUSES.map(x => `<option value="${x}" ${item.status === x ? "selected" : ""}>${t(`status_play_${x}`)}</option>`).join("")}
-                </select>
-            </div>
-            <div class="col-6 col-sm-auto">
-                <select class="form-select form-select-sm" data-field="format" aria-label="${esc(t("collection_format"))}">
-                    ${["physical", "digital"].map(x => `<option value="${x}" ${item.format === x ? "selected" : ""}>${t(`format_${x}`)}</option>`).join("")}
-                </select>
-            </div>
-            <div class="col-6 col-sm-auto">
-                <select class="form-select form-select-sm" data-score ${item.score_locked ? "disabled" : ""}
-                        aria-label="${esc(t("collection_score"))}" title="${esc(t("collection_score_hint"))}">
-                    <option value="">${t("collection_no_score")}</option>
-                    ${Array.from({ length: 10 }, (_, i) => 10 - i).map(n => `<option value="${n}" ${item.score === n ? "selected" : ""}>★ ${n}/10</option>`).join("")}
-                </select>
-            </div>
-            <div class="col-6 col-sm-auto">
-                <div class="input-group input-group-sm" style="max-width: 9rem;">
-                    <input type="text" inputmode="decimal" class="form-control" data-field="hours" value="${item.hours === null ? "" : fmtNumber(item.hours)}"
-                           aria-label="${esc(t("collection_hours"))}" placeholder="0">
-                    <span class="input-group-text">h</span>
-                </div>
-            </div>
-            <div class="col-6 col-sm-auto">
-                <div class="input-group input-group-sm" style="max-width: 11rem;" title="${esc(t("collection_achievements"))}">
-                    <span class="input-group-text">🏆</span>
-                    <input type="number" min="0" class="form-control" data-field="achievements" value="${item.achievements ?? ""}"
-                           aria-label="${esc(t("collection_achievements_done"))}" placeholder="0">
-                    <span class="input-group-text">/</span>
-                    <input type="number" min="0" class="form-control" data-field="achievements_total" value="${item.achievements_total ?? ""}"
-                           aria-label="${esc(t("collection_achievements_total"))}" placeholder="—">
-                </div>
-            </div>
-            <div class="col-12 col-sm">
-                <input type="text" maxlength="1000" class="form-control form-control-sm" data-field="notes" value="${esc(item.notes || "")}"
-                       placeholder="${esc(t("collection_notes"))}" aria-label="${esc(t("collection_notes"))}">
-            </div>
-        </div>`;
-}
-
-function itemRow(item) {
-    const owned = item.kind === "owned";
-    return `
-        <div class="list-group-item ${item.good_deal ? "border-start border-success border-4" : ""}" data-id="${item.id}">
-            <div class="d-flex gap-3">
-                <a href="/game/${item.game_id}"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
-                <div class="flex-grow-1 min-w-0">
-                    <div class="d-flex flex-wrap justify-content-between gap-1">
-                        <a href="/game/${item.game_id}" class="fw-semibold link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
-                        <span class="small text-body-secondary">${esc(item.platform_name || "")}</span>
-                    </div>
-                    <div class="small mt-1">${priceLine(item)}</div>
-                    ${owned ? ownedControls(item) : ""}
-                    <div class="d-flex flex-wrap gap-2 mt-2">
-                        ${owned
-                            // only physical copies can be sold (a digital game can't be handed over)
-                            ? (item.format === "digital" ? "" : `<a class="btn btn-sm btn-success" href="/sell?game_id=${item.game_id}&edition_id=${item.edition_id}">${t("collection_sell")}</a>`)
-                            : `<button type="button" class="btn btn-sm btn-success" data-action="bought">${t("collection_bought")}</button>`}
-                        <button type="button" class="btn btn-sm btn-danger" data-action="remove">${t("collection_remove")}</button>
-                    </div>
-                </div>
-            </div>
-        </div>`;
-}
-
-function renderItems() {
-    document.querySelectorAll("[data-kind]").forEach(b => {
-        b.classList.toggle("active", b.dataset.kind === kind);
-        b.setAttribute("aria-selected", b.dataset.kind === kind);
-    });
-    const status = document.getElementById("filter-status");
-    status.classList.toggle("d-none", kind !== "owned");
-    const words = document.getElementById("filter-text").value.toLowerCase().split(/\s+/).filter(Boolean);
-    const items = data.items.filter(i => i.kind === kind
-        && (kind !== "owned" || !status.value || i.status === status.value)
-        && words.every(w => `${i.name || ""} ${i.name_en || ""}`.toLowerCase().includes(w)))
-        .sort((a, b) => (localName(a) || "").localeCompare(localName(b) || "", LOCALE));
-    const list = document.getElementById("items");
-    list.innerHTML = items.map(itemRow).join("");
-    const empty = document.getElementById("empty");
-    empty.textContent = data.items.some(i => i.kind === kind) ? t("no_results") : t(`collection_empty_${kind}`);
-    empty.classList.toggle("d-none", items.length > 0);
-
-    list.querySelectorAll("[data-id]").forEach(row => {
-        const id = row.dataset.id;
-        row.querySelectorAll("[data-field]").forEach(input => input.onchange = async () => {
-            const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { [input.dataset.field]: input.value } });
-            if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
-            const item = data.items.find(i => String(i.id) === id);
-            const numeric = ["hours", "achievements", "achievements_total"].includes(input.dataset.field);
-            item[input.dataset.field] = numeric ? (input.value ? Number(input.value.replace(",", ".")) : null) : input.value || null;
-            data.stats = recount();
-            renderStats();
-        });
-        // the score is the user's review of the game (game page): one per game, kept in step on every card of it
-        const score = row.querySelector("[data-score]");
-        if (score) score.onchange = async () => {
-            const item = data.items.find(i => String(i.id) === id);
-            const { ok, data: answer } = await api(`/api/games/${item.game_id}/reviews/mine/score`,
-                                                   { method: "PUT", body: { score: score.value } });
-            if (!ok) {
-                score.value = item.score ?? "";
-                return showMessage(false, t(`error_${answer?.error || "unknown"}`));
-            }
-            data.items.filter(i => i.game_id === item.game_id).forEach(i => i.score = answer.score);
-            list.querySelectorAll("[data-id]").forEach(other => {
-                const same = data.items.find(i => String(i.id) === other.dataset.id)?.game_id === item.game_id;
-                if (same && other.querySelector("[data-score]")) other.querySelector("[data-score]").value = answer.score ?? "";
-            });
-            showMessage(true, t("collection_score_saved"));
-        };
-        row.querySelector("[data-action=remove]").onclick = async () => {
-            if (!confirm(t("collection_remove_confirm"))) return;
-            const { ok } = await api(`/api/collection/${id}`, { method: "DELETE" });
-            if (ok) load();
-        };
-        const bought = row.querySelector("[data-action=bought]");
-        if (bought) bought.onclick = async () => {
-            const { ok } = await api(`/api/collection/${id}`, { method: "PATCH", body: { kind: "owned" } });
-            if (ok) { showMessage(true, t("collection_moved_owned")); load(); }
-        };
-    });
-}
-
-// The statistics again after an edit in the page (the server counts them the same way)
-function recount() {
-    const owned = data.items.filter(i => i.kind === "owned");
-    const statuses = {};
-    owned.forEach(i => { if (i.status) statuses[i.status] = (statuses[i.status] || 0) + 1; });
-    const withTotal = owned.filter(i => i.achievements_total);
-    return { ...data.stats, statuses, hours: owned.reduce((sum, i) => sum + (i.hours || 0), 0),
-             completed: owned.filter(i => ["completed", "platinum"].includes(i.status)).length,
-             achievements: withTotal.reduce((sum, i) => sum + (i.achievements || 0), 0),
-             achievements_total: withTotal.reduce((sum, i) => sum + i.achievements_total, 0) };
-}
-
-function renderPublicLink() {
-    const box = document.getElementById("public-link");
-    box.classList.toggle("d-none", !data.public);
-    box.innerHTML = data.public ? `${esc(t("collection_public_at"))} <a href="/user/${encodeURIComponent(currentUser.username)}">/user/${esc(currentUser.username)}</a>` : "";
-}
-
-async function load() {
-    const response = await fetch("/api/collection");
-    document.getElementById("loading").classList.add("d-none");
-    if (!response.ok) return showMessage(false, t("error_unknown"));
-    data = await response.json();
-    document.getElementById("public-switch").checked = data.public;
-    renderPublicLink();
-    renderStats();
-    renderItems();
-    document.getElementById("content").classList.remove("d-none");
-}
-
-async function start() {
-    applyI18n();
-    await renderAccountArea();
-    if (!currentUser) return location.replace(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
-    document.getElementById("filter-status").innerHTML = `<option value="">${t("collection_all_statuses")}</option>`
-        + STATUSES.map(x => `<option value="${x}">${t(`status_play_${x}`)}</option>`).join("");
-    document.getElementById("filter-status").onchange = renderItems;
-    document.getElementById("filter-text").oninput = renderItems;
-    document.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => {
-        kind = b.dataset.kind;
-        history.replaceState(null, "", kind === "wishlist" ? "?tab=wishlist" : location.pathname);
-        renderItems();
-    });
-    document.getElementById("public-switch").onchange = async e => {
-        const { ok } = await api("/api/collection/settings", { method: "PUT", body: { public: e.target.checked } });
-        if (ok) { data.public = e.target.checked; renderPublicLink(); }
-    };
-    load();
-}
-start();
-</script>
+<script src="/static/pages/collection.js"></script>
 </body>
 </html>

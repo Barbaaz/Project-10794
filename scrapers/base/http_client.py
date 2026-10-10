@@ -21,6 +21,8 @@ from .robots import RobotsRules
 
 log = logging.getLogger(__name__)
 
+# A browser's User-Agent again (user, 2026-10-08): CSTech answered 429 to every request from
+# "Project10794-bot/1.0" (10-07 → 10-08) while the site still opened in a browser
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
@@ -42,6 +44,14 @@ class RobotsDisallowed(Exception):
     """The site's robots.txt asks crawlers not to fetch this URL."""
 
 
+class ServerErrorRetry(Retry):
+    """
+    urllib3 also retries 429 / 413 when they carry Retry-After, sleeping it out each time (CSTech,
+    2026-10-07: three 60 s waits, four requests on a 429). Only a 503's Retry-After is waited for.
+    """
+    RETRY_AFTER_STATUS_CODES = frozenset({503})
+
+
 class HttpClient:
     def __init__(self, timeout=30, retries=3, min_interval=MIN_INTERVAL, jitter=JITTER, max_requests=MAX_REQUESTS):
         self.timeout = timeout
@@ -58,7 +68,7 @@ class HttpClient:
 
         # Retries only for temporary server errors, with growing waits (2, 4, 8 s).
         # 403 / 429 are not retried here: they mean "slow down / go away".
-        retry = Retry(
+        retry = ServerErrorRetry(
             total=retries,
             backoff_factor=2,
             status_forcelist=[500, 502, 503, 504],
@@ -129,8 +139,10 @@ class HttpClient:
             try:
                 response = self.session.get(f"https://{host}/robots.txt", timeout=self.timeout)
                 self._last_request[host] = time.monotonic()
-                if response.status_code in (401, 403):
-                    parser.disallow_all = True      # the site refuses even robots.txt: crawl nothing
+                # the site refuses even robots.txt, or can't serve it (5xx: RFC 9309 says assume
+                # everything is disallowed): crawl nothing
+                if response.status_code in (401, 403) or response.status_code >= 500:
+                    parser.disallow_all = True
                     self._rules[host] = RobotsRules.parse("User-agent: *\nDisallow: /", HEADERS["User-Agent"])
                 else:
                     # No robots.txt (404) means everything is allowed

@@ -42,6 +42,8 @@ def test_files_saved_on_install_exist():
 
 def test_every_page_links_the_manifest():
     for page in (ROOT / "templates").glob("*.html"):
+        if page.name.startswith("_"):          # a part pages include (_header.html), not a page
+            continue
         html = page.read_text(encoding="utf-8")
         assert '<link rel="manifest" href="/manifest.webmanifest">' in html, page.name
         assert "apple-touch-icon" in html, page.name

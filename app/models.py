@@ -59,6 +59,7 @@ class Game(Base):
     platform_id: Mapped[int] = mapped_column(ForeignKey("platforms.id"))
     title: Mapped[str] = mapped_column(Unicode(300))
     normalized_title: Mapped[str] = mapped_column(Unicode(300))     # the game key (core/editions.py)
+    kind: Mapped[str] = mapped_column(String(12), server_default="game")   # game / console (core/hardware.py)
     title_en: Mapped[str | None] = mapped_column(Unicode(300))      # English name (IGDB / moderators)
     title_fixed: Mapped[bool] = mapped_column(Boolean, default=False)  # title corrected by a moderator: kept
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))
@@ -72,7 +73,8 @@ class Game(Base):
     publishers: Mapped[str | None] = mapped_column(Unicode(500))
     developers: Mapped[str | None] = mapped_column(Unicode(500))
     first_release_date = mapped_column(Date)
-    rating: Mapped[int | None] = mapped_column(Integer)
+    rating: Mapped[int | None] = mapped_column(Integer)          # critics' score 0-100
+    rating_count: Mapped[int | None] = mapped_column(Integer)    # critics' reviews it's made of
     pegi: Mapped[str | None] = mapped_column(Unicode(10))
     cover_image_id: Mapped[str | None] = mapped_column(Unicode(50))
     screenshot_ids: Mapped[str | None] = mapped_column(UnicodeText)
@@ -111,6 +113,7 @@ class StoreProduct(Base):
     url: Mapped[str] = mapped_column(Unicode(800))
     image_url: Mapped[str | None] = mapped_column(Unicode(1000))
     condition: Mapped[str] = mapped_column(String(10), server_default="new")
+    kind: Mapped[str] = mapped_column(String(12), server_default="game")   # as the scraper found it (Game.kind)
     first_seen_at = mapped_column(DateTime, server_default=NOW, nullable=False)
     last_seen_at = mapped_column(DateTime, server_default=NOW, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=true())
@@ -160,8 +163,11 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=true())      # False: blocked
     role: Mapped[str] = mapped_column(String(10), server_default="user")
     collection_public: Mapped[bool] = mapped_column(Boolean, server_default=false())   # shown on their profile
+    wish_alerts: Mapped[bool] = mapped_column(Boolean, server_default=true(), nullable=False)   # wishlist e-mails
+    lang: Mapped[str] = mapped_column(String(2), server_default="pt", nullable=False)   # pt / en, for e-mails
     last_login_at = mapped_column(DateTime)
     created_at = created_at()
+    deleted_at = mapped_column(DateTime)      # the user deleted their account: anonymised (auth_service.delete_account)
 
     @property
     def is_moderator(self):
@@ -369,6 +375,9 @@ class CollectionItem(Base):
     achievements: Mapped[int | None] = mapped_column(Integer)          # done (owned)
     achievements_total: Mapped[int | None] = mapped_column(Integer)
     wish_price = mapped_column(Numeric(10, 2))                         # best new price when wished (wishlist)
+    # wishlist alerts: the best new price at the last check (None: none in stock), and when
+    alert_price = mapped_column(Numeric(10, 2))
+    alert_checked_at = mapped_column(DateTime)
     created_at = created_at()
     updated_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 

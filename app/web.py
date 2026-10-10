@@ -5,6 +5,7 @@ scheduler fills (python -m scheduler.run_all_scrapers). Nothing here scrapes the
     python app.py                     # development server, http://127.0.0.1:5000
     waitress-serve app.web:app        # production server (Docker uses this)
 """
+import re
 from datetime import timedelta
 from pathlib import Path
 
@@ -35,6 +36,15 @@ for blueprint in (auth.bp, chat.bp, collection.bp, games.bp, igdb_games.bp, list
     app.register_blueprint(blueprint)
 
 CHANGING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+MAX_JSON_BYTES = 1024 * 1024
+
+
+@app.before_request
+def only_uploads_are_big():
+    """MAX_CONTENT_LENGTH is sized for a listing's photos; any other request (JSON) is small, so a
+    huge one is refused (413) before it's read into memory."""
+    if request.mimetype != "multipart/form-data":
+        request.max_content_length = MAX_JSON_BYTES
 
 
 @app.before_request
@@ -46,6 +56,38 @@ def only_our_pages_change_things():
     """
     if request.method in CHANGING_METHODS and request.headers.get("X-Requested-With") != "fetch":
         abort(403, description="missing_request_header")
+
+
+@app.before_request
+def json_bodies_are_objects():
+    """Our pages send {…}; the routes read it with .get(). A list, a number, null or broken JSON is
+    refused here instead of failing inside a route."""
+    if request.method in CHANGING_METHODS and request.is_json and request.get_data():
+        if not isinstance(request.get_json(silent=True), dict):
+            abort(400, description="body_invalid")
+
+
+# Scripts only from files: ours (static/, the pages' in static/pages/) and the CDN's (checked against
+# their hashes), so an injected <script> or onclick="…" doesn't run (tests/test_csp.py). No framing by
+# other sites (clickjacking), no <base> or plugins. Images, styles and frames (YouTube) aren't limited.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "script-src 'self' https://cdn.jsdelivr.net/npm/; "
+                               "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+    # other sites get only our origin, never a full address (a password-reset link carries its token)
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
+
+
+@app.after_request
+def security_headers(response):
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    if COOKIE_SECURE:          # served over HTTPS (production): browsers keep to HTTPS for a year
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return response
 
 
 @app.errorhandler(HTTPException)
@@ -103,11 +145,16 @@ def admin_page():
     return render_template("admin.html")
 
 
+# The only public uploads: listing photos, as LocalPhotoStorage names them (listings/<id>/<uuid hex>.jpg)
+PUBLIC_MEDIA = re.compile(r"listings/\d+/[0-9a-f]{32}\.jpg")
+
+
 @app.route("/media/<path:key>")
 def media(key):
-    """Uploaded photos kept on this computer (app/services/photo_storage.py); no paths outside it.
-    Not the photos sent in conversations: those only through /api/conversations/<id>/photos/."""
-    if key.startswith("chats/"):
+    """Listing photos kept on this computer (app/services/photo_storage.py). Only keys of exactly that
+    shape: the photos sent in conversations (chats/…) go only through /api/conversations/<id>/photos/,
+    and "./chats/…", "listings/../chats/…" or "Chats/…" (Windows ignores case) must not reach them."""
+    if not PUBLIC_MEDIA.fullmatch(key):
         abort(404)
     return send_from_directory(storage.root, key, max_age=7 * 24 * 3600)
 

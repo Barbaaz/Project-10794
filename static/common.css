@@ -1,13 +1,89 @@
 /* Shared by every page (each page keeps its own styles in <style>). */
 
-/* Text contrast at least 4.5:1 (WCAG AA): Bootstrap's grey secondary text on the dark page
-   background is 4.33:1, its link blue on the light page background 4.26:1 */
-[data-bs-theme="dark"] { --bs-secondary-color: #a7aeb5; --bs-secondary-color-rgb: 167, 174, 181; }
-[data-bs-theme="light"] { --bs-link-color: #0a58ca; --bs-link-color-rgb: 10, 88, 202; }
+/* The look (user's choice 2026-10-10, "A · Vitrine": a calm shop, big covers, one blue accent, green
+   only for savings), as Bootstrap's own variables so its components follow. The page ground is
+   bg-body-tertiary (on <body>), the surfaces (header, cards, panels) bg-body. Text contrast stays at
+   least 4.5:1 (WCAG AA) on both. Figtree is served from here, not Google (no visitor data to Google). */
+@font-face { font-family: "Figtree"; font-style: normal; font-weight: 300 900; font-display: swap;
+             src: url("/static/fonts/figtree-latin.woff2") format("woff2");
+             unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+                            U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Figtree"; font-style: normal; font-weight: 300 900; font-display: swap;
+             src: url("/static/fonts/figtree-latin-ext.woff2") format("woff2");
+             unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F,
+                            U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 
-/* Tabs are solid buttons too (no outline-only buttons): the selected one blue, the others grey */
-.nav-pills .nav-link:not(.active) { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); }
-.nav-pills .nav-link:not(.active):hover { background: var(--bs-tertiary-bg); }
+:root, [data-bs-theme="light"] {
+    --bs-body-font-family: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --bs-body-color: #14171f; --bs-body-color-rgb: 20, 23, 31;
+    --bs-emphasis-color: #0b0d12; --bs-emphasis-color-rgb: 11, 13, 18;
+    --bs-secondary-color: #5d6475; --bs-secondary-color-rgb: 93, 100, 117;
+    --bs-body-bg: #ffffff; --bs-body-bg-rgb: 255, 255, 255;
+    --bs-secondary-bg: #eef0f5; --bs-secondary-bg-rgb: 238, 240, 245;
+    --bs-tertiary-bg: #f6f7f9; --bs-tertiary-bg-rgb: 246, 247, 249;
+    --bs-border-color: #e3e6ec;
+    --bs-primary: #2346d0; --bs-primary-rgb: 35, 70, 208;
+    --bs-link-color: #2346d0; --bs-link-color-rgb: 35, 70, 208;
+    --bs-link-hover-color: #1b38a8; --bs-link-hover-color-rgb: 27, 56, 168;
+    --bs-primary-bg-subtle: #e8edfc; --bs-primary-border-subtle: #c3cff5; --bs-primary-text-emphasis: #1b38a8;
+    --bs-border-radius: .625rem; --bs-border-radius-sm: .5rem; --bs-border-radius-lg: .875rem;
+    --brand-btn: #2346d0; --brand-btn-hover: #1b38a8; --soft-btn-hover: #e2e5ec;
+    --save: #0f7a4a; --save-bg: #e6f4ec; --used: #6f42c1;
+}
+[data-bs-theme="dark"] {
+    --bs-body-color: #e9ebf1; --bs-body-color-rgb: 233, 235, 241;
+    --bs-emphasis-color: #ffffff; --bs-emphasis-color-rgb: 255, 255, 255;
+    --bs-secondary-color: #a3aabb; --bs-secondary-color-rgb: 163, 170, 187;
+    --bs-body-bg: #1b1e27; --bs-body-bg-rgb: 27, 30, 39;
+    --bs-secondary-bg: #272b36; --bs-secondary-bg-rgb: 39, 43, 54;
+    --bs-tertiary-bg: #12141a; --bs-tertiary-bg-rgb: 18, 20, 26;
+    --bs-border-color: #2e3340;
+    --bs-primary: #8ea6ff; --bs-primary-rgb: 142, 166, 255;
+    --bs-link-color: #9db2ff; --bs-link-color-rgb: 157, 178, 255;
+    --bs-link-hover-color: #c3d0ff; --bs-link-hover-color-rgb: 195, 208, 255;
+    --bs-primary-bg-subtle: #1c2547; --bs-primary-border-subtle: #33417a; --bs-primary-text-emphasis: #b9c7ff;
+    --brand-btn: #3f5fe0; --brand-btn-hover: #3150cc; --soft-btn-hover: #313644;
+    --save: #5fd39a; --save-bg: #12301f; --used: #c4a6ff;
+}
+
+h1, h2, h3, .h1, .h2, .h3 { font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
+h4, h5, h6, .h4, .h5, .h6 { font-weight: 700; letter-spacing: -0.01em; }
+.card { --bs-card-border-color: var(--bs-border-color); --bs-card-border-radius: var(--bs-border-radius-lg); }
+.shadow-sm { box-shadow: 0 1px 2px rgb(20 23 31 / .05), 0 4px 14px rgb(20 23 31 / .05) !important; }
+.form-control, .form-select { --bs-border-color: #d5d9e2; }
+[data-bs-theme="dark"] .form-control, [data-bs-theme="dark"] .form-select { --bs-border-color: #3a3f4d; }
+/* Switches, checkboxes and focus rings in the site's blue (Bootstrap writes its own blue there) */
+.form-check-input:checked { background-color: var(--brand-btn); border-color: var(--brand-btn); }
+.form-control:focus, .form-select:focus, .form-check-input:focus {
+    border-color: var(--bs-primary); box-shadow: 0 0 0 .2rem rgb(var(--bs-primary-rgb) / .25); }
+.btn:focus-visible { box-shadow: 0 0 0 .2rem rgb(var(--bs-primary-rgb) / .4); }
+
+/* Buttons: the main action in the blue, the rest soft grey (no heavy grey blocks) */
+.btn { font-weight: 600; }
+.btn-primary { --bs-btn-bg: var(--brand-btn); --bs-btn-border-color: var(--brand-btn); --bs-btn-color: #fff;
+               --bs-btn-hover-bg: var(--brand-btn-hover); --bs-btn-hover-border-color: var(--brand-btn-hover); --bs-btn-hover-color: #fff;
+               --bs-btn-active-bg: var(--brand-btn-hover); --bs-btn-active-border-color: var(--brand-btn-hover);
+               --bs-btn-disabled-bg: var(--brand-btn); --bs-btn-disabled-border-color: var(--brand-btn); }
+.btn-secondary { --bs-btn-bg: var(--bs-secondary-bg); --bs-btn-border-color: transparent; --bs-btn-color: var(--bs-emphasis-color);
+                 --bs-btn-hover-bg: var(--soft-btn-hover); --bs-btn-hover-border-color: transparent; --bs-btn-hover-color: var(--bs-emphasis-color);
+                 --bs-btn-active-bg: var(--soft-btn-hover); --bs-btn-active-border-color: transparent; --bs-btn-active-color: var(--bs-emphasis-color);
+                 --bs-btn-disabled-bg: var(--bs-secondary-bg); --bs-btn-disabled-border-color: transparent; --bs-btn-disabled-color: var(--bs-secondary-color); }
+
+/* Pills (collection, admin, filters): chips, the chosen one dark */
+.nav-pills { --bs-nav-pills-border-radius: 999px; --bs-nav-pills-link-active-bg: var(--bs-emphasis-color);
+             --bs-nav-pills-link-active-color: var(--bs-body-bg); }
+.nav-pills .nav-link { font-weight: 600; }
+.nav-pills .nav-link:not(.active) { background: var(--bs-body-bg); color: var(--bs-emphasis-color); box-shadow: inset 0 0 0 1px var(--bs-border-color); }
+.nav-pills .nav-link:not(.active):hover { background: var(--bs-secondary-bg); }
+/* The front page's tabs: underlined, like a shop's sections */
+.nav-pills.front-tabs { gap: 1.4rem !important; border-bottom: 1px solid var(--bs-border-color);
+                        flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding-bottom: 0 !important; }
+.nav-pills.front-tabs .nav-link { white-space: nowrap; font-size: .95rem; padding-block: .8rem; }
+.nav-pills.front-tabs .nav-link, .nav-pills.front-tabs .nav-link:not(.active) {
+    background: none; box-shadow: none; border-radius: 0; padding: .8rem 0; color: var(--bs-secondary-color);
+    border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.nav-pills.front-tabs .nav-link:hover { color: var(--bs-emphasis-color); }
+.nav-pills.front-tabs .nav-link.active { background: none; color: var(--bs-emphasis-color); border-bottom-color: var(--bs-primary); }
 
 /* Marketplace listing cards (static/market.js) */
 .listing-card { color: inherit; }
@@ -25,14 +101,48 @@
 
 /* The header, the same on every page: the site's name on the left, the account's buttons, language
    and theme on the right. On a phone, logged in, language and theme are in the account menu */
-.site-header .site-brand { font-size: 1.25rem; font-weight: 600; white-space: nowrap; }
-.site-header .site-brand a { color: inherit; }
-.site-header .header-tools { flex-wrap: wrap; justify-content: flex-end; }
+.site-header .header-row { display: flex; align-items: center; gap: .5rem 1.25rem; flex-wrap: wrap; padding-block: .8rem; }
+.site-header .site-brand { font-size: inherit; font-weight: inherit; letter-spacing: inherit; }
+.site-brand-link { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap;
+                   color: var(--bs-emphasis-color); text-decoration: none; }
+.site-brand-link .brand-b { color: var(--bs-primary); }
+.site-brand-link:hover { color: var(--bs-emphasis-color); }
+/* The search: a rounded grey field in the header; on a phone a row of its own under the name */
+.header-search { flex: 1 1 18rem; min-width: 0; max-width: 46rem; }
+.header-search .form-control { border-radius: 999px; border-color: transparent; background: var(--bs-secondary-bg);
+                               padding: .55rem 1.1rem; font-size: .95rem; }
+.header-search .form-control:focus { background: var(--bs-body-bg); }
+.site-header .header-tools { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 767.98px) { .header-search { order: 3; flex-basis: 100%; max-width: none; } }
 .site-header .account-menu .dropdown-menu { right: 0; left: auto; top: calc(100% + .25rem); min-width: 13rem; }
+/* Vender / Mensagens / Coleção: icon buttons on a phone, plain words from a wide screen up */
+.header-link { --bs-btn-bg: var(--bs-secondary-bg); --bs-btn-color: var(--bs-emphasis-color); --bs-btn-border-color: transparent;
+               --bs-btn-hover-bg: var(--soft-btn-hover); --bs-btn-hover-color: var(--bs-emphasis-color); --bs-btn-hover-border-color: transparent;
+               --bs-btn-active-bg: var(--soft-btn-hover); --bs-btn-active-color: var(--bs-emphasis-color); --bs-btn-active-border-color: transparent; }
+@media (min-width: 992px) {
+    .header-link { --bs-btn-bg: transparent; --bs-btn-color: var(--bs-body-color); --bs-btn-padding-x: .55rem; font-size: .92rem; }
+    .header-link .icon { display: none; }
+}
 @media (max-width: 575.98px) {
-    .site-header .site-brand { font-size: 1.05rem; }
+    .site-brand-link { font-size: 1.05rem; }
     .logged-in .site-header .header-setting { display: none !important; }
 }
-@media (max-width: 359.98px) {
-    .site-header .site-brand span { display: none; }      /* only 🎮 on the narrowest phones */
+
+/* Chips: platforms and other picks (one chosen, dark) */
+.chip-btn { border: 1px solid var(--bs-border-color); background: var(--bs-body-bg); color: var(--bs-emphasis-color); border-radius: 999px;
+            padding: .3rem .8rem; font-size: .85rem; font-weight: 600; line-height: 1.3; }
+.chip-btn:hover { background: var(--bs-secondary-bg); }
+.chip-btn[aria-pressed="true"] { background: var(--bs-emphasis-color); border-color: var(--bs-emphasis-color); color: var(--bs-body-bg); }
+.chip-btn:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+.chip-select { width: auto; border-radius: 999px; font-weight: 600; font-size: .85rem; padding-block: .3rem; }
+.chip-select.chosen { background-color: var(--bs-emphasis-color); color: var(--bs-body-bg); border-color: var(--bs-emphasis-color); }
+
+/* Phones: tabs in one row that scrolls sideways (home page, /admin), not several rows */
+@media (max-width: 767.98px) {
+    .scroll-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .25rem; scrollbar-width: thin; }
+    .scroll-tabs .nav-link { white-space: nowrap; }
 }
+
+/* Game search results (market.js gamePicker: the sell form, the collection) */
+.game-option img { width: 32px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .2rem; background: #000; flex-shrink: 0; }
+.min-w-0 { min-width: 0; }

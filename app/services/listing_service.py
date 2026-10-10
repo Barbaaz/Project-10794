@@ -95,16 +95,17 @@ def get_listing(listing_id, viewer_id=None):
             Conversation.listing_id == listing_id, Conversation.buyer_id == viewer_id).limit(1))
         if listing.status not in VISIBLE and listing.user_id != viewer_id and not talked:
             return None
-        if not listing.seller.is_active and listing.user_id != viewer_id:
-            return None                       # a blocked seller's listing
+        if not listing.seller.is_active and listing.user_id != viewer_id and not (listing.seller.deleted_at and talked):
+            return None                       # a blocked seller's listing (a deleted one's: for who talked to them)
         return as_dicts([listing])[0]
 
 
-def browse(platform=None, sort="newest", page=1, per_page=48):
+def browse(platform=None, sort="newest", page=1, per_page=48, kind=None):
     """
     The market tab: one group per game edition users sell (a game can have several sellers),
     each with its active listings, cheapest first; editions with the newest listing first, or
-    by their cheapest price. Paged by edition.
+    by their cheapest price. Paged by edition. kind: "game", "hardware" (consoles:
+    core/hardware.py) or None for both.
     """
     used = (select(Listing.edition_id, func.min(Listing.price).label("min_price"),
                    func.max(Listing.created_at).label("newest"))
@@ -115,6 +116,10 @@ def browse(platform=None, sort="newest", page=1, per_page=48):
                 .join(Game, Game.id == GameEdition.game_id).join(Platform, Platform.id == Game.platform_id))
     if platform:
         editions = editions.where(Platform.code == platform)
+    if kind == "game":
+        editions = editions.where(Game.kind == "game")
+    elif kind == "hardware":
+        editions = editions.where(Game.kind != "game")
     order = {"newest": (used.c.newest.desc(), Game.title, used.c.edition_id),
              "price_asc": (used.c.min_price, Game.title, used.c.edition_id),
              "price_desc": (used.c.min_price.desc(), Game.title, used.c.edition_id)}[sort if sort in BROWSE_SORTS else "newest"]
@@ -128,7 +133,7 @@ def browse(platform=None, sort="newest", page=1, per_page=48):
                                       .order_by(Listing.price, Listing.created_at, Listing.id)).unique().all()) if ids else []
     groups = [card_group({"edition_id": edition.id, "game_id": game.id, "title": game.title,
                           "edition_key": edition.edition_key, "edition": edition.name,
-                          "console": platform_.code, "platform_name": platform_.name},
+                          "console": platform_.code, "platform_name": platform_.name, "kind": game.kind},
                          [], image=game.image_url, listings=[l for l in listings if l["edition_id"] == edition.id])
               for edition, game, platform_ in rows]
     return page_result(page, per_page, total, groups=groups)
@@ -245,7 +250,7 @@ def _checked_fields(price, condition, description):
         price = Decimal(str(price)).quantize(Decimal("0.01"))
     except (InvalidOperation, ValueError):
         raise ListingError("price_invalid")
-    if not MIN_PRICE <= price <= MAX_PRICE:
+    if not price.is_finite() or not MIN_PRICE <= price <= MAX_PRICE:     # "NaN" gets past quantize()
         raise ListingError("price_invalid")
     if condition not in CONDITIONS:
         raise ListingError("condition_invalid")
@@ -307,9 +312,23 @@ def _process(data):
 
 
 def _own_listing(s, user_id, listing_id):
+    """The seller's listing, to change; not while a purchase of it is under way (the buyer agreed to
+    this price, condition and photos, and the copy is promised to them: cancelling comes first)."""
     listing = s.get(Listing, listing_id)
     if listing is None or (listing.user_id != user_id and listing.status not in VISIBLE):
         raise ListingError("not_found", 404)
     if listing.user_id != user_id:
         raise ListingError("not_yours", 403)
+    if in_deal(s, listing.id):
+        raise ListingError("listing_in_deal", 409)
     return listing
+
+
+# A purchase under way: accepted by the seller, not yet completed or cancelled (chat_service.STEPS)
+DEAL_UNDER_WAY = ("accepted", "sent", "problem")
+
+
+def in_deal(s, listing_id):
+    """Whether a purchase of this listing is under way (the listing is then reserved for that buyer)."""
+    return s.scalar(select(Conversation.id).where(Conversation.listing_id == listing_id,
+                                                  Conversation.deal_status.in_(DEAL_UNDER_WAY)).limit(1)) is not None

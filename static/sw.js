@@ -10,7 +10,10 @@
  *   something, other sites' images): straight to the network, never saved here
  * Change VERSION when this file changes what it saves: the old saved copies are dropped.
  */
-const VERSION = "v1";
+// v2: CDN files with integrity hashes (v1 may hold opaque copies they can't use)
+// v3: page scripts in files (static/pages/); saved pages from before had them inline
+// v4: the new look (2026-10-10) and its font
+const VERSION = "v4";
 const CACHE = `site-${VERSION}`;
 const SLOW_MS = 6000;      // past this, a saved copy is shown while the network keeps trying
 const CDN = "https://cdn.jsdelivr.net";       // Bootstrap, Chart.js: fixed versions in their URLs
@@ -18,7 +21,8 @@ const BOOTSTRAP_CSS = `${CDN}/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css`;
 
 // Saved when the worker is installed, so even the first offline visit has them
 const PRECACHE = [
-    "/static/offline.html", "/static/common.css", "/static/common.js", "/static/i18n.js", "/static/market.js",
+    "/static/offline.html", "/static/pages/offline.js", "/static/common.css", "/static/common.js", "/static/i18n.js",
+    "/static/market.js", "/static/fonts/figtree-latin.woff2",
     "/static/favicon.svg", "/static/icons/icon-192.png", BOOTSTRAP_CSS,
 ];
 
@@ -98,7 +102,8 @@ async function cacheFirst(request) {
     const saved = await caches.match(request);
     if (saved) return saved;
     const response = await fetch(request);
-    if (response.ok || response.type === "opaque") {
+    // only real (CORS) answers: the pages check CDN files against their hash, which an opaque copy can't pass
+    if (response.ok) {
         const copy = response.clone();
         caches.open(CACHE).then(cache => cache.put(request, copy));
     }

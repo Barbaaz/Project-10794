@@ -1,10 +1,14 @@
 import logging
 import sys
-from logging.handlers import TimedRotatingFileHandler
+from collections import Counter
+from contextlib import contextmanager
+from datetime import date, timedelta
 from pathlib import Path
 
+import db
 from db import connection
 from pipeline.process_scraped_data import process_products
+from scrapers.base.http_client import StoreBlocked
 from scrapers.cstech.scraper import CSTechScraper
 from scrapers.gaming_replay.scraper import GamingReplayScraper
 from scrapers.mega_mania.scraper import MegaManiaScraper
@@ -23,13 +27,25 @@ MIN_PRODUCT_RATIO = 0.7
 RELEASE_DATE_RECHECK_DAYS = 7
 
 # A store isn't scraped again this soon after a successful run (unless forced), so repeated
-# manual runs don't flood it with requests. The schedule (06:00 and 18:00) is above this.
+# manual runs (and the logon task's checks every 2 hours) don't flood it with requests.
 MIN_HOURS_BETWEEN_RUNS = 8
+
+# A store that answered 403 / 429 isn't asked again this soon (unless forced): the logon task checks
+# every 2 hours, and a store that refuses us shouldn't get a request from each check
+BLOCKED_PAUSE_HOURS = 24
+BLOCKED = "Blocked: "      # error_message prefix of such a run
 
 # The evening run (run_all_scrapers --light): these stores again, listing pages only (prices and
 # stock; no product pages), so prices are at most ~12 h old. CSTech stays once a day: it has
 # answered "too many requests" before; Rádio Popular too (match-only, few of its products link).
 LIGHT_STORES = ("press_start", "mega-mania", "gaming_replay")
+
+# Stores whose consoles are read too (core/hardware.py; user, 2026-10-07: consoles only):
+# a store is added once a check run's kept / left-out names were read (the first three: 2026-10-07;
+# CSTech 2026-10-08: 40 consoles kept, all right, 455 accessories left out; Techinn 2026-10-10: its 3
+# console pages saved once, 34 consoles kept, all right, 2 retro minis left out).
+# Not yet: Rádio Popular (match-only)
+HARDWARE_STORES = {"press_start", "mega-mania", "gaming_replay", "cstech", "techinn"}
 
 # To add a store: write its scraper, register it here and add it to database/seed_stores.sql
 SCRAPERS = {
@@ -42,10 +58,48 @@ SCRAPERS = {
 }
 
 
+LOG_DAYS = 30
+
+
+class DailyFileHandler(logging.FileHandler):
+    """
+    logs/scraper-<date>.log, the file of the day each line is written on, appended to by every process.
+    Nothing is renamed: with a rotating log, two runs at once each rotated it at midnight and lines were
+    lost (and Windows can't rename a file another process has open).
+    """
+
+    def __init__(self, directory):
+        self.directory, self.day = Path(directory), date.today()
+        super().__init__(self._path(), encoding="utf-8")
+
+    def _path(self):
+        return self.directory / f"scraper-{self.day.isoformat()}.log"
+
+    def emit(self, record):
+        if date.today() != self.day:            # a run going on past midnight, or the server's daemon
+            self.acquire()
+            try:
+                self.close()
+                self.day = date.today()
+                self.baseFilename = str(self._path())
+            finally:
+                self.release()
+        super().emit(record)
+
+
+def remove_old_logs(directory=LOG_DIR, days=LOG_DAYS):
+    """Day files (and the old rotating log's copies) older than `days`."""
+    oldest = date.today() - timedelta(days=days)
+    for path in [*Path(directory).glob("scraper-*.log"), *Path(directory).glob("scraper.log.*")]:
+        if date.fromtimestamp(path.stat().st_mtime) < oldest:
+            path.unlink(missing_ok=True)
+
+
 def setup_logging():
-    # Scheduled runs have no console, so also keep a log file (last 30 days)
+    # Scheduled runs have no console, so also keep a log file per day (last 30 days)
     LOG_DIR.mkdir(exist_ok=True)
-    handlers = [TimedRotatingFileHandler(LOG_DIR / "scraper.log", when="midnight", backupCount=30, encoding="utf-8")]
+    remove_old_logs()
+    handlers = [DailyFileHandler(LOG_DIR)]
 
     # sys.stdout is None under pythonw.exe (used by the scheduled task)
     if sys.stdout is not None:
@@ -70,6 +124,10 @@ class RanRecently(Exception):
     """The store was scraped successfully less than MIN_HOURS_BETWEEN_RUNS ago."""
 
 
+class Paused(RanRecently):
+    """The store answered 403 / 429 less than BLOCKED_PAUSE_HOURS ago; skipped like a recent run."""
+
+
 def run_store(slug, accept_drop=False, force=False, light=False):
     """
     Scrape one store's catalogue into the database, logging the run in scrape_runs.
@@ -79,6 +137,36 @@ def run_store(slug, accept_drop=False, force=False, light=False):
     """
     if slug not in SCRAPERS:
         raise ValueError(f"No scraper registered for '{slug}'. Known: {', '.join(SCRAPERS)}")
+
+    with store_lock(slug):
+        return scrape_store(slug, accept_drop, force, light)
+
+
+@contextmanager
+def store_lock(slug):
+    """
+    One run of a store at a time, across processes. A PC switched on after 18:00 starts the missed
+    morning task and the evening one together (10-06, 10-07): both read Gaming Replay, Mega Mania
+    and Press Start at once. The second now waits here, then the MIN_HOURS_BETWEEN_RUNS check skips it.
+    """
+    conn = db.connect(db.DB_CONNECTION_STRING, autocommit=True)
+    try:
+        cursor = conn.cursor()
+        key = f"scrape_store:{slug}"
+        if not cursor.execute("SELECT pg_try_advisory_lock(hashtext(?))", key).fetchone()[0]:
+            log.info("[%s] another run is scraping it; waiting for it to finish", slug)
+            cursor.execute("SELECT pg_advisory_lock(hashtext(?))", key)
+        yield
+    finally:
+        conn.close()        # closing the session releases the lock
+
+
+def scrape_store(slug, accept_drop, force, light):
+    """run_store's work, with the store's lock held."""
+    blocked = hours_since_blocked(slug)
+    if not force and blocked is not None and blocked < BLOCKED_PAUSE_HOURS:
+        raise Paused(f"[{slug}] answered 403 / 429 {blocked:.1f} h ago (pause {BLOCKED_PAUSE_HOURS} h); "
+                     f"use --force to run anyway")
 
     hours = hours_since_last_success(slug)
     if not force and hours is not None and hours < MIN_HOURS_BETWEEN_RUNS:
@@ -92,8 +180,14 @@ def run_store(slug, accept_drop=False, force=False, light=False):
                                  last_seen=last_seen(slug))
         if light:
             scraper.max_product_pages = 0
+        scraper.read_hardware = slug in HARDWARE_STORES
         products = scraper.scrape_catalog()
         log.info("[%s] %d requests", slug, scraper.http.request_count)
+        if scraper.read_hardware:
+            kinds = Counter(p.get("kind", "game") for p in products)
+            log.info("[%s] hardware: %s; %d left out", slug, dict(kinds), len(scraper.hardware_left_out))
+        elif getattr(scraper, "hardware_preview", None) is not None:
+            write_hardware_check(slug, scraper.hardware_preview, scraper.hardware_left_out)
         if not products:
             raise RuntimeError("Scraper returned 0 products, the site's HTML may have changed")
 
@@ -123,8 +217,18 @@ def run_store(slug, accept_drop=False, force=False, light=False):
 
     except Exception as e:
         log.exception("[%s] failed", slug)
-        finish_run(run_id, "failed", error_message=str(e))
+        finish_run(run_id, "failed", error_message=(BLOCKED if isinstance(e, StoreBlocked) else "") + str(e))
         raise
+
+
+def write_hardware_check(slug, kept, left_out):
+    """What a store not in HARDWARE_STORES would keep and leave out, to read before switching it on."""
+    path = LOG_DIR / f"hardware_check_{slug}.txt"
+    lines = [f"{p['kind']:10} {p['console']:10} {p['condition']:4} {p['price']} | {p['external_name']}"
+             for p in sorted(kept, key=lambda p: (p["kind"], p["console"], p["external_name"]))]
+    path.write_text("\n".join([f"KEPT ({len(kept)})", *lines, "", f"LEFT OUT ({len(left_out)})", *sorted(set(left_out))]),
+                    encoding="utf-8")
+    log.info("[%s] hardware check (not saved): %d kept, %d left out → %s", slug, len(kept), len(left_out), path.name)
 
 
 def is_suspicious_drop(found, previous, min_ratio=MIN_PRODUCT_RATIO):
@@ -150,6 +254,29 @@ def hours_since_last_success(slug):
             "FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
             "WHERE s.slug = ? AND r.status IN ('success', 'warning')",
             slug,
+        ).fetchone()
+    return float(row[0]) if row and row[0] is not None else None
+
+
+def hours_since_blocked(slug):
+    """Hours since the store's last run, when that run ended with a 403 / 429; otherwise None."""
+    with connection() as conn:
+        row = conn.cursor().execute(
+            "SELECT EXTRACT(EPOCH FROM utcnow() - r.finished_at) / 3600, r.error_message "
+            "FROM scrape_runs r JOIN stores s ON s.id = r.store_id "
+            "WHERE s.slug = ? AND r.finished_at IS NOT NULL ORDER BY r.id DESC LIMIT 1",
+            slug,
+        ).fetchone()
+    return float(row[0]) if row and (row[1] or "").startswith(BLOCKED) else None
+
+
+def hours_since_last_run(slugs):
+    """Hours since any of these stores' runs last started (whatever its outcome); None if never."""
+    with connection() as conn:
+        row = conn.cursor().execute(
+            "SELECT EXTRACT(EPOCH FROM utcnow() - MAX(r.started_at)) / 3600 "
+            "FROM scrape_runs r JOIN stores s ON s.id = r.store_id WHERE s.slug = ANY(?)",
+            [list(slugs)],      # one parameter, the array (a lone list would be taken as the parameters)
         ).fetchone()
     return float(row[0]) if row and row[0] is not None else None
 

@@ -1,6 +1,7 @@
 """
-Games no store sells (older platforms, mostly), created from IGDB when a user wants to sell a copy:
-the sell form searches IGDB when the catalogue doesn't have the game, and picking a result on a
+Games no store sells (older platforms, mostly), created from IGDB when a user wants to sell a copy or
+add it to their collection (user, 2026-10-07; never a typed name, unlike Trophium's collection):
+the sell form and /collection search IGDB when the catalogue doesn't have the game, and picking a result on a
 platform creates the game there with its IGDB information and a Standard edition (the game's other
 IGDB editions are offered too: edition_options). The game then
 works like any other (game page, collection, reviews); if a store starts selling it, the daily
@@ -35,14 +36,14 @@ class IGDBGameError(Exception):
 _client = None
 
 
-def query(body):
+def query(body, endpoint="games"):
     """IGDB's answer; the client (and its token) is kept between requests, made again if refused."""
     global _client
     for attempt in range(2):
         try:
             if _client is None:
                 _client = IGDBClient()
-            return _client.query(body)
+            return _client.query(body, endpoint)
         except (requests.RequestException, RuntimeError):
             _client = None              # an expired token: a new one on the second try
     raise IGDBGameError("igdb_unavailable", 503)
@@ -57,7 +58,8 @@ def known_platforms():
 
 def search(q):
     """IGDB games whose name has q, on our platforms: [{igdb_id, name, year, cover, platforms: [{code, name}]}]."""
-    q = " ".join((q or "").replace('"', " ").split())[:100]
+    # inside IGDB's search "…": no quote to close it, no backslash to escape the closing one
+    q = " ".join((q or "").replace('"', " ").replace("\\", " ").split())[:100]
     if len(q) < 2:
         return []
     platforms = known_platforms()

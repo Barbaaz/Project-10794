@@ -92,7 +92,7 @@ def test_robots_txt_wildcards():
         "Disallow: /index.php?action=*", "Allow: *utm_source=google_products&utm_medium*",
         "Disallow: /private", "Allow: /private/open",
         "User-agent: EtaoSpider", "Disallow: /",
-    ]), "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+    ]), http_client.HEADERS["User-Agent"])
     base = "https://www.tradeinn.com"
     assert robots.allowed(f"{base}/techinn/pt/consolas-jogos-playstation/19292/s")
     assert robots.allowed(f"{base}/techinn/pt/consolas-jogos-playstation/19292/s?page=2")
@@ -106,8 +106,22 @@ def test_robots_txt_wildcards():
     assert RobotsRules.parse("User-agent: *\nDisallow:", "Mozilla/5.0").allowed(f"{base}/anything")
 
 
-def test_robots_txt_refused_means_crawl_nothing(clock):
-    c = client(FakeSession(robots=FakeResponse(status=403)))
+def test_a_group_naming_our_bot_is_ours():
+    """Matched by the product token (RFC 9309), not by any word in the rest of the User-Agent."""
+    from scrapers.base.robots import RobotsRules
+
+    ours = "Project10794-bot/1.0 (+https://github.com/Barbaaz/Project-10794)"
+    named = "User-agent: *\nDisallow:\n\nUser-agent: project10794-bot\nDisallow: /private"
+    assert not RobotsRules.parse(named, ours).allowed("https://shop.test/private/x")
+    assert RobotsRules.parse(named, ours).allowed("https://shop.test/games")
+    others = "User-agent: *\nDisallow:\n\nUser-agent: github\nDisallow: /"      # "github" is in our link, not our name
+    assert RobotsRules.parse(others, ours).allowed("https://shop.test/games")
+
+
+@pytest.mark.parametrize("status", [403, 500, 503])
+def test_robots_txt_refused_or_broken_means_crawl_nothing(clock, status):
+    """401 / 403: the site refuses crawlers; 5xx: it can't say what's allowed, so nothing is (RFC 9309)."""
+    c = client(FakeSession(robots=FakeResponse(status=status)))
     with pytest.raises(RobotsDisallowed):
         c.get_text("https://shop.test/a")
 
@@ -122,6 +136,15 @@ def test_blocked_stops_immediately(clock, status):
     session = FakeSession(responses={"https://shop.test/a": FakeResponse(status=status, headers={"Retry-After": "120"})})
     with pytest.raises(StoreBlocked, match="Retry-After: 120"):
         client(session).get_text("https://shop.test/a")
+
+
+def test_session_never_retries_a_block():
+    """The real session's retries: 429 with Retry-After isn't waited out and asked again (CSTech, 10-07)."""
+    retry = HttpClient().session.get_adapter("https://shop.test/").max_retries
+    assert not retry.is_retry("GET", 429, has_retry_after=True)
+    assert not retry.is_retry("GET", 403, has_retry_after=True)
+    assert retry.is_retry("GET", 503, has_retry_after=True)
+    assert retry.is_retry("GET", 502)
 
 
 def test_post_follows_the_same_rules(clock):

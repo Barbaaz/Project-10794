@@ -1,6 +1,8 @@
 import logging
 
+from app.utils.utils import extrair_consola
 from core.editions import parse_title
+from core.hardware import PLATFORMS as HARDWARE_PLATFORMS, kind_of
 from .http_client import HttpClient, RequestBudgetExceeded, StoreBlocked
 
 log = logging.getLogger(__name__)
@@ -23,12 +25,18 @@ class BaseScraper:
         build_search_url(query, page)     -> needed for search()
         build_page_url(url, page)         -> needed for scrape_catalog()
         catalog_urls                      -> {category url: console code}
+        hardware_urls                     -> {category url: (console code or None, "console" | "accessory")}:
+                                             consoles (core/hardware.py), read
+                                             when read_hardware is on (scheduler/jobs.py HARDWARE_STORES)
     (Stores with another kind of catalogue, like a JSON feed, override scrape_catalog instead.)
+    Every product also gets "kind": "game", or the hardware kind.
     """
 
     store_slug = None
     base_url = None
     catalog_urls = {}
+    hardware_urls = {}
+    read_hardware = False
     max_pages = 200                  # safety limit per listing
     max_product_pages = 100          # product pages opened per run; the rest wait for the next run
     reads_release_date_from_page = False   # True when the release date is only on the product page
@@ -46,6 +54,10 @@ class BaseScraper:
         self.fresh_release_urls = set(fresh_release_urls)
         # Products whose description was already read (read once)
         self.known_detail_urls = set(known_detail_urls)
+        self.hardware_left_out = []
+        # A store whose hardware costs no extra request (a feed) sorts it anyway while not switched on:
+        # what it would keep, to check first (scheduler/jobs.py writes it to logs/hardware_check_<store>.txt)
+        self.hardware_preview = None
 
     # --- implemented by each store -------------------------------------
 
@@ -77,14 +89,42 @@ class BaseScraper:
         return self.crawl(lambda page: self.build_search_url(query, page))
 
     def scrape_catalog(self):
-        """Every game in the store, used by the scheduler to fill the database."""
+        """Every game in the store (and its hardware, with read_hardware), used by the scheduler to fill the database."""
         products = []
 
         for url, console in self.catalog_urls.items():
             products.extend(self.crawl(lambda page: self.build_page_url(url, page), console))
+        for p in products:
+            p["kind"] = "game"
 
-        self.add_product_pages(products)
-        return products
+        self.add_product_pages(products)     # games only: hardware needs no description or release date
+        hardware = []
+        if self.read_hardware:
+            for url, (console, page_kind) in self.hardware_urls.items():
+                hardware.extend(self.keep_hardware(self.crawl(lambda page: self.build_page_url(url, page), console),
+                                                   page_kind))
+        # first: a store lists some consoles among its games too ("Consola Switch OLED + Mario Wonder"), and
+        # the pipeline keeps the first copy of a URL (pipeline/deduplicator.py)
+        return hardware + products
+
+    def keep_hardware(self, products, page_kind):
+        """The consoles of a hardware page, with their kind; the rest
+        (controllers, accessories, other platforms…) left out, kept in hardware_left_out to check."""
+        kept = []
+        for p in products:
+            kind = kind_of(p["external_name"], page_kind)
+            # a platform the name says wins over the page's ("Comando Nintendo Switch" on the Switch 2 page)
+            named = extrair_consola(p["external_name"])
+            console = named if named in HARDWARE_PLATFORMS else p["console"]
+            # a console names its platform: retro and mini consoles ("THE SPECTRUM", "Game & Watch") are
+            # listed on platforms' pages they don't belong to
+            if kind == "console" and named not in HARDWARE_PLATFORMS:
+                kind = None
+            if kind and console in HARDWARE_PLATFORMS:
+                kept.append({**p, "kind": kind, "console": console})
+            else:
+                self.hardware_left_out.append(p["external_name"])
+        return kept
 
     def needs_release_date(self, p):
         return (self.reads_release_date_from_page and p["is_preorder"] and not p["release_date"]

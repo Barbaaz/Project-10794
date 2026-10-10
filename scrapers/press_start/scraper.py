@@ -21,6 +21,12 @@ class PressStartScraper(BaseScraper):
         "https://www.pressstart.pt/pt/jogos-xbox-one/": "XboxOne",
         "https://www.pressstart.pt/pt/jogos-pc/": "PC",
     }
+    # Consoles (core/hardware.py); the platform from the name where a page has several
+    hardware_urls = {
+        "https://www.pressstart.pt/pt/consolas/": (None, "console"),
+        "https://www.pressstart.pt/pt/consolas-nintendo-switch-2/": ("Switch2", "console"),
+        "https://www.pressstart.pt/pt/consolas-nintendo-switch/": ("Switch", "console"),
+    }
 
     def build_search_url(self, query, page):
         return f"{self.base_url}/pt/pesquisar?s={quote_plus(query)}&page={page}"

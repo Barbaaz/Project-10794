@@ -46,6 +46,14 @@ def test_sign_up_rules(client, fields, error):
     assert (response.status_code, response.get_json()["error"]) == (400, error)
 
 
+def test_sign_ups_from_one_address_are_limited(client):
+    """Accounts made in bulk (spam, other people's e-mail addresses): at most MAX_SIGNUPS tries per hour."""
+    for i in range(auth_service.MAX_SIGNUPS):
+        assert register(client, username=f"user_{i}", email=f"user_{i}@example.pt").status_code == 201
+    response = register(client, username="one_more", email="one_more@example.pt")
+    assert (response.status_code, response.get_json()["error"]) == (429, "register_locked")
+
+
 def test_username_and_email_are_unique(client, test_db):
     register(client)
     assert register(client, email="other@example.pt").get_json()["error"] == "username_taken"
@@ -83,10 +91,25 @@ def test_wrong_password_and_lock_out(client):
 
 @pytest.fixture
 def mails(monkeypatch):
-    """E-mails the app sends, as (to, subject, text), instead of sending them."""
+    """E-mails the app sends, as (to, subject, text), instead of sending them (at once, not in the background)."""
     sent = []
     monkeypatch.setattr(auth_service.mail_service, "send", lambda *mail: sent.append(mail) or False)
+    monkeypatch.setattr(auth_service, "in_background", lambda work, *args: work(*args))
     return sent
+
+
+def test_asking_for_a_reset_doesnt_wait_for_the_mail(client, monkeypatch):
+    """Sending takes seconds and only happens for real accounts: done in the background, the answer
+    takes as long either way (it doesn't tell whether the address has an account)."""
+    import threading
+    import time
+    register(client)
+    sent = threading.Event()
+    monkeypatch.setattr(auth_service.mail_service, "send", lambda *mail: time.sleep(2) or sent.set())
+    started = time.monotonic()
+    assert post(client, "forgot", email="ana@example.pt").get_json() == {"ok": True}
+    assert time.monotonic() - started < 1.5
+    assert sent.wait(5)                                                    # and it does go out
 
 
 def reset_token(mail):
@@ -117,6 +140,49 @@ def test_forgotten_password(client, mails):
     assert post(client, "login", login="ana_92", password="nova-senha-1").status_code == 200
 
 
+def test_a_new_password_logs_out_every_other_session(client, mails):
+    """Someone with a copy of the login cookie (another computer, a stolen one) is out once the password changes."""
+    from app.web import app
+    register(client)
+    other = app.test_client()
+    assert post(other, "login", login="ana_92", password="segredo123").status_code == 200
+    assert other.get("/api/auth/me").get_json()["username"] == "ana_92"
+
+    post(client, "forgot", email="ana@example.pt")
+    post(client, "reset", token=reset_token(mails[0]), password="nova-senha-1")
+    assert client.get("/api/auth/me").get_json()["username"] == "ana_92"   # the one who changed it stays in
+    assert other.get("/api/auth/me").get_json() is None
+    assert other.get("/api/collection").status_code == 401
+
+
+def test_changing_the_password_while_logged_in(client):
+    from app.web import app
+    assert post(client, "password", current="segredo123", password="nova-senha-1").status_code == 401
+    register(client)
+    other = app.test_client()
+    post(other, "login", login="ana_92", password="segredo123")
+
+    assert post(client, "password", current="segredo123", password="curta").get_json()["error"] == "password_short"
+    response = post(client, "password", current="errada-123", password="nova-senha-1")
+    assert (response.status_code, response.get_json()["error"]) == (400, "password_wrong")
+    assert post(client, "password", current="segredo123", password="nova-senha-1").get_json()["username"] == "ana_92"
+
+    assert client.get("/api/auth/me").get_json()["username"] == "ana_92"   # this session stays
+    assert other.get("/api/auth/me").get_json() is None                    # the others are logged out
+    post(client, "logout")
+    assert post(client, "login", login="ana_92", password="segredo123").get_json()["error"] == "login_failed"
+    assert post(client, "login", login="ana_92", password="nova-senha-1").status_code == 200
+
+
+def test_the_current_password_cant_be_guessed_there(client):
+    """Wrong current passwords count like wrong logins: locked after MAX_FAILURES."""
+    register(client)
+    for _ in range(auth_service.MAX_FAILURES):
+        post(client, "password", current="errada-123", password="nova-senha-1")
+    response = post(client, "password", current="segredo123", password="nova-senha-1")
+    assert (response.status_code, response.get_json()["error"]) == (429, "login_locked")
+
+
 def test_reset_link_expires_and_requests_are_limited(client, mails, monkeypatch):
     register(client)
     post(client, "forgot", email="ana@example.pt")
@@ -129,11 +195,48 @@ def test_reset_link_expires_and_requests_are_limited(client, mails, monkeypatch)
     assert (response.status_code, response.get_json()["error"]) == (429, "reset_locked")
 
 
+def test_huge_logins_and_passwords_are_refused_and_not_kept(client):
+    """A request can be ~100 MB: such a login mustn't be kept in memory (the lock-out's records), nor
+    sent to the database or hashed."""
+    register(client)
+    post(client, "logout")
+    huge = "a" * 100_000
+    assert post(client, "login", login=huge, password="segredo123").get_json()["error"] == "login_failed"
+    assert post(client, "login", login="ana_92", password=huge).get_json()["error"] == "login_failed"
+    assert all(len(login) <= auth_service.MAX_LOGIN for _, login in auth_service._failures)
+    long_password = "p" * (auth_service.MAX_PASSWORD + 1)
+    assert register(client, username="bea_1", email="bea@example.pt", password=long_password).get_json()["error"] == "password_long"
+    assert post(client, "reset", token="x", password=long_password).get_json()["error"] == "password_long"
+
+
+def test_only_photo_uploads_may_be_big(client):
+    """JSON bodies are small: past 1 MB the request is refused before it's read (photos are multipart)."""
+    response = post(client, "login", login="a" * 2_000_000, password="segredo123")
+    assert response.status_code == 413
+
+
+def test_lock_out_records_are_bounded(client, monkeypatch):
+    """Wrong passwords for many different logins: the oldest records go, memory doesn't grow forever."""
+    monkeypatch.setattr(auth_service, "MAX_TRACKED", 3)
+    for i in range(8):
+        with pytest.raises(auth_service.AccountError):
+            auth_service.authenticate(f"user_{i}", "wrong-password", ip="203.0.113.5")
+    assert len(auth_service._failures) <= 3
+    assert ("203.0.113.5", "user_7") in auth_service._failures            # the latest kept
+
+
 def test_blocked_account_is_logged_out(client, test_db):
     register(client)
     test_db.conn.cursor().execute("UPDATE users SET is_active = false")
     assert client.get("/api/auth/me").get_json() is None
     assert post(client, "login", login="ana_92", password="segredo123").get_json()["error"] == "login_failed"
+
+
+@pytest.mark.parametrize("body", ["[1, 2]", '"text"', "7", "null"])
+def test_a_json_body_that_isnt_an_object_is_refused(client, body):
+    """Our pages always send {…}; anything else is a 400, not a server error in the route."""
+    response = client.post("/api/auth/login", data=body, content_type="application/json", headers=HEADERS)
+    assert (response.status_code, response.get_json()["error"]) == (400, "body_invalid")
 
 
 def test_changes_need_our_pages_header(client):

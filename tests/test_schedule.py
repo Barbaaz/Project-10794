@@ -1,31 +1,43 @@
-"""The morning run (every store, then IGDB) and the light evening run (no network, no database)."""
+"""The full run (every store, then IGDB) and the light run (no network, no database)."""
+import pytest
+
 import scheduler.run_all_scrapers as run_all
 
 
-def run(monkeypatch, light):
+def run(monkeypatch, light, due=False):
     calls = {"stores": [], "igdb": 0}
     monkeypatch.setattr(run_all, "setup_logging", lambda: None)
     monkeypatch.setattr(run_all, "active_store_slugs",
                         lambda: ["press_start", "mega-mania", "cstech", "radio_popular", "gaming_replay"])
     monkeypatch.setattr(run_all, "run_store", lambda slug, light=False: calls["stores"].append((slug, light)) or {})
-    for name in ("enrich_games", "fill_videos", "fill_tags", "fill_names", "fill_time_to_beat"):
+    for name in ("enrich_games", "fill_videos", "fill_tags", "fill_names", "fill_time_to_beat", "refresh_critic_scores"):
         monkeypatch.setattr(run_all, name, lambda *a, **k: calls.__setitem__("igdb", calls["igdb"] + 1))
     monkeypatch.setattr(run_all, "complete_overdue", lambda: 0)
     monkeypatch.setattr(run_all, "notify", lambda *a: None)
-    run_all.main(light=light)
+    run_all.main(light=light, due=due)
     return calls
 
 
 def test_morning_run_does_every_store_and_igdb(monkeypatch):
     calls = run(monkeypatch, light=False)
     assert [s for s, _ in calls["stores"]] == ["press_start", "mega-mania", "cstech", "radio_popular", "gaming_replay"]
-    assert all(not light for _, light in calls["stores"]) and calls["igdb"] == 5
+    assert all(not light for _, light in calls["stores"]) and calls["igdb"] == 6
 
 
 def test_evening_run_is_light(monkeypatch):
     calls = run(monkeypatch, light=True)
     assert calls["stores"] == [("press_start", True), ("mega-mania", True), ("gaming_replay", True)]
     assert calls["igdb"] == 0
+
+
+@pytest.mark.parametrize("hours_ago, light", [(None, False), (21, False), (19, True), (2, True)])
+def test_due_run_is_full_about_once_a_day(monkeypatch, hours_ago, light):
+    """--due (the logon task, every 2 hours): full if no full-run store ran in FULL_RUN_HOURS, else light."""
+    asked = []
+    monkeypatch.setattr(run_all, "hours_since_last_run", lambda slugs: asked.append(slugs) or hours_ago)
+    calls = run(monkeypatch, light=False, due=True)
+    assert asked == [["cstech", "radio_popular"]]         # the stores only a full run reads
+    assert all(l == light for _, l in calls["stores"]) and (calls["igdb"] == 0) == light
 
 
 def test_server_schedule_times():

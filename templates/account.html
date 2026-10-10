@@ -8,8 +8,8 @@
     <!-- installable on a phone (static/manifest.webmanifest, static/sw.js) -->
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
-    <meta name="theme-color" content="#0d6efd">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <meta name="theme-color" content="#2346d0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
     <link href="/static/common.css" rel="stylesheet">
     <script src="/static/common.js"></script>
     <script src="/static/i18n.js"></script>
@@ -17,18 +17,7 @@
 </head>
 <body class="bg-body-tertiary">
 
-<!-- The same header on every page (static/common.js fills the account area) -->
-<header class="site-header bg-body border-bottom mb-4">
-    <div class="container-xxl d-flex align-items-center gap-2 py-2">
-        <a href="/" class="site-brand link-body-emphasis text-decoration-none">🎮 <span>Game Price Tracker</span></a>
-        <div class="header-tools ms-auto d-flex align-items-center gap-1">
-            <div id="account-area" class="d-flex gap-1 align-items-center"></div>
-            <div id="lang-switch" class="btn-group header-setting" role="group" data-i18n-aria-label="language"></div>
-            <button type="button" onclick="toggleDark()" class="btn btn-sm btn-secondary header-setting"
-                    data-i18n-aria-label="dark_mode" data-i18n-title="dark_mode">🌙</button>
-        </div>
-    </div>
-</header>
+{% include "_header.html" %}
 
 <div class="container pb-4" style="max-width: 900px;">
 
@@ -117,6 +106,51 @@
             <h1 class="h4 mb-3" data-i18n="my_account"></h1>
             <dl id="account-facts" class="row mb-3"></dl>
             <button type="button" id="logout" class="btn btn-secondary" data-i18n="log_out"></button>
+
+            <!-- A new password: this session stays, the others (other devices) are logged out -->
+            <form id="password-form" class="border-top mt-4 pt-3" style="max-width: 420px;" novalidate>
+                <h2 class="h6" data-i18n="change_password"></h2>
+                <div class="mb-3">
+                    <label class="form-label" for="current-password" data-i18n="current_password"></label>
+                    <input id="current-password" name="current" type="password" class="form-control"
+                           autocomplete="current-password" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="new-password" data-i18n="new_password"></label>
+                    <input id="new-password" name="password" type="password" class="form-control" autocomplete="new-password"
+                           required minlength="8" maxlength="200" aria-describedby="new-password-help">
+                    <div id="new-password-help" class="form-text" data-i18n="password_help"></div>
+                </div>
+                <div class="alert alert-danger d-none py-2" role="alert"></div>
+                <button type="submit" class="btn btn-primary" data-i18n="reset_save"></button>
+            </form>
+
+            <!-- The user's own data as a file (GDPR; export_service) -->
+            <div class="border-top mt-4 pt-3" style="max-width: 420px;">
+                <h2 class="h6" data-i18n="export_data"></h2>
+                <p class="small" data-i18n="export_data_help"></p>
+                <a href="/api/auth/export" class="btn btn-secondary" download data-i18n="export_data_button"></a>
+            </div>
+
+            <!-- Deleting the account: anonymised (auth_service.delete_account) -->
+            <details class="border-top mt-4 pt-3" style="max-width: 420px;">
+                <summary class="h6" data-i18n="delete_account"></summary>
+                <form id="delete-form" class="mt-2" novalidate>
+                    <p class="small" data-i18n="delete_account_gone"></p>
+                    <p class="small" data-i18n="delete_account_kept"></p>
+                    <div class="mb-3">
+                        <label class="form-label" for="delete-password" data-i18n="current_password"></label>
+                        <input id="delete-password" name="password" type="password" class="form-control"
+                               autocomplete="current-password" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input id="delete-confirm" type="checkbox" class="form-check-input">
+                        <label class="form-check-label" for="delete-confirm" data-i18n="delete_account_confirm"></label>
+                    </div>
+                    <div class="alert alert-danger d-none py-2" role="alert"></div>
+                    <button type="submit" class="btn btn-danger" data-i18n="delete_account" disabled></button>
+                </form>
+            </details>
         </div>
     </section>
 
@@ -131,85 +165,6 @@
     </section>
 </div>
 
-<script>
-// After logging in: back to where the visitor came from (only our own pages, never another site)
-function nextPage() {
-    const next = new URLSearchParams(location.search).get("next") || "/";
-    return next.startsWith("/") && !next.startsWith("//") ? next : "/";
-}
-
-const RESET_TOKEN = new URLSearchParams(location.search).get("reset");    // from the emailed link
-
-function showForm(name) {
-    document.querySelectorAll("[data-form]").forEach(b => {
-        const selected = b.dataset.form === name;
-        b.classList.toggle("active", selected);
-        b.setAttribute("aria-selected", selected);
-    });
-    ["login", "register", "forgot", "reset"].forEach(f =>
-        document.getElementById(`${f}-form`).classList.toggle("d-none", name !== f));
-}
-
-document.querySelectorAll("[data-form]").forEach(b => b.onclick = () => showForm(b.dataset.form));
-document.querySelectorAll("[data-show]").forEach(b => b.onclick = () => showForm(b.dataset.show));
-
-// done(): what happens after it worked (by default, back to where the visitor came from)
-function handleForm(id, path, { extra = {}, done = () => location.assign(nextPage()) } = {}) {
-    const form = document.getElementById(id);
-    const message = form.querySelector(".alert");
-    form.onsubmit = async event => {
-        event.preventDefault();
-        message.className = "alert alert-danger d-none py-2";
-        const button = form.querySelector("button[type=submit]");
-        button.disabled = true;
-        const { ok, data } = await api(path, { body: { ...Object.fromEntries(new FormData(form)), ...extra } });
-        button.disabled = false;
-        if (ok) return done(message);
-        message.textContent = t(`error_${data?.error || "unknown"}`);
-        message.classList.remove("d-none");
-    };
-}
-
-handleForm("login-form", "/api/auth/login");
-handleForm("register-form", "/api/auth/register");
-handleForm("forgot-form", "/api/auth/forgot", { extra: { lang: LANG }, done: message => {
-    message.className = "alert alert-success py-2";
-    message.textContent = t("forgot_sent");
-} });
-handleForm("reset-form", "/api/auth/reset", { extra: { token: RESET_TOKEN }, done: () => location.assign("/account") });
-
-async function load() {
-    const user = await fetch("/api/auth/me").then(r => r.json()).catch(() => null);
-    document.getElementById("loading").classList.add("d-none");
-    if (!user || RESET_TOKEN) {
-        document.getElementById("logged-out").classList.remove("d-none");
-        if (RESET_TOKEN) showForm("reset");
-        else if (location.hash === "#register") showForm("register");
-        return;
-    }
-    const facts = [
-        [t("username"), user.username],
-        [t("display_name"), user.display_name],
-        [t("email"), user.email],
-        [t("member_since"), new Date(user.created_at).toLocaleDateString(LOCALE)],
-    ];
-    document.getElementById("account-facts").innerHTML = facts.map(([k, v]) =>
-        `<dt class="col-sm-4 text-body-secondary">${esc(k)}</dt><dd class="col-sm-8">${esc(v)}</dd>`).join("");
-    document.getElementById("logout").onclick = async () => {
-        await api("/api/auth/logout");
-        location.assign("/");
-    };
-    document.getElementById("logged-in").classList.remove("d-none");
-
-    const mine = await fetch("/api/listings/mine").then(r => r.json()).catch(() => []);
-    document.getElementById("my-listings-grid").innerHTML = mine.map(l => listingCard(l, { showSeller: false })).join("");
-    document.getElementById("my-listings-empty").classList.toggle("d-none", mine.length > 0);
-    document.getElementById("my-listings").classList.remove("d-none");
-}
-
-applyI18n();
-renderAccountArea();
-load();
-</script>
+<script src="/static/pages/account.js"></script>
 </body>
 </html>

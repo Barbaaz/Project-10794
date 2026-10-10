@@ -31,21 +31,21 @@ class CollectionError(Exception):
 
 
 def collection(user_id):
-    """{items, stats, public}: the user's collection with each edition's prices."""
+    """{items, stats, public, wish_alerts}: the user's collection with each edition's prices."""
     with session() as s:
         user = s.get(User, user_id)
         items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                           .order_by(CollectionItem.kind, CollectionItem.updated_at.desc(), CollectionItem.id.desc())).all()
         rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "achievements", "achievements_total",
                        "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
-        public = user.collection_public
+        public, alerts = user.collection_public, user.wish_alerts
         # the user's review score of each game (one per game, as on the game page); a hidden one can't change
         reviews = {game_id: (score, hidden) for game_id, score, hidden in s.execute(
             select(GameReview.game_id, GameReview.score, GameReview.hidden).where(GameReview.user_id == user_id))}
     for r in rows:
         r["score"], r["score_locked"] = reviews.get(r["game_id"], (None, False))
     rows = with_prices(rows)                       # stats() needs the prices
-    return {"items": rows, "stats": stats(rows), "public": public}
+    return {"items": rows, "stats": stats(rows), "public": public, "wish_alerts": alerts}
 
 
 def with_prices(rows):
@@ -125,6 +125,8 @@ def add(user_id, edition_id, kind, **changes):
             item = CollectionItem(user_id=user_id, game_id=edition.game_id, edition_id=edition.id, kind=kind,
                                   format="physical" if kind == "owned" else None,
                                   wish_price=best_new_price(edition.id) if kind == "wishlist" else None)
+            if kind == "wishlist":    # alerts from the price it was wished at (wish_alert_service)
+                item.alert_price, item.alert_checked_at = item.wish_price, NOW
             s.add(item)
         _apply(item, changes)
         s.flush()
@@ -188,10 +190,18 @@ def remove(user_id, item_id):
     return {"ok": True}
 
 
-def set_public(user_id, public):
+def set_settings(user_id, changes):
+    """{public?, wish_alerts?, lang?}: show the collection on the profile; wishlist e-mails, in this language."""
+    from app.services.auth_service import LANGS
     with session() as s:
-        s.get(User, user_id).collection_public = bool(public)
-    return {"public": bool(public)}
+        user = s.get(User, user_id)
+        if "public" in changes:
+            user.collection_public = bool(changes["public"])
+        if "wish_alerts" in changes:
+            user.wish_alerts = bool(changes["wish_alerts"])
+        if changes.get("lang") in LANGS:
+            user.lang = changes["lang"]
+        return {"public": user.collection_public, "wish_alerts": user.wish_alerts}
 
 
 def public_collection(username):
@@ -246,7 +256,7 @@ def _hours(value):
         hours = Decimal(str(value).replace(",", ".")).quantize(Decimal("0.1"))
     except InvalidOperation:
         raise CollectionError("hours_invalid")
-    if not 0 <= hours <= MAX_HOURS:
+    if not hours.is_finite() or not 0 <= hours <= MAX_HOURS:            # "NaN" gets past quantize()
         raise CollectionError("hours_invalid")
     return hours
 

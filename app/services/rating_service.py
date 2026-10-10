@@ -7,7 +7,7 @@ A rating can be changed for EDIT_DAYS; the rated user may reply to it.
 """
 from datetime import timedelta
 
-from sqlalchemy import Numeric, and_, cast, exists, func, or_, select
+from sqlalchemy import Numeric, and_, case, cast, exists, func, or_, select
 
 from app.models import NOW, Conversation, Rating, User, fields
 from db import session
@@ -25,11 +25,14 @@ class RatingError(Exception):
 
 
 def _unrated(user_id):
-    """Completed purchases of this user without their rating (a condition on Conversation)."""
+    """Completed purchases of this user without their rating (a condition on Conversation); not
+    those with someone who deleted their account since (nobody left to rate)."""
+    other_id = case((Conversation.buyer_id == user_id, Conversation.seller_id), else_=Conversation.buyer_id)
     return and_(
         Conversation.deal_status == "completed",
         or_(Conversation.buyer_id == user_id, Conversation.seller_id == user_id),
         ~exists().where(Rating.conversation_id == Conversation.id, Rating.rater_id == user_id),
+        ~exists().where(User.id == other_id, User.deleted_at.is_not(None)),
     )
 
 
@@ -45,6 +48,8 @@ def rate(user_id, conversation_id, stars, comment=None):
             raise RatingError("not_found", 404)
         if conversation.deal_status != "completed":
             raise RatingError("not_completed", 409)
+        if (conversation.seller if user_id == conversation.buyer_id else conversation.buyer).deleted_at:
+            raise RatingError("user_deleted", 409)
         try:
             stars = int(stars)
         except (TypeError, ValueError):
@@ -58,6 +63,8 @@ def rate(user_id, conversation_id, stars, comment=None):
         rating = s.scalars(select(Rating).where(Rating.conversation_id == conversation_id,
                                                 Rating.rater_id == user_id)).first()
         if rating:
+            if rating.hidden:              # by a moderator: rewriting it would undo that (as hidden reviews)
+                raise RatingError("rating_hidden", 403)
             if _now(s) - rating.created_at > timedelta(days=EDIT_DAYS):
                 raise RatingError("rating_locked", 409)
             rating.stars, rating.comment, rating.updated_at = stars, comment, NOW
@@ -77,6 +84,8 @@ def reply(user_id, rating_id, text):
         rating = s.get(Rating, rating_id)
         if not rating or rating.rated_id != user_id:
             raise RatingError("not_found", 404)
+        if rating.hidden:
+            raise RatingError("rating_hidden", 403)
         rating.reply = text
         return fields(rating, "id", "stars", "comment", "reply")
 

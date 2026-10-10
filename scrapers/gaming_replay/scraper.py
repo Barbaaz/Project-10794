@@ -31,6 +31,12 @@ class GamingReplayScraper(BaseScraper):
         "https://www.gamingreplay.com/pt/115-seminovos-xbox-one": "XboxOne",
         "https://www.gamingreplay.com/pt/48-jogos-pc": "PC",      # boxed games (not "Jogos Digitais": codes)
     }
+    # Consoles (core/hardware.py), per platform
+    hardware_urls = {f"https://www.gamingreplay.com/pt/{path}": hint for path, hint in {
+        "2288-consolas-ps5": ("PS5", "console"),
+        "3161-consolas-nintendo-switch-2": ("Switch2", "console"),
+        "229-consolas-nintendo-switch": ("Switch", "console"),
+    }.items()}
 
     def build_page_url(self, url, page):
         return url if page == 1 else f"{url}?p={page}"

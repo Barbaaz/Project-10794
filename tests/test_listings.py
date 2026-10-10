@@ -39,6 +39,26 @@ def test_only_real_images_are_accepted():
 
 # --- listings through the API ------------------------------------------------------------------
 
+def test_prices_that_arent_numbers_are_refused(market):
+    """Decimal reads "NaN" and "Infinity" too: refused like any wrong price, not a server error."""
+    sign_up(market["client"], "seller_nan")
+    for price in ("NaN", "nan", "sNaN", "Infinity", "-Infinity"):
+        response = new_listing(market, price=price)
+        assert (response.status_code, response.get_json()["error"]) == (400, "price_invalid"), price
+
+
+def test_a_blocked_sellers_copies_leave_the_catalogue(market):
+    """The catalogue lists editions with a store offer or a used copy; a blocked seller's copies don't count
+    (no card, no price from them), as everywhere else in the market."""
+    client = market["client"]
+    seller = sign_up(client, "seller_blocked")
+    new_listing(market, price="9.99")
+    catalog = lambda: client.get("/api/games/catalog?platform=PS5&q=market test game").get_json()["groups"]
+    assert [g["edition_id"] for g in catalog()] == [market["edition"]]
+    market["db"].execute("UPDATE users SET is_active = false WHERE id = ?", seller["id"])
+    assert catalog() == []
+
+
 def test_selling_needs_an_account(market):
     assert new_listing(market).status_code == 401
 
@@ -130,3 +150,16 @@ def test_photos_can_be_added_and_removed_within_the_limits(market):
     after = client.delete(f"/api/listings/{listing['id']}/photos/{first['id']}", headers=HEADERS).get_json()
     assert len(after["photos"]) == 3
     assert not (market["dir"] / first["photo_key"]).exists()        # its files are deleted too
+
+
+def test_the_market_tab_filters_games_and_hardware(market):
+    """/api/listings?kind=game|hardware: a used console is listed apart from games (core/hardware.py)."""
+    client, c = market["client"], market["db"]
+    c.execute("UPDATE games SET kind = 'console' WHERE id = ?", market["other_game"])
+    sign_up(client, "seller_kinds")
+    new_listing(market)
+    new_listing(market, game_id=market["other_game"], edition_id=market["other_edition"])
+    titles = lambda kind="": sorted(g["name"] for g in client.get(f"/api/listings?kind={kind}").get_json()["groups"])
+    assert titles() == ["Market Test Game", "Other Game"]
+    assert titles("game") == ["Market Test Game"]
+    assert titles("hardware") == ["Other Game"]

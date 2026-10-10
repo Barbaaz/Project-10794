@@ -84,8 +84,8 @@ def get_game(game_id):
     game = fetch_one(
         """
         SELECT g.id, g.title, NULLIF(g.title_en, '') AS title_en, p.code AS platform, p.name AS platform_name,
-               g.image_url AS image, g.igdb_id, g.summary, g.genres, g.publishers, g.developers, g.first_release_date,
-               g.rating, g.pegi, g.cover_image_id, g.screenshot_ids, g.video_ids AS videos,
+               g.kind, g.image_url AS image, g.igdb_id, g.summary, g.genres, g.publishers, g.developers, g.first_release_date,
+               g.rating, g.rating_count, g.pegi, g.cover_image_id, g.screenshot_ids, g.video_ids AS videos,
                g.ttb_hastily, g.ttb_normally, g.ttb_completely, g.ttb_count
         FROM games g JOIN platforms p ON p.id = g.platform_id
         WHERE g.id = ?
@@ -141,7 +141,29 @@ def get_game(game_id):
     release = game_release_date(game_id) or {}
     game["release_date"] = release.get("release_date")
     game["date_is_estimate"] = release.get("date_is_estimate", False)
+    game["other_platforms"] = other_platforms(game)
     return game
+
+
+def other_platforms(game):
+    """
+    The same game on our other platforms (the same IGDB entry), for "Também para Xbox Series X|S,
+    desde 47,89 €": [{game_id, platform, platform_name, best_price}] (best_price None: none in stock).
+    """
+    if not game["igdb_id"] or game["kind"] != "game":
+        return []
+    return fetch_all(
+        """
+        SELECT g.id AS game_id, p.code AS platform, p.name AS platform_name,
+               MIN(CASE WHEN o.in_stock THEN o.price END) AS best_price
+        FROM games g JOIN platforms p ON p.id = g.platform_id
+        LEFT JOIN current_offers o ON o.game_id = g.id AND o.is_active
+        WHERE g.igdb_id = ? AND g.id <> ? AND g.kind = 'game'
+        GROUP BY g.id, p.code, p.name
+        ORDER BY p.name, g.id
+        """,
+        game["igdb_id"], game["id"],
+    )
 
 
 def store_descriptions(game_id):
@@ -272,8 +294,12 @@ CARD_SORTS = {
 }
 
 
+# What catalog(kind=…) lists: games, or the consoles tab's (core/hardware.py; consoles only, user 2026-10-07)
+HARDWARE_KINDS = ("console",)
+
+
 def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False, q=None, store=None, genre=None,
-            tags=None, pegi=None):
+            tags=None, pegi=None, kind="game"):
     """
     The whole catalogue: every edition with at least one offer in stock at a store or a used
     copy for sale by a user, as card groups (same shape as /search), one page at a time; each
@@ -289,16 +315,19 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
     shown, to compare).
     genre: only games in this category (app/services/genre_service.py); an unknown one is ignored.
     tags: only games with all these tags; pegi: PEGI rating up to this age (app/services/tag_service.py).
+    kind: "game" (default), or "hardware" / "console": the consoles.
     """
     order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS["name"])
+    kinds = HARDWARE_KINDS if kind == "hardware" else (kind,) if kind in HARDWARE_KINDS else ("game",)
     in_stock_editions = f"""
         WITH offers AS (
             SELECT sp.id AS store_product_id, sp.edition_id, sp.store_id, sp.condition, last.price
             FROM store_products sp {LATEST_PRICE}
             WHERE sp.is_active AND last.in_stock AND sp.edition_id IS NOT NULL
         ),
-        used AS (
-            SELECT edition_id, price FROM user_listings WHERE status = 'active' AND edition_id IS NOT NULL
+        used AS (       -- a blocked seller's copies don't count (listing_service.SELLER_ACTIVE)
+            SELECT l.edition_id, l.price FROM user_listings l JOIN users u ON u.id = l.user_id
+            WHERE l.status = 'active' AND l.edition_id IS NOT NULL AND u.is_active
         ),
         ed AS (
             SELECT edition_id, MIN(price) AS best_price
@@ -306,7 +335,7 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             GROUP BY edition_id
         )
     """
-    filters, params = ["(? IS NULL OR p.code = ?)"], [platform, platform]
+    filters, params = ["(? IS NULL OR p.code = ?)", f"g.kind IN ({placeholders(kinds)})"], [platform, platform, *kinds]
     if special_only:
         filters.append("e.edition_key <> '' AND e.edition_key NOT LIKE '|%'")
     words, word_params = title_word_filters(q)

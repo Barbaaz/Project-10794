@@ -89,6 +89,35 @@ def test_a_match_only_store_links_to_known_games_and_editions_only(cursor):
     assert links() == {"a": True, "b": False, "c": False} and games() == [("Test Game 1",)]
 
 
+def test_consoles_are_grouped_strictly_and_kept_apart_from_games(cursor):
+    """Consoles (core/hardware.py): their own kind, one Standard edition, the same console across stores
+    only with the same cleaned name; the catalogue lists them on their own tab."""
+    from app.services.game_service import catalog
+    from pipeline.rematch import rematch_all
+
+    process_products("press_start", [
+        product(1, external_name="Test Game 1 PS5"),
+        product(2, external_name="Consola PS5 Slim Digital 1TB", kind="console", price=449.99),
+    ])
+    process_products("mega-mania", [
+        product("a", external_name="PlayStation 5 Slim Digital Edition 1 TB Consola", kind="console", price=459.99),
+        product("b", external_name="Consola PS5 Pro", kind="console", price=799.99),          # another model
+    ])
+    games = [tuple(r) for r in cursor.execute(
+        "SELECT g.kind, g.normalized_title, COUNT(DISTINCT e.id) AS editions, COUNT(sp.id) AS offers FROM games g "
+        "JOIN game_editions e ON e.game_id = g.id JOIN store_products sp ON sp.game_id = g.id "
+        "GROUP BY g.kind, g.normalized_title ORDER BY g.kind, g.normalized_title").fetchall()]
+    assert games == [("console", "console:1 digital slim tb", 1, 2), ("console", "console:pro", 1, 1),
+                     ("game", "test game 1", 1, 1)]
+    assert cursor.execute("SELECT DISTINCT kind FROM store_products WHERE url LIKE '%/2'").fetchone()[0] == "console"
+
+    names = lambda **kw: sorted(g["name"] for g in catalog(**kw)["groups"])
+    assert names() == ["Test Game 1"]
+    assert names(kind="hardware") == names(kind="console") == ["Consola PS5 Pro", "Consola PS5 Slim Digital 1TB"]
+    # the rematch links them the same way
+    assert rematch_all()[0] == 0
+
+
 def test_to_cents_rounds_like_sql_server():
     assert [str(to_cents(v)) for v in (1.005, 25.995, 2.675, 10.125)] == ["1.00", "26.00", "2.67", "10.13"]
     assert to_cents(None) is None

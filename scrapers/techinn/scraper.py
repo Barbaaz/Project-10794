@@ -18,7 +18,8 @@ class TechinnScraper(BaseScraper):
     - the product sitemap (1 request), then up to max_product_pages of the other games' product
       pages, those never read first, then the longest unseen: each is read every ~4 days.
     Products gone from both the sitemap and the listings are the ones deactivated (still_listed).
-    ~160 requests a run.
+    With read_hardware, also its 3 console pages (Nintendo, PlayStation, Xbox: consoles only, 2–25
+    each, one page each). ~165 requests a run.
     """
     store_slug = "techinn"
     base_url = "https://www.tradeinn.com"
@@ -31,7 +32,10 @@ class TechinnScraper(BaseScraper):
         "https://www.tradeinn.com/techinn/pt/consolas-jogos-xbox/19293/s": None,
         "https://www.tradeinn.com/techinn/pt/jogos-jogos-pc/18390/s": "PC",
     }
-    sitemap_url = "https://www.tradeinn.com/techinn/sitemaps/sitemap_productos_1_por_techinn.xml"
+    # Consoles (core/hardware.py): the platform from each name (keep_hardware)
+    hardware_urls = {f"https://www.tradeinn.com/techinn/pt/{path}/s": (None, "console") for path in (
+        "consolas-consolas-nintendo/15858", "consolas-consolas-playstation/15860", "consolas-consolas-xbox/15859")}
+    sitemap_url ="https://www.tradeinn.com/techinn/sitemaps/sitemap_productos_1_por_techinn.xml"
     max_product_pages = 150
 
     def scrape_catalog(self):
@@ -59,4 +63,14 @@ class TechinnScraper(BaseScraper):
                 continue
             if game:
                 products.setdefault(game["url"], game)
-        return list(products.values())
+        for p in products.values():
+            p["kind"] = "game"
+
+        hardware = []
+        if self.read_hardware:
+            for url, (console, page_kind) in self.hardware_urls.items():
+                hardware += self.keep_hardware(self.parse_listing(self.http.get_text(url), console), page_kind)
+            self.still_listed |= {p["url"] for p in hardware}
+            log.info("[%s] %d consoles on the console pages", self.store_slug, len(hardware))
+        # first, as in BaseScraper.scrape_catalog: the pipeline keeps the first copy of a URL
+        return hardware + list(products.values())

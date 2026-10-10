@@ -62,7 +62,7 @@ def preorders():
             JOIN platforms p ON p.id = g.platform_id
             JOIN game_editions e ON e.id = o.edition_id
             LEFT JOIN game_release r ON r.game_id = g.id
-            WHERE o.is_active AND o.is_preorder AND o.condition = 'new' AND o.in_stock
+            WHERE o.is_active AND o.is_preorder AND o.condition = 'new' AND o.in_stock AND g.kind = 'game'
               -- out already: some stores keep the pre-order label after the release date
               -- (the product's own date first: a special edition can come out later than the game)
               AND COALESCE(o.release_date, r.release_date, '9999-12-31') >= CAST(utcnow() AS date)
@@ -108,7 +108,7 @@ def upcoming_releases():
             JOIN games g ON g.id = r.game_id
             JOIN platforms p ON p.id = g.platform_id
             LEFT JOIN prices pr ON pr.game_id = g.id AND pr.rn = 1
-            WHERE r.release_date >= CAST(utcnow() AS date)
+            WHERE r.release_date >= CAST(utcnow() AS date) AND g.kind = 'game'
             ORDER BY r.date_is_estimate, r.release_date, g.title, p.sort_order, g.id
         """)
         for r in rows:

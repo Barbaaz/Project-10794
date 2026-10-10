@@ -113,16 +113,19 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/deals?limit=12&min_percent=15` | Editions clearly cheaper at one store than at the next cheapest (15–60% gap, a comparison, not a discount), one per game, the most money saved (`savings`) first; shown while there are no real discounts |
 | `GET /api/preorders?platform=` | Games on pre-order, one group per edition, soonest release first |
 | `GET /api/releases?platform=` | Games coming out from today on, by release date (`date_is_estimate` for "31/12" dates) |
-| `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special&q=&store=&genre=&tags=&pegi=` | The whole catalogue (and the search): every edition with an offer in stock, paged. Without `platform`, one card per game and edition across platforms: the cheapest platform's group, the others in `alternatives`; `editions=special` = only editions above Standard; `q` = words in the title; `store` = only what that store has in stock; `genre` = only games in that category; `tags=coop,horror` = only games with all those tags; `pegi=12` = PEGI up to 12 |
+| `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special&q=&store=&genre=&tags=&pegi=` | The whole catalogue (and the search): every edition with an offer in stock, paged. Without `platform`, one card per game and edition across platforms: the cheapest platform's group, the others in `alternatives`; `editions=special` = only editions above Standard; `q` = words in the title; `store` = only what that store has in stock; `genre` = only games in that category; `tags=coop,horror` = only games with all those tags; `pegi=12` = PEGI up to 12; `kind=hardware` (or `console`) = consoles instead of games |
 | `GET /api/genres` | Categories with games in stock (`{genre, count}`), from the IGDB genres; close genres share one (TBS / RTS / Tactical → `strategy`) |
 | `GET /api/tags` | Tags for the filter: game modes and themes from IGDB (with counts), price tags `on_sale`, `historical_low` (dropped to the lowest price ever), `used` |
 | `GET /api/games/editions?ids=12,34` | The wishlist tab (up to 200): these editions with all offers, historical low and `restocked_at` (back in stock in the last 14 days) |
 | `GET /api/stores` | Active stores with `last_updated`, `last_status` / `last_error` of the latest run and `is_stale` (no update in 36 h) |
 | `GET /api/platforms` | Platforms with games on sale (`PS5`, `Switch2`, `XboxSeries`, `XboxOne`, `PC`...) for the `platform` filter |
-| `POST /api/auth/register` `{username, email, password, display_name?}` | Create an account and log in (the session cookie) |
-| `POST /api/auth/login` `{login, password}` | Log in with username or email; locked for 15 min after 5 wrong passwords |
+| `POST /api/auth/register` `{username, email, password, display_name?, lang?}` | Create an account and log in (the session cookie); `lang` (pt / en) is kept for e-mails |
+| `POST /api/auth/login` `{login, password, lang?}` | Log in with username or email; locked for 15 min after 5 wrong passwords |
 | `POST /api/auth/forgot` `{email, lang}` | E-mail a link to choose a new password (valid 1 hour, works once); the same answer whether or not the email has an account. Sent by SMTP once `SMTP_HOST` is set (`.env.example`), else only logged |
 | `POST /api/auth/reset` `{token, password}` | The new password from that link; logs in |
+| `POST /api/auth/password` `{current, password}` | A new password; other sessions are logged out |
+| `GET /api/auth/export` | The user's own data as a JSON file to save (GDPR): account, listings, conversations and messages, ratings given / received, reviews, collection, reports made, moderation actions |
+| `POST /api/auth/delete` `{password}` | Delete the account: anonymised (e-mail, password, names, collection, listing photos gone; ratings, reviews and messages kept as "deleted user"); not while a purchase is under way, not for an admin; logs out |
 | `POST /api/auth/logout` · `GET /api/auth/me` | Log out · the logged-in user (or `null`) |
 | `GET /api/listings?game_id=` · `GET /api/listings/<id>` | Pre-owned copies people sell (active / reserved), with photos; never the seller's email |
 | `GET /api/listings?platform=&sort=newest\|price_asc\|price_desc&page=` | The "Used" tab: one group per game edition with its sellers' active listings, paged |
@@ -137,6 +140,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/igdb/games?q=` · `POST /api/igdb/games` `{igdb_id, platform}` | The sell form, for games the catalogue doesn't have (older platforms): IGDB games on our platforms · the game on that platform, created from IGDB if needed (20 per user per day) → `{game_id, edition_id}` |
 | `PUT /api/mod/games/<id>/title` `{title}` | Moderators: correct a store's typo in a game's title, kept by the processing and the rematch (`""` = the stores' title again) |
 | `PUT /api/mod/games/<id>/title-en` `{title_en}` | Moderators: a game's English name, shown when the page is in English (`""` = the store's title) |
+| `POST /api/collection/steam` `{profile}` | The user's Steam games (profile link, custom name or id; game details public) into the collection: those we have on PC as owned, digital, with Steam's hours → `{added, updated, total, missing: [{name, igdb_id, hours}]}`; one import per 10 min. Needs `STEAM_API_KEY` |
 | `POST /api/collection/import` `{ids}` | Favourites an old browser kept (before accounts; favourites are now the wishlist), put on the wishlist (merged editions followed) → `{added}` |
 | `GET /api/ratings/pending` | Completed purchases the user still has to rate (`overdue` after 14 days: buying and selling blocked until rated) |
 | `POST /api/conversations/<id>/rating` `{stars, comment?}` | Rate the other side of a completed purchase (changeable for 14 days) |
@@ -144,7 +148,8 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/users/<username>` | Public profile: average rating, ratings received, listings, game reviews (never the email) |
 | `GET /api/collection` · `GET /api/collection/editions` | The user's collection and wishlist with current prices and statistics (per platform / status, hours, worth new / used) · which editions they have (for the game page's Tenho / Quero) |
 | `POST /api/collection` `{edition_id, kind: owned\|wishlist, format?, status?, hours?, notes?}` · `PATCH` / `DELETE /api/collection/<id>` | Add (owning one takes it off the wishlist) · edit (`kind: owned` = bought it) / remove |
-| `PUT /api/collection/settings` `{public}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown) · a public collection |
+| `PUT /api/collection/settings` `{public?, wish_alerts?, lang?}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown); wishlist alerts by e-mail on / off · a public collection |
+| `POST /api/collection/alerts-off` `{token}` | The link in a wishlist alert switches the alerts off (no log-in needed) |
 | `GET /api/games/<id>/reviews?page=` | Players' reviews of a game on that platform: average, count and how many gave each score 1–10, the user's own review, 20 shown reviews per page (newest first; hidden ones and blocked users' left out; `owner` = has the game in their collection). Catalogue / deals / wishlist cards carry `review_score` and `review_count` |
 | `PUT /api/games/<id>/reviews/mine` `{score: 1–10, title?, body?}` · `DELETE` | Write or change one's review (one per user and game) · delete it (not once a moderator hid it) |
 | `PUT /api/games/<id>/reviews/mine/score` `{score: 1–10 or ""}` | Only the review's score (the collection page's rating); its text is kept |
@@ -248,26 +253,29 @@ python -m scheduler.run_all_scrapers            # every active store
 python -m scheduler.run_single_store cstech     # one store
 ```
 
-Each run is logged in the `scrape_runs` table and in `logs\scraper.log`.
+Each run is logged in the `scrape_runs` table and in `logs\scraper-<date>.log` (one file per day, kept 30 days).
 
 ### Daily update
 
-Live prices and stock are re-checked twice a day by two Windows scheduled tasks:
+The PC isn't on at fixed hours, so one Windows task, `Project10794-Scrapers`, starts 10 minutes
+after logon and again every 2 hours while logged on, and runs whatever is due
+(`python -m scheduler.run_all_scrapers --due`):
 
-- **06:00** `python -m scheduler.run_all_scrapers`: every store (including product pages for
-  descriptions / release dates), then the IGDB lookups (new games, videos, tags, time to beat)
-- **18:00** `python -m scheduler.run_all_scrapers --light`: Press Start, Mega Mania and Gaming Replay
-  again, listing pages only (~250 requests), so their prices are at most ~12 h old. CSTech
-  (has answered "too many requests" before) and Rádio Popular stay once a day
+- the **full run** (`python -m scheduler.run_all_scrapers`) if none started in the last 20 hours:
+  every store (including product pages for descriptions / release dates), then the IGDB lookups
+  (new games, videos, tags, time to beat)
+- otherwise the **light run** (`--light`): Press Start, Mega Mania and Gaming Replay again, listing
+  pages only (~250 requests). CSTech and Rádio Popular stay once a day
 
-A store isn't run again within 8 hours of a successful run (`MIN_HOURS_BETWEEN_RUNS`).
+So the stores get no more requests than with fixed 06:00 / 18:00 runs. A store isn't run again within
+8 hours of a successful run (`MIN_HOURS_BETWEEN_RUNS`), nor within 24 hours of answering 403 / 429
+(`BLOCKED_PAUSE_HOURS`); either is skipped without a request. One copy of the task runs at a time.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1                   # 06:00 and 18:00
-powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -Time 03:30 -EveningTime 17:00
-powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -EveningTime ""   # morning only
-Start-ScheduledTask -TaskName Project10794-Scrapers                                          # run now
-Unregister-ScheduledTask -TaskName Project10794-Scrapers* -Confirm:$false                    # remove both
+powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1                # every 2 h
+powershell -ExecutionPolicy Bypass -File scheduler\register_daily_task.ps1 -EveryHours 3
+Start-ScheduledTask -TaskName Project10794-Scrapers                                       # check now
+Unregister-ScheduledTask -TaskName Project10794-Scrapers -Confirm:$false                  # remove
 ```
 
 The task runs while you are logged on; if the computer was off at the scheduled time,
@@ -276,6 +284,12 @@ it runs as soon as it is on again.
 When a store fails or looks half-broken, the daily run shows a **Windows notification**, and
 the front page footer shows ⚠ next to that store (also when a store hasn't updated for 36 h). A full run takes about 8 minutes. A new price row is
 only stored when a price or stock status changes.
+
+After the morning run, **wishlist alerts** (`app/services/wish_alert_service.py`): each user with
+alerts on gets at most one e-mail listing the wishes that came back in stock or dropped in price
+(by at least 1 € and 5%; a new historical low says so) since the last check. Each wish remembers the
+price at that check, so nothing is sent twice. Switched off on /collection or with the link in the
+message; logged instead of sent until `SMTP_HOST` is set.
 
 ## Database code
 

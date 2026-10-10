@@ -8,16 +8,16 @@
     <!-- installable on a phone (static/manifest.webmanifest, static/sw.js) -->
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
-    <meta name="theme-color" content="#0d6efd">
+    <meta name="theme-color" content="#2346d0">
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
     <link href="/static/common.css" rel="stylesheet">
     <script src="/static/common.js"></script>
     <script src="/static/i18n.js"></script>
     <script src="/static/market.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" integrity="sha384-NrKB+u6Ts6AtkIhwPixiKTzgSKNblyhlk0Sohlgar9UHUBzai/sgnNNWWd291xqt" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" integrity="sha384-cVMg8E3QFwTvGCDuK+ET4PD341jF3W8nO1auiXfuZNQkzbUUiBGLsIQUE+b1mxws" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js" integrity="sha384-3N9GHhCtN3CQef6tNfqgZlv7sQLYIkcChN+uaTZ7xVdzKYp/SjBNPxa92+hM7EAY" crossorigin="anonymous"></script>
 
     <style>
         /* Chart colors by role. Store colors are a validated categorical palette
@@ -52,19 +52,95 @@
         }
 
         .chart-box { position: relative; height: 280px; background: var(--surface-1); border-radius: .5rem; padding: .5rem; }
-        .game-cover { width: 140px; aspect-ratio: 3 / 4; object-fit: cover; background: #000; border-radius: .5rem; }
+        /* The page: the game on the left, the buy box on the right (sticky, the whole way down) */
+        .gp { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 1.75rem 2rem; align-items: start;
+              grid-template-areas: "top buy" "media buy" "market buy" "reviews buy" "history buy"; }
+        .gp.d-none { display: none; }
+        .gp-top { grid-area: top; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 1.75rem; align-items: start; }
+        .gp-buy { grid-area: buy; align-self: stretch; }
+        .gp-media { grid-area: media; } .gp-market { grid-area: market; } .gp-reviews { grid-area: reviews; } .gp-history { grid-area: history; }
+        .gp-panel { background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .875rem; padding: 1.25rem 1.4rem; }
+        .buy-box { position: sticky; top: 1rem; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .875rem;
+                   padding: 1.15rem 1.2rem; display: grid; gap: 1rem; }
+        .buy-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--bs-secondary-color); margin-bottom: .4rem; }
+        .best-price { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+        .buy-box .offer-row { padding: .6rem .8rem; gap: .55rem; font-size: .92rem; }
+        .buy-box .offer-row .stock { font-size: .82rem; }
+        .cover-thumbs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .4rem; margin-top: .6rem; }
+        .cover-thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: .5rem; }
+        .other-platforms { color: var(--bs-secondary-color); font-size: .92rem; }
+        .other-platforms:empty { display: none; }
+        .other-platforms a { font-weight: 700; text-decoration: none; }
+        .video-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
+        .video-grid .video-thumb, .video-grid .video-thumb img { width: 100%; height: auto; }
+        .video-grid .video-thumb img { aspect-ratio: 16 / 9; object-fit: cover; border-radius: .625rem; }
+        /* the play button in the middle of the picture (the name line under it is ~1.4rem tall) */
+        .video-grid .video-thumb .play { top: calc((100% - 1.4rem) / 2); }
+        @media (max-width: 1199.98px) { .gp-top { grid-template-columns: 200px minmax(0, 1fr); } .gp { grid-template-columns: minmax(0, 1fr) 310px; } }
+        /* Narrower: one column, in this order: cover, title, buy box, then the rest */
+        @media (max-width: 991.98px) {
+            .gp { display: flex; flex-direction: column; gap: 1.25rem; }
+            .gp-top, .gp-info { display: contents; }
+            .gp-cover { order: 1; } .gp-head { order: 2; } .gp-buy { order: 3; } .other-platforms { order: 4; } #about { order: 5; margin-top: 0 !important; }
+            #edition-info { order: 6; margin-top: 0 !important; } .gp-media { order: 7; } .gp-market { order: 8; } .gp-reviews { order: 9; } .gp-history { order: 10; }
+            .gp-cover { display: flex; gap: .75rem; align-items: flex-start; }
+            .gp-cover .game-cover { width: 150px; flex: none; }
+            .gp-cover .cover-thumbs { display: none; }
+            .buy-box { position: static; }
+            .gp-panel { padding: 1rem; }
+            .video-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        .back-link { font-size: .9rem; font-weight: 600; text-decoration: none; color: var(--bs-secondary-color); }
+        .back-link:hover { color: var(--bs-emphasis-color); }
+        /* An edition's stores: one row each (stock dot, store, stock, price), the whole row opens the store */
+        .offer-rows { border: 1px solid var(--bs-border-color); border-radius: .875rem; overflow: hidden; background: var(--bs-body-bg); }
+        .offer-row { display: flex; align-items: center; gap: .75rem; padding: .75rem 1.1rem; color: var(--bs-body-color); text-decoration: none; }
+        .offer-row + .offer-row { border-top: 1px solid var(--bs-border-color); }
+        .offer-row:hover { background: var(--bs-tertiary-bg); color: var(--bs-body-color); }
+        .offer-row .dot { width: 8px; height: 8px; border-radius: 50%; background: #1f9d5c; flex: none; }
+        .offer-row.out .dot { background: var(--bs-secondary-color); opacity: .5; }
+        .offer-row .store { flex: 1; min-width: 0; font-weight: 500; }
+        .offer-row .stock { color: var(--bs-secondary-color); font-size: .9rem; white-space: nowrap; }
+        .offer-row .price { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .offer-row.out .price { color: var(--bs-secondary-color); }
+        .offer-row .go { color: var(--bs-secondary-color); font-size: .85rem; }
+        @media (max-width: 575.98px) { .offer-row { padding-inline: .8rem; gap: .5rem; } .offer-row .stock { font-size: .8rem; } }
+        .gp.no-cover .gp-top { grid-template-columns: minmax(0, 1fr); }
+        .game-cover { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--bs-secondary-bg); border-radius: .875rem;
+                      box-shadow: 0 12px 30px rgb(20 23 31 / .18); }
+        .game-kicker { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-primary); }
+        .game-name { font-size: clamp(1.6rem, 3.5vw, 2.3rem); line-height: 1.1; margin: .2rem 0 0; }
+        .d-contents { display: contents; }
+        .badge-soft { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color); font-weight: 700; font-size: .8rem; border-radius: .4rem; }
+        .badge-critics { background: var(--save-bg); color: var(--save); }
+        .badge-release { background: var(--bs-primary-bg-subtle); color: var(--bs-primary-text-emphasis); }
+        /* The best price of any edition: one card, the price large */
+        .best-card { background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .875rem; padding: 1rem 1.25rem;
+                     display: grid; gap: .15rem; justify-items: start; }
+        .best-card .lbl { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-secondary-color); }
+        .best-card .big { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+        .best-card .btn { margin-top: .6rem; }
+        /* An edition's price history: a panel of its own under the stores */
+        .chart-panel { border: 1px solid var(--bs-border-color); border-radius: .875rem; background: var(--bs-body-bg); padding: 1rem 1.1rem; }
+        .chart-box { background: var(--bs-body-bg) !important; }
+        /* Editions: panels with a border, no shadow */
+        .edition-card { border: 1px solid var(--bs-border-color); border-radius: .875rem; background: var(--bs-body-bg); }
         .swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
         .low-badge { background: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); border: 1px solid var(--bs-success-border-subtle); }
         table.prices td, table.prices th { font-variant-numeric: tabular-nums; }
-        .facts { display: grid; grid-template-columns: auto 1fr; column-gap: .75rem; row-gap: .15rem; }
-        @media (min-width: 768px) { .facts { grid-template-columns: auto 1fr auto 1fr; } }
+        .facts { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 1.25rem; row-gap: .35rem; font-size: .92rem; }
         .offer-link { white-space: nowrap; }
-        .facts dt { font-weight: 600; color: var(--bs-secondary-color); }
-        .facts dd { margin: 0; }
+        .facts dt { font-weight: 400; color: var(--bs-secondary-color); }
+        .facts dd { margin: 0; font-weight: 600; }
         .clamped { display: -webkit-box; -webkit-line-clamp: var(--lines); -webkit-box-orient: vertical; overflow: hidden; }
         .clamped.open { display: block; }
         .screenshots { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .25rem; }
         .screenshots img { height: 120px; border-radius: .375rem; }
+        /* The game's pictures: two a row, 16:9, rounded; the rest behind "more" */
+        .shot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+        .shot-grid img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: .625rem; background: var(--bs-secondary-bg); }
+        .shot-grid.store-photos img { object-fit: contain; background: #fff; }
+        .shot-grid a[hidden] { display: none; }
         .edition-info ul { padding-left: 1.2rem; }
         .video-thumb { position: relative; flex-shrink: 0; width: 213px; padding: 0; border: 0; background: none; text-align: left; }
         .video-thumb img { width: 213px; height: 120px; object-fit: cover; }
@@ -81,63 +157,80 @@
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     </style>
 </head>
-<body class="bg-body-tertiary">
+<body class="bg-body-tertiary" data-game-id="{{ game_id }}">
 
-<!-- The same header on every page (static/common.js fills the account area) -->
-<header class="site-header bg-body border-bottom mb-4">
-    <div class="container-xxl d-flex align-items-center gap-2 py-2">
-        <a href="/" class="site-brand link-body-emphasis text-decoration-none">🎮 <span>Game Price Tracker</span></a>
-        <div class="header-tools ms-auto d-flex align-items-center gap-1">
-            <div id="account-area" class="d-flex gap-1 align-items-center"></div>
-            <div id="lang-switch" class="btn-group header-setting" role="group" data-i18n-aria-label="language"></div>
-            <button type="button" onclick="toggleDark()" class="btn btn-sm btn-secondary header-setting"
-                    data-i18n-aria-label="dark_mode" data-i18n-title="dark_mode">🌙</button>
-        </div>
-    </div>
-</header>
+{% include "_header.html" %}
 
-<div class="container pb-4" style="max-width: 1000px;">
-    <div class="mb-3"><a href="/" id="back-link" class="btn btn-sm btn-secondary" data-i18n="back"></a></div>
+<div class="container pb-4" style="max-width: 1240px;">
+    <div class="mb-3"><a href="/" id="back-link" class="back-link" data-i18n="back"></a></div>
 
     <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
     <div id="error" class="alert alert-warning d-none"></div>
 
-    <div id="game" class="d-none">
-        <div class="d-flex gap-3 align-items-start mb-4">
-            <img id="cover" class="game-cover flex-shrink-0" alt="">
-            <div>
-                <h1 id="title" class="h3 mb-1"></h1>
-                <span id="platform" class="badge text-bg-secondary"></span>
-                <span id="release" class="badge text-bg-primary d-none"></span>
-                <span id="pegi" class="badge text-bg-dark border d-none"></span>
-                <div id="genres" class="mt-2"></div>
-                <!-- The best price of any edition, right under the title (what people come for) -->
-                <div id="price-summary" class="mt-3"></div>
+    <!-- The shop page layout (user's choice of the mock-ups, 2026-10-10, "1 · Caixa de compra"): the
+         game on the left (cover and details, then its pictures and videos, used copies, reviews, and
+         the price history last), the buy box on the right, on screen all the way down. On a phone one
+         column, the buy box right after the title. -->
+    <div id="game" class="d-none gp">
+        <div class="gp-top">
+            <div class="gp-cover">
+                <img id="cover" class="game-cover" alt="">
+                <div id="cover-thumbs" class="cover-thumbs"></div>
+            </div>
+            <div class="gp-info min-w-0">
+                <div class="gp-head">
+                    <div id="platform" class="game-kicker"></div>
+                    <h1 id="title" class="game-name"></h1>
+                    <div class="d-flex flex-wrap gap-2 mt-2">
+                        <span id="critics" class="badge badge-soft badge-critics d-none"></span>
+                        <span id="release" class="badge badge-soft badge-release d-none"></span>
+                        <span id="pegi" class="badge badge-soft d-none"></span>
+                        <span id="year" class="badge badge-soft d-none"></span>
+                        <span id="genres" class="d-contents"></span>
+                    </div>
+                </div>
+                <!-- The same game on other platforms ("Também para Xbox Series X|S, desde 47,89 €") -->
+                <div id="other-platforms" class="other-platforms mt-3"></div>
+                <!-- About the game: the store's description (Portuguese) and / or IGDB's summary, the facts
+                     (publisher, release, time to beat…), what the chosen edition includes -->
+                <section id="about" class="mt-3 d-none">
+                    <h2 class="h6 mb-2" data-i18n="about"></h2>
+                    <div id="about-text"></div>
+                    <dl id="facts" class="facts mt-3 mb-0"></dl>
+                </section>
+                <div id="edition-info" class="mt-3"></div>
             </div>
         </div>
 
-        <div id="editions"></div>
-        <p id="history-note" class="text-body-secondary small mt-n2 mb-4"></p>
-
-        <!-- About the game: facts (publisher, release, time to beat…), the store's description
-             (Portuguese) and/or IGDB's summary, screenshots, videos -->
-        <section id="about" class="card shadow-sm mb-4 d-none">
-            <div class="card-body">
-                <h2 class="h5 mb-2" data-i18n="about"></h2>
-                <dl id="facts" class="facts small mb-3"></dl>
-                <div id="about-text"></div>
-                <div id="screenshots" class="screenshots mt-3"></div>
-                <div id="videos" class="mt-3 d-none">
-                    <h3 class="h6 mb-2" data-i18n="videos"></h3>
-                    <div id="video-player" class="ratio ratio-16x9 mb-2 d-none"></div>
-                    <div id="video-list" class="screenshots"></div>
-                    <div class="small text-body-secondary" data-i18n="video_source"></div>
+        <!-- The buy box: the chosen edition's best price and its store, the editions, every store's
+             price, the lowest price, Tenho / Quero -->
+        <aside class="gp-buy">
+            <div class="buy-box">
+                <div id="price-summary"></div>
+                <div id="edition-pick">
+                    <div class="buy-label" data-i18n="edition"></div>
+                    <div id="edition-chips" class="d-flex flex-wrap gap-2"></div>
                 </div>
+                <div id="editions"></div>
             </div>
+        </aside>
+
+        <!-- The game's pictures and videos -->
+        <section id="media" class="gp-media gp-panel d-none">
+            <h2 class="h5 mb-3" data-i18n="pictures_videos"></h2>
+            <div id="screenshots" class="shot-grid"></div>
+            <button type="button" id="shots-more" class="btn btn-sm btn-secondary mt-2 d-none"></button>
+            <div id="videos" class="mt-3 d-none">
+                <div id="video-player" class="ratio ratio-16x9 mb-2 d-none"></div>
+                <div id="video-list" class="video-grid"></div>
+                <div class="small text-body-secondary mt-1" data-i18n="video_source"></div>
+            </div>
+            <!-- IGDB's terms ask for a visible credit where its data is shown -->
+            <div id="igdb-credit" class="small text-body-secondary mt-3 d-none"><span data-i18n="igdb_credit_game"></span> <a href="https://www.igdb.com" target="_blank" rel="noopener">IGDB.com</a></div>
         </section>
 
         <!-- Pre-owned copies people sell (the marketplace) -->
-        <section id="market" class="mt-4">
+        <section id="market" class="gp-market gp-panel">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h2 class="h5 mb-0" data-i18n="market_title"></h2>
                 <a id="sell-link" href="/sell" class="btn btn-sm btn-success" data-i18n="market_sell_this"></a>
@@ -147,8 +240,8 @@
         </section>
 
         <!-- Players' reviews of this game on this platform, 1–10 -->
-        <section id="reviews" class="card shadow-sm mt-4">
-            <div class="card-body">
+        <section id="reviews" class="gp-reviews gp-panel">
+            <div>
                 <h2 class="h5 mb-0" data-i18n="reviews_title"></h2>
                 <p id="reviews-platform" class="small text-body-secondary mb-3"></p>
                 <div id="reviews-summary" class="d-flex flex-wrap align-items-center gap-4 mb-3"></div>
@@ -158,718 +251,16 @@
                         data-i18n="reviews_more"></button>
             </div>
         </section>
+
+        <!-- The chosen edition's price history, last -->
+        <section id="history" class="gp-history gp-panel d-none">
+            <h2 class="h5 mb-3"><span data-i18n="price_history"></span> <span id="history-edition" class="small text-body-secondary fw-normal"></span></h2>
+            <div id="history-charts"></div>
+            <p id="history-note" class="text-body-secondary small mt-2 mb-0"></p>
+        </section>
     </div>
 </div>
 
-<script>
-const GAME_ID = {{ game_id }};
-// t(), eur, LOCALE: static/i18n.js
-const fmtDate = d => new Date(d).toLocaleDateString(LOCALE);
-const fmtDateTime = d => new Date(d).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" });
-
-let game, history, stores = {}, rangeDays = 90;
-const charts = [];
-
-function css(name) {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-function storeColor(slug) {
-    const slot = stores[slug]?.color_slot || 6;
-    return css(`--series-${Math.min(slot, 6)}`);
-}
-
-async function load() {
-    try {
-        const [g, h, s] = await Promise.all([
-            fetch(`/api/games/${GAME_ID}`).then(r => r.ok ? r.json() : Promise.reject(r.status)),
-            fetch(`/api/games/${GAME_ID}/prices?days=3650`).then(r => r.json()),
-            fetch(`/api/stores`).then(r => r.json()),
-        ]);
-        game = g; history = h;
-        s.forEach(store => stores[store.slug] = store);
-        render();
-    } catch (status) {
-        document.getElementById("error").textContent =
-            status === 404 ? t("game_not_found") : t("game_load_error");
-        document.getElementById("error").classList.remove("d-none");
-    }
-    document.getElementById("loading").classList.add("d-none");
-}
-
-function render() {
-    document.title = `${localName(game, "title")} (${game.platform}) · Game Price Tracker`;
-    document.getElementById("title").textContent = localName(game, "title");
-    document.getElementById("platform").textContent = game.platform_name;
-
-    // Upcoming games: announced release date ("31/12" means only the year is known)
-    if (game.release_date && new Date(game.release_date + "T23:59:59") >= new Date()) {
-        const [y, m, d] = game.release_date.split("-");
-        const release = document.getElementById("release");
-        release.textContent = game.date_is_estimate ? t("release_tba", { year: y }) : t("release_on", { date: fmtDate(`${y}-${m}-${d}T12:00:00`) });
-        release.classList.remove("d-none");
-    }
-
-    const cover = game.image || game.editions.flatMap(e => e.offers).find(o => o.image)?.image
-        || (game.cover_image_id ? igdbImage(game.cover_image_id, "t_cover_big") : null);
-    if (cover) document.getElementById("cover").src = cover;
-    else document.getElementById("cover").classList.add("d-none");
-
-    renderFacts();
-    renderPriceSummary();
-    renderAbout();
-
-    const firstDate = history.flatMap(o => o.history).map(p => p.date).sort()[0];
-    document.getElementById("history-note").textContent = firstDate
-        ? t("tracked_since", { date: fmtDate(firstDate) })
-        : "";
-
-    const container = document.getElementById("editions");
-    container.innerHTML = "";
-    game.editions.forEach((edition, i) => container.appendChild(renderEdition(edition, i)));
-    drawCharts();
-    loadMarket();
-    loadReviewsOnce();
-    fillCollectionButtons();
-
-    document.getElementById("game").classList.remove("d-none");
-}
-
-// "Melhor preço agora: 26,99 € · Mega Mania [Ver na loja]": the cheapest new copy in stock of any
-// edition (named when the game has several), above the fold on a phone
-function renderPriceSummary() {
-    const offers = game.editions.flatMap(e => e.offers.filter(o => o.in_stock && o.condition === "new").map(o => ({ ...o, edition: e })));
-    const best = offers.sort((a, b) => a.price - b.price)[0];
-    const box = document.getElementById("price-summary");
-    if (!best) { box.innerHTML = ""; return; }
-    const edition = game.editions.length > 1 ? ` · ${esc(localName(best.edition))}` : "";
-    box.innerHTML = `
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            <span class="fs-5">${t("best_price_now")} <strong>${eur.format(best.price)}</strong></span>
-            <span class="text-body-secondary">${esc(storeName(best.store))}${edition}</span>
-            <a href="${esc(best.url)}" target="_blank" rel="noopener" class="btn btn-sm btn-primary offer-link">${t("view_in_store")}</a>
-            ${best.edition.at_historical_low ? `<span class="badge text-bg-success">${t("lowest_ever_now")}</span>` : ""}
-        </div>`;
-}
-
-function igdbImage(id, size) {
-    return `https://images.igdb.com/igdb/image/upload/${size}/${encodeURIComponent(id)}.jpg`;
-}
-
-// PEGI, genres and facts (publisher, developer, release, rating) from IGDB, with the
-// stores' data sheet filling the gaps
-function renderFacts() {
-    const sd = game.store_details || {};
-    if (game.pegi) {
-        const pegi = document.getElementById("pegi");
-        pegi.textContent = `PEGI ${game.pegi}`;
-        pegi.classList.remove("d-none");
-    }
-
-    const genres = (game.genres || sd["Género"] || "").split(",").map(g => g.trim()).filter(Boolean);
-    document.getElementById("genres").innerHTML =
-        genres.map(g => `<span class="badge rounded-pill text-bg-secondary me-1">${esc(g)}</span>`).join("");
-
-    const released = game.first_release_date;
-    const facts = [
-        [t("publisher"), game.publishers || sd["Editora"]],
-        [t("developer"), game.developers || sd["Produtora"]],
-        [t("released"), released && new Date(released + "T12:00:00") <= new Date() ? fmtDate(released + "T12:00:00") : null],
-        [t("rating"), game.rating ? `${game.rating}/100 (IGDB)` : null],
-        [t("time_to_beat"), timeToBeat()],
-    ].filter(([, value]) => value);
-    document.getElementById("facts").innerHTML =
-        facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
-}
-
-// "História ~25 h · Com extras ~40 h · 100% ~60 h (IGDB, 31 jogadores)": IGDB players' times
-function timeToBeat() {
-    const hours = seconds => seconds ? `~${fmtNumber(Math.max(1, Math.round(seconds / 3600)))} h` : null;
-    const parts = [["ttb_hastily", game.ttb_hastily], ["ttb_normally", game.ttb_normally], ["ttb_completely", game.ttb_completely]]
-        .filter(([, s]) => s).map(([key, s]) => `${t(key)} ${hours(s)}`);
-    return parts.length ? `${parts.join(" · ")} (${t("ttb_source", { count: game.ttb_count || 0 })})` : null;
-}
-
-// The store's Portuguese description of the standard edition if there is one; otherwise
-// the longest store description; IGDB's English summary shown too (or on its own)
-function renderAbout() {
-    const parts = [];
-    const storeText = aboutStoreText();
-
-    const store = storeText && { text: storeText.text, label: t(LANG === "pt" ? "store_description" : "store_description_pt", { store: storeName(storeText.store) }) };
-    const igdb = game.summary && { text: game.summary, label: t("igdb_summary") };
-    const [main, extra] = LANG === "pt" ? [store || igdb, store && igdb] : [igdb || store, igdb && store];
-
-    if (main) {
-        parts.push(`${clampedText(main.text, 6)}<div class="small text-body-secondary mt-1">${esc(main.label)}</div>`);
-    }
-    if (extra) {
-        parts.push(`<details class="mt-2"><summary class="small">${esc(extra.label)}</summary>
-            <div class="mt-1">${clampedText(extra.text, 4)}</div></details>`);
-    }
-
-    // IGDB's screenshots; for games IGDB doesn't have, the stores' photos of the standard edition
-    const shots = (game.screenshot_ids || []).map(id => ({ full: igdbImage(id, "t_1080p"), small: igdbImage(id, "t_screenshot_med") }));
-    const standardPhotos = game.editions.find(e => e.name === "Standard")?.photos || [];
-    const pictures = shots.length ? shots : standardPhotos.map(p => ({ full: p.url, small: p.url }));
-    document.getElementById("screenshots").innerHTML = pictures.map(p => `
-        <a href="${esc(p.full)}" target="_blank" rel="noopener">
-            <img src="${esc(p.small)}" alt="${t("screenshot")}" loading="lazy"></a>`).join("");
-
-    renderVideos();
-
-    document.getElementById("about-text").innerHTML = parts.join("");
-    const hasFacts = Boolean(document.getElementById("facts").children.length);
-    document.getElementById("about").classList.toggle("d-none", !hasFacts && !parts.length && !pictures.length && !game.videos.length);
-    bindClampToggles(document.getElementById("about"));
-}
-
-// IGDB's YouTube videos as thumbnails (i.ytimg.com); the player (youtube-nocookie) is only
-// loaded on click, so opening the page doesn't load YouTube's player and its cookies
-function renderVideos() {
-    const videos = game.videos || [];
-    document.getElementById("videos").classList.toggle("d-none", !videos.length);
-    const player = document.getElementById("video-player");
-    player.innerHTML = "";
-    player.classList.add("d-none");
-
-    const list = document.getElementById("video-list");
-    list.innerHTML = videos.map(v => {
-        const name = v.name || t("videos");
-        return `<button type="button" class="video-thumb" data-video="${esc(v.id)}" title="${esc(name)}"
-                    aria-label="${esc(t("play_video", { name }))}">
-                <img src="https://i.ytimg.com/vi/${encodeURIComponent(v.id)}/mqdefault.jpg" alt="" loading="lazy" class="rounded">
-                <span class="play" aria-hidden="true">▶</span>
-                <span class="name">${esc(name)}</span></button>`;
-    }).join("");
-    list.querySelectorAll("[data-video]").forEach(btn => btn.onclick = () => {
-        const id = encodeURIComponent(btn.dataset.video);
-        player.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0"
-            title="${esc(btn.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowfullscreen class="rounded"></iframe>`;
-        player.classList.remove("d-none");
-        player.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
-}
-
-// A store description about the game itself: the standard edition's, or a special edition's
-// without its contents list ("Conteúdo da Collector's Edition: - ..." belongs to "O que inclui")
-function aboutStoreText() {
-    const standard = game.editions.find(e => e.name === "Standard");
-    if (standard?.descriptions.length) return standard.descriptions[0];
-    for (const d of game.editions.flatMap(e => e.descriptions)) {
-        const text = withoutContents(d.text);
-        if (text.length >= 150) return { ...d, text };
-    }
-    return null;
-}
-
-function withoutContents(text) {
-    const lines = text.split("\n");
-    const start = lines.findIndex(l => /conte[uú]do|inclui|includes|cont[eé]m/i.test(l));
-    if (start < 0) return text;
-    let end = start + 1;
-    while (end < lines.length && /^\s*[-–•*·]/.test(lines[end])) end++;
-    return [...lines.slice(0, start), ...lines.slice(end)].join("\n").trim();
-}
-
-// Long text shown on N lines with a "Ler mais" button
-function clampedText(text, lines) {
-    const long = text.length > lines * 90;
-    const html = esc(text).replace(/\n/g, "<br>");
-    return `<div class="clamped" style="--lines:${lines}">${html}</div>`
-        + (long ? `<button type="button" class="btn btn-sm btn-secondary mt-1 clamp-toggle">${t("read_more")}</button>` : "");
-}
-
-function bindClampToggles(root) {
-    root.querySelectorAll(".clamp-toggle").forEach(btn => btn.onclick = () => {
-        const text = btn.previousElementSibling;
-        const open = text.classList.toggle("open");
-        btn.textContent = open ? t("read_less") : t("read_more");
-    });
-}
-
-// "Conteúdo da Collector's Edition: - Estátua - Artbook ..." → ["Estátua", "Artbook", ...]
-function editionContents(text) {
-    const lines = text.split("\n");
-    const start = lines.findIndex(l => /conte[uú]do|inclui|includes|cont[eé]m/i.test(l));
-    if (start < 0) return [];
-    const items = [];
-    // items on the same line: "Conteúdo: - A - B - C"
-    const sameLine = lines[start].split(/\s[-–•]\s/).slice(1);
-    if (sameLine.length > 1) return sameLine.map(s => s.trim()).filter(Boolean);
-    for (const line of lines.slice(start + 1)) {
-        const m = line.match(/^\s*[-–•*·]\s*(.+)/);
-        if (!m) { if (items.length) break; else continue; }
-        items.push(m[1].trim());
-    }
-    return items;
-}
-
-// What a special edition includes, from the store descriptions, with the stores' photos
-function editionInfo(edition) {
-    if (edition.name === "Standard" || (!edition.descriptions.length && !edition.photos.length)) return "";
-    let text = "";
-    if (edition.descriptions.length) {
-        const withList = edition.descriptions.map(d => ({ ...d, items: editionContents(d.text) })).find(d => d.items.length);
-        const source = withList || edition.descriptions[0];
-        const body = withList
-            ? `<ul class="mb-1">${withList.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`
-            : clampedText(source.text, 4);
-        text = `${body}<div class="small text-body-secondary">${esc(t("according_to", { store: storeName(source.store) }))}</div>`;
-    }
-    return `
-        <div class="edition-info mb-3">
-            <h3 class="h6 mb-1">${t("whats_included")}</h3>
-            ${text}
-            ${editionPhotos(edition.photos)}
-        </div>`;
-}
-
-function editionPhotos(photos) {
-    if (!photos.length) return "";
-    const stores = [...new Set(photos.map(p => storeName(p.store)))].join(", ");
-    return `
-        <div class="screenshots mt-2">${photos.map(p => `
-            <a href="${esc(p.url)}" target="_blank" rel="noopener">
-                <img src="${esc(p.url)}" alt="${t("photo")}" loading="lazy"></a>`).join("")}</div>
-        <div class="small text-body-secondary">${esc(t("photos_from", { store: stores }))}</div>`;
-}
-
-function renderEdition(edition, i) {
-    const card = document.createElement("section");
-    card.className = "card shadow-sm mb-4";
-
-    const low = edition.lowest_price;
-    const best = edition.offers.find(o => o.in_stock);
-    // A store dropped it to the lowest price ever: the same rule as the cards' badge and the tag
-    // (app/services/tag_service.py, AT_HISTORICAL_LOW)
-    const isLowNow = edition.at_historical_low;
-
-    card.innerHTML = `
-        <div class="card-body">
-            <h2 class="h5 mb-3">${esc(localName(edition))}
-                ${edition.digital_code ? `<span class="badge text-bg-warning ms-1 align-middle"
-                    title="${t("digital_code_hint")}">${t("digital_code")}</span>` : ""}</h2>
-
-            ${editionInfo(edition)}
-
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                ${best && game.editions.length > 1 ? `<span class="badge bg-body-secondary text-body border fs-6 fw-normal text-wrap text-start">
-                    ${t("best_price_now")} <strong>${eur.format(best.price)}</strong> · ${esc(storeName(best.store))}</span>` : ""}
-                ${low ? `<span class="badge low-badge fs-6 fw-normal text-wrap text-start">
-                    ${t("historical_low")} <strong>${eur.format(low.price)}</strong> · ${fmtDate(low.date)} · ${esc(storeName(low.store))}</span>` : ""}
-                ${isLowNow ? `<span class="badge text-bg-success fs-6 fw-normal">${t("lowest_ever_now")}</span>` : ""}
-            </div>
-            <div class="d-flex flex-wrap gap-2 mb-3" data-collection="${edition.id}"></div>
-
-            ${offersTable(edition)}
-
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-4 mb-2">
-                <h3 class="h6 mb-0">${t("price_history")} <span class="text-body-secondary fw-normal small">${t("new_copies")}</span></h3>
-                ${periodButtons()}
-            </div>
-            <div class="chart-box"><canvas id="chart-${i}" role="img"
-                aria-label="${esc(t("price_history_of", { name: localName(edition) }))}"></canvas></div>
-            <p class="small text-body-secondary mt-1 mb-0">${t("dashed_sold_out")}</p>
-
-            <details class="mt-2">
-                <summary class="small">${t("history_table")}</summary>
-                ${historyTable(edition)}
-            </details>
-        </div>`;
-    return card;
-}
-
-// The chart period (30 days … all time): the same for every chart on the page
-function periodButtons() {
-    const periods = [[30, "days_30"], [90, "days_90"], [365, "year_1"], [0, "all_time"]];
-    return `<div class="btn-group btn-group-sm" role="group" aria-label="${esc(t("period"))}">${periods.map(([days, key]) => `
-        <button type="button" class="btn ${days === rangeDays ? "btn-primary active" : "btn-secondary"}" data-days="${days}"
-            aria-pressed="${days === rangeDays}">${t(key)}</button>`).join("")}</div>`;
-}
-
-function offersTable(edition) {
-    const rows = edition.offers.map(o => `
-        <tr class="${o.in_stock ? "" : "text-body-secondary"}">
-            <td><span class="swatch" style="background:${storeColor(o.store)}"></span>${esc(storeName(o.store))}
-                ${o.condition === "used" ? `<span class="badge text-bg-secondary d-sm-none ms-1">${t("used")}</span>` : ""}</td>
-            <td class="d-none d-sm-table-cell">${o.condition === "used" ? `<span class="badge text-bg-secondary">${t("used")}</span>` : t("new")}</td>
-            <td class="text-end">
-                ${o.was_price ? `<small class="text-decoration-line-through text-body-secondary me-1">${eur.format(o.was_price)}</small>
-                    <span class="badge text-bg-danger me-1">-${o.discount_percent}%</span>` : ""}
-                <strong>${eur.format(o.price)}</strong>
-            </td>
-            <td>${o.is_preorder ? `<span class="badge text-bg-primary">${t("preorder")}</span>` : o.in_stock ? t("in_stock") : t("sold_out")}</td>
-            <td class="text-end"><a href="${esc(o.url)}" target="_blank" rel="noopener"
-                class="btn btn-sm offer-link ${o.in_stock ? "btn-primary" : "btn-secondary"}"
-                aria-label="${esc(t("view_at", { store: storeName(o.store) }))}"><span class="d-none d-sm-inline">${t("view_in_store")}</span><span
-                class="d-sm-none" aria-hidden="true">${t("store_short")} ↗</span></a></td>
-        </tr>`).join("");
-
-    return `
-        <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0 prices">
-                <thead><tr><th>${t("col_store")}</th><th class="d-none d-sm-table-cell">${t("col_condition")}</th><th class="text-end">${t("col_price")}</th><th>${t("col_stock")}</th><th></th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
-        </div>`;
-}
-
-function editionHistory(edition) {
-    return history.filter(o => o.edition_id === edition.id && o.condition === "new");
-}
-
-function historyTable(edition) {
-    const low = edition.lowest_price;
-    const rows = editionHistory(edition)
-        .flatMap(o => o.history.map(p => ({ ...p, store: o.store, offer_id: o.offer_id })))
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .map(p => {
-            const isLow = low && p.offer_id === low.offer_id && p.date === low.date;
-            return `<tr class="${isLow ? "table-success" : ""}">
-                <td>${fmtDateTime(p.date)}</td><td>${esc(storeName(p.store))}</td>
-                <td class="text-end">${eur.format(p.price)}${isLow ? " ★" : ""}</td>
-                <td>${p.in_stock ? t("in_stock") : t("sold_out")}</td></tr>`;
-        }).join("");
-
-    return `<table class="table table-sm mt-2 mb-0 prices">
-        <thead><tr><th>${t("col_date")}</th><th>${t("col_store")}</th><th class="text-end">${t("col_price")}</th><th>${t("col_stock")}</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="4" class="text-body-secondary">${t("no_history")}</td></tr>`}</tbody></table>`;
-}
-
-// The copies people sell for this game (render() runs again on theme changes: loaded once)
-let marketLoaded = false;
-async function loadMarket() {
-    document.getElementById("sell-link").href = `/sell?game_id=${GAME_ID}`;
-    if (marketLoaded) return;
-    marketLoaded = true;
-    const listings = await fetch(`/api/listings?game_id=${GAME_ID}`).then(r => r.json()).catch(() => []);
-    document.getElementById("market-listings").innerHTML = listings.map(l => listingCard(l)).join("");
-    document.getElementById("market-empty").classList.toggle("d-none", listings.length > 0);
-}
-
-// Vertical crosshair under the cursor
-const crosshair = {
-    id: "crosshair",
-    afterDatasetsDraw(chart) {
-        const active = chart.tooltip?.getActiveElements?.() || [];
-        if (!active.length) return;
-        const x = active[0].element.x, { top, bottom } = chart.chartArea, ctx = chart.ctx;
-        ctx.save();
-        ctx.strokeStyle = css("--baseline");
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
-        ctx.restore();
-    },
-};
-
-function drawCharts() {
-    charts.forEach(c => c.destroy());
-    charts.length = 0;
-
-    const now = new Date();
-    const rangeStart = rangeDays ? new Date(now - rangeDays * 86400000) : null;
-
-    game.editions.forEach((edition, i) => {
-        const low = edition.lowest_price;
-        const activeOffers = new Set(edition.offers.map(o => o.offer_id));
-        const offers = editionHistory(edition);
-        const allDates = offers.flatMap(o => o.history.map(p => new Date(p.date)));
-        if (!allDates.length) return;
-
-        const firstDate = new Date(Math.min(...allDates));
-        const xMin = rangeStart && rangeStart > firstDate ? rangeStart : firstDate;
-
-        const datasets = offers.map(o => {
-            const color = storeColor(o.store);
-            const points = o.history.map(p => ({ x: new Date(p.date), y: p.price, in_stock: p.in_stock, date: p.date }));
-            // The last price still holds today for products the store still sells
-            const last = points[points.length - 1];
-            if (activeOffers.has(o.offer_id)) points.push({ ...last, x: now, extended: true });
-
-            const isLow = p => low && o.offer_id === low.offer_id && p.date === low.date && !p.extended;
-            return {
-                label: storeName(o.store),
-                data: points,
-                stepped: true,
-                borderColor: color,
-                backgroundColor: color,
-                borderWidth: 2,
-                borderCapStyle: "round",
-                borderJoinStyle: "round",
-                segment: { borderDash: ctx => ctx.p0.raw.in_stock ? undefined : [4, 4] },
-                pointRadius: ctx => isLow(ctx.raw) ? 6 : 0,
-                pointHoverRadius: 5,
-                pointBorderColor: css("--surface-1"),
-                pointBorderWidth: ctx => isLow(ctx.raw) ? 2 : 1,
-                pointHitRadius: 8,
-            };
-        });
-
-        const annotations = low ? {
-            lowLine: {
-                type: "line",
-                yMin: low.price, yMax: low.price,
-                borderColor: css("--text-secondary"),
-                borderWidth: 1,
-                label: {
-                    display: true,
-                    content: t("chart_low", { price: eur.format(low.price) }),
-                    position: "start",
-                    color: css("--text-primary"),
-                    backgroundColor: css("--surface-1"),
-                    font: { size: 11, weight: "600" },
-                    padding: 3,
-                    yAdjust: -10,
-                },
-            },
-        } : {};
-
-        Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-        charts.push(new Chart(document.getElementById(`chart-${i}`), {
-            type: "line",
-            data: { datasets },
-            plugins: [crosshair],
-            options: {
-                maintainAspectRatio: false,
-                animation: false,
-                interaction: { mode: "nearest", axis: "x", intersect: false },
-                scales: {
-                    x: {
-                        type: "time",
-                        min: xMin, max: now,
-                        time: { tooltipFormat: "dd/MM/yyyy HH:mm", displayFormats: { hour: "HH:mm", day: "dd/MM", week: "dd/MM", month: "MM/yyyy" } },
-                        grid: { color: css("--gridline") },
-                        border: { color: css("--baseline") },
-                        ticks: { color: css("--text-muted"), maxTicksLimit: 8 },
-                    },
-                    y: {
-                        grace: "10%",
-                        grid: { color: css("--gridline") },
-                        border: { display: false },
-                        ticks: { color: css("--text-muted"), callback: v => eur.format(v) },
-                    },
-                },
-                plugins: {
-                    legend: {
-                        display: datasets.length > 1,
-                        align: "start",
-                        labels: { color: css("--text-secondary"), boxWidth: 16, boxHeight: 3 },
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: ctx => {
-                                const p = ctx.raw;
-                                return `${ctx.dataset.label}: ${eur.format(p.y)}${p.in_stock ? "" : ` ${t("chart_sold_out")}`}${p.extended ? ` ${t("chart_current")}` : ""}`;
-                            },
-                        },
-                    },
-                    annotation: { annotations },
-                },
-            },
-        }));
-    });
-}
-
-// Period buttons (one group per chart, one setting): the selected one solid blue, the others grey
-document.addEventListener("click", e => {
-    const btn = e.target.closest("[data-days]");
-    if (!btn) return;
-    rangeDays = Number(btn.dataset.days);
-    document.querySelectorAll("[data-days]").forEach(b => {
-        const selected = Number(b.dataset.days) === rangeDays;
-        b.classList.toggle("active", selected);
-        b.classList.toggle("btn-primary", selected);
-        b.classList.toggle("btn-secondary", !selected);
-        b.setAttribute("aria-pressed", selected);
-    });
-    drawCharts();
-});
-
-// toggleDark(): static/common.js. The charts read their colours from CSS, so redraw them
-function onThemeChange() {
-    if (game) render();
-}
-
-// Back to the search or front page tab this game was opened from (remembered by the
-// search page for this browser tab); works after reloads and doesn't rely on browser history
-function setBackLink() {
-    const last = saved("lastListPage", null, "sessionStorage");
-    if (!last || !last.startsWith("/?")) return;   // only our own pages
-    const link = document.getElementById("back-link");
-    link.href = last;
-    if (new URLSearchParams(last.slice(1)).get("q")) link.textContent = t("back_search");
-}
-
-// --- the user's collection: "Tenho" / "Quero" per edition (app/services/collection_service.py) ---
-const accountReady = renderAccountArea();
-let collectionIds = null;      // {edition_id: {owned?: item id, wishlist?: item id}}, loaded once
-
-async function fillCollectionButtons() {
-    await accountReady;
-    if (currentUser && collectionIds === null) {
-        collectionIds = await fetch("/api/collection/editions").then(r => r.ok ? r.json() : {}).catch(() => ({}));
-    }
-    document.querySelectorAll("[data-collection]").forEach(box => {
-        const mine = (collectionIds || {})[box.dataset.collection] || {};
-        box.innerHTML = ["owned", "wishlist"].map(kind => `
-            <button type="button" class="btn btn-sm ${mine[kind] ? "btn-primary" : "btn-secondary"}" data-kind="${kind}"
-                    aria-pressed="${!!mine[kind]}">${t(mine[kind] ? `collection_in_${kind}` : `collection_add_${kind}`)}</button>`).join("")
-            + (mine.owned || mine.wishlist ? `<a href="/collection${mine.owned ? "" : "?tab=wishlist"}" class="btn btn-sm btn-link">${t("collection_open")}</a>` : "");
-        box.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => toggleCollection(Number(box.dataset.collection), b.dataset.kind));
-    });
-}
-
-async function toggleCollection(editionId, kind) {
-    if (!currentUser) return location.assign(`/account?next=${encodeURIComponent(location.pathname)}`);
-    const mine = collectionIds[editionId] || {};
-    const { ok, data } = mine[kind]
-        ? await api(`/api/collection/${mine[kind]}`, { method: "DELETE" })
-        : await api("/api/collection", { body: { edition_id: editionId, kind } });
-    if (!ok) return;
-    collectionIds = await fetch("/api/collection/editions").then(r => r.json());   // "owned" also clears the wish
-    fillCollectionButtons();
-}
-
-// --- players' reviews (app/services/review_service.py) ---
-let reviewPage = null;          // the API's answer: {summary, mine, reviews, page, pages}
-let reviewsLoaded = false, editingReview = false;
-
-// render() runs again on theme changes: load once, and don't redraw a form being written
-async function loadReviewsOnce() {
-    if (reviewsLoaded) return;
-    reviewsLoaded = true;
-    document.getElementById("reviews-more").onclick = () => loadReviews(reviewPage.page + 1);
-    await accountReady;
-    loadReviews(1);
-}
-
-async function loadReviews(page) {
-    const data = await fetch(`/api/games/${GAME_ID}/reviews?page=${page}`).then(r => r.ok ? r.json() : null).catch(() => null);
-    if (!data) return;
-    if (page > 1) data.reviews = reviewPage.reviews.concat(data.reviews);
-    showReviews(data);
-}
-
-function showReviews(data) {
-    reviewPage = data;
-    const { summary, reviews, page, pages } = data;
-    document.getElementById("reviews-platform").textContent = t("reviews_platform", { platform: game.platform_name });
-    const most = Math.max(1, ...summary.distribution);
-    const bar = (score, n) => `
-        <div class="d-flex align-items-center gap-2">
-            <span class="small text-end" style="width: 1.25rem;">${score}</span>
-            <div class="progress flex-fill" style="height: .5rem;" role="progressbar" aria-valuemin="0"
-                 aria-valuemax="${summary.count}" aria-valuenow="${n}" aria-label="${esc(t("reviews_bar", { score, count: n }))}">
-                <div class="progress-bar" style="width: ${100 * n / most}%"></div></div>
-            <span class="small text-body-secondary" style="width: 1.5rem;">${n}</span>
-        </div>`;
-    document.getElementById("reviews-summary").innerHTML = summary.count ? `
-        <div class="text-center">
-            <div class="display-6 fw-semibold">${fmtNumber(summary.average)}<span class="fs-6 text-body-secondary">/10</span></div>
-            <div class="small text-body-secondary">${esc(summary.count === 1 ? t("reviews_count_one") : t("reviews_count", { count: summary.count }))}</div>
-        </div>
-        <div class="review-bars flex-fill">${summary.distribution.map((n, i) => bar(i + 1, n)).reverse().join("")}</div>`
-        : `<p class="small text-body-secondary mb-0">${esc(t("reviews_none"))}</p>`;
-    renderMyReview();
-    const list = document.getElementById("reviews-list");
-    list.innerHTML = reviews.filter(r => !r.mine).map(reviewItem).join("");
-    bindClampToggles(list);
-    document.getElementById("reviews-more").classList.toggle("d-none", page >= pages);
-}
-
-function scoreBadge(score) {
-    const style = score >= 8 ? "text-bg-success" : score >= 5 ? "text-bg-warning" : "text-bg-danger";
-    return `<span class="badge ${style} fs-6">${score}/10</span>`;
-}
-
-function reviewItem(r) {
-    return `<article class="border-top pt-3">
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">${scoreBadge(r.score)}
-            ${r.title ? `<strong>${esc(r.title)}</strong>` : ""}</div>
-        ${r.body ? clampedText(r.body, 5) : ""}
-        <div class="small text-body-secondary mt-1">
-            <a href="/user/${encodeURIComponent(r.username)}">@${esc(r.username)}</a>
-            ${r.owner ? `<span class="badge bg-body-secondary text-body border" title="${esc(t("review_owner_hint"))}">📚 ${esc(t("review_owner"))}</span>` : ""}
-            · ${fmtDate(r.created_at)}${r.edited ? ` (${esc(t("review_edited"))})` : ""}
-            ${r.mine ? "" : `· ${reportButton("review", r.id)}`}
-        </div>
-    </article>`;
-}
-
-// The user's own review (with Edit / Delete), the form, or a link to log in
-function renderMyReview() {
-    const box = document.getElementById("review-mine");
-    const mine = reviewPage.mine;
-    if (!currentUser) {
-        box.innerHTML = `<a href="/account?next=${encodeURIComponent(location.pathname)}" class="small">${esc(t("reviews_login"))}</a>`;
-    } else if (editingReview) {
-        box.innerHTML = reviewForm(mine);
-        const form = box.querySelector("form");
-        form.querySelector("[value=cancel]").onclick = () => { editingReview = false; renderMyReview(); };
-        form.onsubmit = e => { e.preventDefault(); saveReview(form); };
-    } else if (mine) {
-        box.innerHTML = `<h3 class="h6">${esc(t("review_yours"))}</h3>
-            ${mine.hidden ? `<div class="alert alert-warning py-1 px-2 small mb-2">${esc(t("review_hidden"))}</div>` : ""}
-            ${reviewItem({ ...mine, mine: true })}
-            ${mine.hidden ? "" : `<div class="d-flex gap-2 mt-2">
-                <button type="button" class="btn btn-sm btn-primary" data-review="edit">${esc(t("review_edit"))}</button>
-                <button type="button" class="btn btn-sm btn-danger" data-review="delete">${esc(t("review_delete"))}</button>
-            </div>`}`;
-        bindClampToggles(box);
-        box.querySelector("[data-review=edit]")?.addEventListener("click", () => { editingReview = true; renderMyReview(); });
-        box.querySelector("[data-review=delete]")?.addEventListener("click", deleteReview);
-    } else {
-        box.innerHTML = `<button type="button" class="btn btn-sm btn-primary">${esc(t("review_write"))}</button>`;
-        box.querySelector("button").onclick = () => { editingReview = true; renderMyReview(); };
-    }
-}
-
-function reviewForm(mine) {
-    const scores = Array.from({ length: 10 }, (_, i) => i + 1).map(n => `
-        <input type="radio" class="btn-check" name="score" id="score-${n}" value="${n}" required ${mine?.score === n ? "checked" : ""}>
-        <label class="btn btn-sm btn-secondary" for="score-${n}">${n}</label>`).join("");
-    return `<form class="border rounded p-2 p-sm-3">
-        <fieldset class="mb-2">
-            <legend class="form-label small mb-1">${esc(t("review_score"))}</legend>
-            <div class="review-scores">${scores}</div>
-        </fieldset>
-        <label for="review-title" class="form-label small">${esc(t("review_title_label"))}</label>
-        <input id="review-title" name="title" maxlength="120" class="form-control form-control-sm mb-2" value="${esc(mine?.title || "")}">
-        <label for="review-body" class="form-label small">${esc(t("review_body_label"))}</label>
-        <textarea id="review-body" name="body" maxlength="4000" rows="4" class="form-control form-control-sm mb-2">${esc(mine?.body || "")}</textarea>
-        <div class="alert d-none py-1 px-2 small" role="alert"></div>
-        <div class="d-flex justify-content-end gap-2">
-            <button type="button" value="cancel" class="btn btn-sm btn-secondary">${esc(t("cancel"))}</button>
-            <button type="submit" class="btn btn-sm btn-primary">${esc(t("review_save"))}</button>
-        </div>
-    </form>`;
-}
-
-async function saveReview(form) {
-    const fields = form.elements;     // form.title would be the form's own title attribute
-    const { ok, data } = await api(`/api/games/${GAME_ID}/reviews/mine`, { method: "PUT",
-        body: { score: Number(fields.score.value), title: fields.title.value, body: fields.body.value } });
-    if (!ok) {
-        const message = form.querySelector(".alert");
-        message.className = "alert alert-warning py-1 px-2 small";
-        message.textContent = t(`error_${data?.error || "unknown"}`);
-        return;
-    }
-    editingReview = false;
-    showReviews(data);
-}
-
-async function deleteReview() {
-    if (!confirm(t("review_delete_confirm"))) return;
-    const { ok, data } = await api(`/api/games/${GAME_ID}/reviews/mine`, { method: "DELETE" });
-    if (ok) showReviews(data);
-}
-
-applyI18n();
-setBackLink();   // after applyI18n, which sets the default "← Voltar"
-load();
-</script>
+<script src="/static/pages/game.js"></script>
 </body>
 </html>

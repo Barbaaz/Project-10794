@@ -119,3 +119,30 @@ def test_a_run_reads_the_listings_then_the_longest_unseen_product_pages():
     assert len(games) == 2 + 3                              # the listing's two games + three product pages
     assert scraper.still_listed == set(others) | {g["url"] for g in parse_products(LISTING)}
     assert {g["url"] for g in games} <= scraper.still_listed      # what was read is never deactivated
+    assert not any(url in scraper.http.asked for url in TechinnScraper.hardware_urls)   # consoles: only when on
+
+
+# Cards from its console pages (saved 2026-10-10)
+CONSOLES = "<main><ul>" + "".join([
+    card("nintendo-switch-oled-jp-switch", 142680295, "Nintendo Switch OLED JP switch", "391.49"),
+    card("nintendo-switch-2---mario-kart-world", 142080234, "Nintendo Switch 2 + Mario Kart World", "735.99"),
+    card("playstation-jogador-remoto-ps-portal", 141903455, "Playstation Jogador remoto PS Portal", "259.99"),
+    card("playstation-mini-consola-classica", 141477056, "Playstation Mini Consola Clássica", "99.99"),  # retro: no platform
+    card("xbox-console-series-s-1tb", 141845888, "XBOX Console Series S 1TB", "864.99"),
+]) + "</ul></main>"
+
+
+def test_consoles_are_read_with_read_hardware_and_never_deactivated():
+    from core.hardware import hardware_key
+    pages = {url: CONSOLES if "playstation" in url else "<html></html>" for url in TechinnScraper.hardware_urls}
+    scraper = TechinnScraper(http=FakeHttp(pages))
+    scraper.read_hardware = True
+
+    products = scraper.scrape_catalog()
+    consoles = [p for p in products if p["kind"] == "console"]
+    assert [(p["external_name"], p["console"]) for p in consoles] == [
+        ("Switch OLED JP", "Switch"), ("Switch 2 + Mario Kart World", "Switch2"),
+        ("Consola PlayStation Portal PS5", "PS5"), ("Console Xbox Series S 1TB", "XboxSeries")]
+    # the same key as other stores' "Consola Playstation Portal PS5"
+    assert hardware_key(consoles[2]["external_name"], "console") == hardware_key("Consola Playstation Portal PS5", "console")
+    assert {p["url"] for p in consoles} <= scraper.still_listed

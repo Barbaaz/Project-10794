@@ -1,0 +1,341 @@
+// The admin page (templates/admin.html). A file, not inline: the site's CSP only runs scripts from files.
+const ACTIONS_BY_KIND = { listing: ["hide_listing", "restore_listing"], user: ["block_user", "unblock_user"],
+                          rating: ["hide_rating", "restore_rating"], review: ["hide_review", "restore_review"] };
+
+function showMessage(ok, text) {
+    const box = document.getElementById("message");
+    box.className = `alert ${ok ? "alert-success" : "alert-warning"} py-2 small`;
+    box.textContent = text;
+}
+
+async function getJSON(path) {
+    const response = await fetch(path);
+    return response.ok ? response.json() : [];
+}
+
+function date(value) {
+    return value ? new Date(value).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) : "";
+}
+
+// --- reports ----------------------------------------------------------------------------------
+function targetSummary(kind, target) {
+    if (!target) return `<em class="text-body-secondary">${esc(t("mod_target_gone"))}</em>`;
+    if (kind === "listing") {
+        const hidden = target.removed_by_moderator ? ` <span class="badge text-bg-dark">${esc(t("mod_hidden"))}</span>` : "";
+        return `<div><strong>${esc(target.title)}</strong> · ${esc(target.platform)} · ${eur.format(target.price)}
+                    ${statusBadge(target.status)}${hidden}</div>
+                <div class="small">${esc(t("listing_seller"))}: ${userLink(target.seller)} ·
+                    <a href="/listing/${target.id}">${esc(t("mod_open_listing"))}</a></div>
+                ${target.description ? `<div class="small text-body-secondary mt-1" style="white-space: pre-line;">${esc(target.description)}</div>` : ""}`;
+    }
+    if (kind === "user") {
+        const blocked = target.is_active ? "" : ` <span class="badge text-bg-danger">${esc(t("mod_blocked"))}</span>`;
+        return `<div>${userLink(target.username)} ${target.display_name && target.display_name !== target.username ?`(${esc(target.display_name)})` : ""}
+                    <span class="badge text-bg-secondary">${esc(t(`role_${target.role}`))}</span>${blocked}</div>
+                <div class="small text-body-secondary">${esc(t("member_since"))} ${new Date(target.created_at).toLocaleDateString(LOCALE)}</div>`;
+    }
+    const hidden = target.hidden ? ` <span class="badge text-bg-dark">${esc(t("mod_hidden"))}</span>` : "";
+    if (kind === "review") {
+        return `<div><strong>${target.score}/10</strong>${hidden}
+                    <span class="small">${userLink(target.writer)} ·
+                        <a href="/game/${target.game_id}">${esc(target.game)} (${esc(target.platform)})</a></span></div>
+                ${target.title ? `<div class="fw-semibold">${esc(target.title)}</div>` : ""}
+                ${target.body ? `<div class="small" style="white-space: pre-line;">${esc(target.body)}</div>` : ""}`;
+    }
+    return `<div><span class="text-warning">${"★".repeat(target.stars)}${"☆".repeat(5 - target.stars)}</span>${hidden}
+                <span class="small">${userLink(target.rater)} → ${userLink(target.rated)} (${esc(target.title)})</span></div>
+            ${target.comment ? `<div>${esc(target.comment)}</div>` : ""}
+            ${target.reply ? `<div class="small ms-3 border-start ps-2">${esc(t("reply_from", { user: userLabel(target.rated) }))} ${esc(target.reply)}</div>` : ""}`;
+}
+
+function reportCard(group) {
+    const [hide, restore] = ACTIONS_BY_KIND[group.kind];
+    const hidden = group.target && (group.target.removed_by_moderator || group.target.hidden || group.target.is_active === false);
+    return `
+        <div class="card" data-kind="${group.kind}" data-target="${group.target_id}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="badge text-bg-primary">${esc(t(`mod_kind_${group.kind}`))}</span>
+                    <span class="small text-body-secondary">${esc(t("mod_report_count", { count: group.reports.length }))}</span>
+                </div>
+                ${targetSummary(group.kind, group.target)}
+                <ul class="list-group list-group-flush small my-2">
+                    ${group.reports.map(r => `<li class="list-group-item px-0 d-flex justify-content-between gap-2">
+                        <span><strong>${esc(t(`reason_${r.reason}`))}</strong> · ${userLink(r.reporter)} · ${date(r.created_at)}
+                            ${r.details ? `<div>${esc(r.details)}</div>` : ""}</span>
+                        <button type="button" class="btn btn-sm btn-secondary align-self-start" data-dismiss="${r.id}">${esc(t("mod_dismiss"))}</button>
+                    </li>`).join("")}
+                </ul>
+                ${group.target ? `<form class="d-flex flex-wrap gap-2 act-form">
+                    <input name="note" maxlength="500" class="form-control form-control-sm flex-fill" style="min-width: 12rem;"
+                           placeholder="${esc(t("mod_note_placeholder"))}" aria-label="${esc(t("mod_note"))}">
+                    <button class="btn btn-sm ${hidden ? "btn-success" : "btn-danger"}" name="action" value="${hidden ? restore : hide}">
+                        ${esc(t(`action_${hidden ? restore : hide}`))}</button>
+                </form>` : ""}
+            </div>
+        </div>`;
+}
+
+async function loadReports() {
+    const groups = await getJSON("/api/mod/reports");
+    const box = document.getElementById("reports");
+    box.innerHTML = groups.map(reportCard).join("");
+    document.getElementById("no-reports").classList.toggle("d-none", groups.length > 0);
+    box.querySelectorAll("[data-dismiss]").forEach(b => b.onclick = () => act("dismiss", Number(b.dataset.dismiss)));
+    box.querySelectorAll(".act-form").forEach(form => form.onsubmit = e => {
+        e.preventDefault();
+        const action = e.submitter.value;
+        if (action === "block_user" && !confirm(t("mod_confirm_block"))) return;
+        act(action, Number(form.closest("[data-target]").dataset.target), form.note.value);
+    });
+}
+
+async function act(action, targetId, note) {
+    const { ok, data } = await api("/api/mod/actions", { body: { action, target_id: targetId, note } });
+    showMessage(ok, ok ? t("mod_done", { action: t(`action_${action}`) }) : t(`error_${data?.error || "unknown"}`));
+    loadReports();
+}
+
+// --- problem purchases ------------------------------------------------------------------------
+async function loadProblems() {
+    const problems = await getJSON("/api/mod/problems");
+    const list = document.getElementById("problems");
+    list.innerHTML = problems.map(p => `
+        <button type="button" class="list-group-item list-group-item-action" data-conversation="${p.id}">
+            <div class="d-flex justify-content-between"><strong>${esc(p.title)}</strong><span>${eur.format(p.price)}</span></div>
+            <div class="small">${esc(t("mod_buyer_seller", { buyer: userLabel(p.buyer), seller: userLabel(p.seller) }))} ·
+                ${esc(t("deal_sent"))} ${date(p.sent_at)}</div>
+        </button>`).join("");
+    document.getElementById("no-problems").classList.toggle("d-none", problems.length > 0);
+    list.querySelectorAll("[data-conversation]").forEach(b => b.onclick = () => showConversation(Number(b.dataset.conversation)));
+}
+
+// A purchase's messages, read-only: who said what, and the purchase steps
+async function showConversation(id) {
+    const c = await fetch(`/api/mod/conversations/${id}`).then(r => r.json());
+    const box = document.getElementById("conversation");
+    box.querySelector(".card-body").innerHTML = `
+        <h2 class="h6">${esc(c.title)} · ${esc(t(`deal_${c.deal_status}`))}</h2>
+        ${c.messages.map(m => m.event
+            ? `<div class="small text-body-secondary text-center my-1">${esc(t(`event_${m.event}`))} · ${date(m.created_at)}</div>`
+            : `<div class="small my-1"><strong>${esc(userLabel(m.sender_id === c.buyer_id ? c.buyer : c.seller))}</strong>
+                   <span class="text-body-secondary">${date(m.created_at)}</span><div style="white-space: pre-line;">${esc(m.body || "")}</div>
+                   ${(m.photos || []).map(p => `<a href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.thumb_url)}" alt=""
+                       style="width: 96px; height: 72px; object-fit: cover;" class="rounded me-1 mt-1"></a>`).join("")}</div>`).join("")}`;
+    box.classList.remove("d-none");
+}
+
+// --- log --------------------------------------------------------------------------------------
+async function loadLog() {
+    const entries = await getJSON("/api/mod/log");
+    document.getElementById("log").innerHTML = entries.length ? entries.map(e => `
+        <tr><td class="text-nowrap">${date(e.created_at)}</td><td>${esc(userLabel(e.moderator))}</td>
+            <td>${esc(t(`action_${e.action}`))}</td><td>${esc(t(`mod_kind_${e.kind}`))} #${e.target_id}</td>
+            <td>${esc(e.note || "")}</td></tr>`).join("")
+        : `<tr><td colspan="5" class="text-body-secondary">${esc(t("mod_no_log"))}</td></tr>`;
+}
+
+// --- wrong matches ----------------------------------------------------------------------------
+let lastMatchQuery = "";
+
+function matchCard(game) {
+    const options = game.editions.map(e => `<option value="${e.id}">${esc(e.name)} (#${e.id})</option>`).join("");
+    return `
+        <div class="card" data-game="${game.id}">
+            <div class="card-body">
+                <h3 class="h6"><a href="/game/${game.id}">${esc(game.title)}</a>
+                    <span class="text-body-secondary small">· ${esc(game.platform)} · #${game.id}</span>
+                    ${game.title_fixed ? `<span class="badge text-bg-info">${esc(t("match_title_fixed"))}</span>` : ""}</h3>
+                <form class="title-form d-flex gap-2 mb-2">
+                    <input name="title" maxlength="300" class="form-control form-control-sm" value="${esc(game.title)}"
+                           placeholder="${esc(t("match_title_placeholder"))}" aria-label="${esc(t("match_title"))}">
+                    <button class="btn btn-sm btn-secondary text-nowrap">${esc(t("match_title_save"))}</button>
+                </form>
+                <form class="title-en-form d-flex gap-2 mb-2">
+                    <input name="title_en" maxlength="300" class="form-control form-control-sm" value="${esc(game.title_en)}"
+                           placeholder="${esc(t("match_title_en_placeholder"))}" aria-label="${esc(t("match_title_en"))}">
+                    <button class="btn btn-sm btn-secondary text-nowrap">${esc(t("match_title_en_save"))}</button>
+                </form>
+                ${game.editions.map(e => `
+                    <div class="mb-2">
+                        <div class="fw-semibold small">${esc(e.name)} <span class="text-body-secondary">#${e.id} · ${esc(e.key || "standard")}</span></div>
+                        ${e.products.map(p => `<label class="d-flex gap-2 small ms-2">
+                            <input type="checkbox" class="form-check-input" value="${p.id}">
+                            <span>${esc(p.store)}: <a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>
+                                ${p.pinned ? `<span class="badge text-bg-info">${esc(t("match_pinned"))}</span>` : ""}
+                                ${p.is_active ? "" : `<span class="badge text-bg-secondary">${esc(t("match_inactive"))}</span>`}</span>
+                        </label>`).join("") || `<div class="small text-body-secondary ms-2">${esc(t("match_no_products"))}</div>`}
+                    </div>`).join("")}
+                <form class="move-form row g-2 align-items-end mt-1">
+                    <div class="col-12 col-sm-auto">
+                        <label class="form-label small">${esc(t("match_move_to"))}</label>
+                        <select name="target" class="form-select form-select-sm">
+                            ${options}
+                            <option value="new">${esc(t("match_new_edition"))}</option>
+                            <option value="other">${esc(t("match_other_edition"))}</option>
+                        </select>
+                    </div>
+                    <div class="col d-none" data-for="new">
+                        <input name="name" maxlength="200" class="form-control form-control-sm"
+                               placeholder="${esc(t("match_new_name"))}" aria-label="${esc(t("match_new_name"))}">
+                    </div>
+                    <div class="col d-none" data-for="other">
+                        <input name="edition" type="number" min="1" class="form-control form-control-sm"
+                               placeholder="${esc(t("match_edition_number"))}" aria-label="${esc(t("match_edition_number"))}">
+                    </div>
+                    <div class="col-auto"><button class="btn btn-sm btn-primary">${esc(t("match_move"))}</button></div>
+                </form>
+            </div>
+        </div>`;
+}
+
+async function searchMatches(q) {
+    lastMatchQuery = q;
+    const games = await getJSON(`/api/mod/matches?q=${encodeURIComponent(q)}`);
+    const box = document.getElementById("match-results");
+    box.innerHTML = games.length ? games.map(matchCard).join("") : `<p class="text-body-secondary small">${esc(t("no_results"))}</p>`;
+    // a store's typo corrected; kept by the daily processing (empty: the stores' title again)
+    box.querySelectorAll(".title-form").forEach(form => form.onsubmit = async e => {
+        e.preventDefault();
+        const gameId = form.closest("[data-game]").dataset.game;
+        const { ok, data } = await api(`/api/mod/games/${gameId}/title`, { method: "PUT",
+            body: { title: form.querySelector("[name=title]").value } });     // not form.title: the form's own attribute
+        showMessage(ok, ok ? t("match_title_saved") : t(`error_${data?.error || "unknown"}`));
+        if (ok) searchMatches(lastMatchQuery);
+    });
+    // the English name, shown when the page is in English (empty: the store's title)
+    box.querySelectorAll(".title-en-form").forEach(form => form.onsubmit = async e => {
+        e.preventDefault();
+        const gameId = form.closest("[data-game]").dataset.game;
+        const { ok, data } = await api(`/api/mod/games/${gameId}/title-en`,
+                                       { method: "PUT", body: { title_en: form.title_en.value } });
+        showMessage(ok, ok ? t("match_title_en_saved") : t(`error_${data?.error || "unknown"}`));
+    });
+    box.querySelectorAll(".move-form").forEach(form => {
+        const card = form.closest("[data-game]");
+        const target = form.querySelector("[name=target]");
+        target.onchange = () => form.querySelectorAll("[data-for]").forEach(el =>
+            el.classList.toggle("d-none", el.dataset.for !== target.value));
+        form.onsubmit = async e => {
+            e.preventDefault();
+            const productIds = [...card.querySelectorAll("input[type=checkbox]:checked")].map(c => Number(c.value));
+            if (!productIds.length) return showMessage(false, t("match_choose_products"));
+            const body = { product_ids: productIds };
+            if (target.value === "new") {
+                Object.assign(body, { game_id: Number(card.dataset.game), new_edition: form.querySelector("[name=name]").value });
+            } else {
+                body.edition_id = Number(target.value === "other" ? form.querySelector("[name=edition]").value : target.value);
+            }
+            const { ok, data } = await api("/api/mod/matches", { body });
+            showMessage(ok, ok ? t("match_moved", { count: productIds.length, id: data.edition_id })
+                               : t(`error_${data?.error || "unknown"}`));
+            if (ok) { searchMatches(lastMatchQuery); loadPins(); }
+        };
+    });
+}
+
+async function loadPins() {
+    const pins = await getJSON("/api/mod/pins");
+    const list = document.getElementById("pins");
+    list.innerHTML = pins.length ? pins.map(p => `
+        <li class="list-group-item px-0 d-flex justify-content-between gap-2">
+            <span>${esc(p.store)}: ${esc(p.name)} → <a href="/game/${p.game_id}">${esc(p.game)}</a> · ${esc(p.edition)}</span>
+            <button type="button" class="btn btn-sm btn-secondary" data-unpin="${p.product_id}">${esc(t("match_unpin"))}</button>
+        </li>`).join("") : `<li class="list-group-item px-0 text-body-secondary">${esc(t("match_no_pins"))}</li>`;
+    list.querySelectorAll("[data-unpin]").forEach(b => b.onclick = async () => {
+        const { ok, data } = await api(`/api/mod/pins/${b.dataset.unpin}`, { method: "DELETE" });
+        showMessage(ok, ok ? t("match_unpinned") : t(`error_${data?.error || "unknown"}`));
+        loadPins();
+        if (lastMatchQuery) searchMatches(lastMatchQuery);
+    });
+}
+
+// --- possible duplicates (same platform: the same IGDB entry, or names alike) --------------------
+async function loadDuplicates() {
+    const pairs = await getJSON("/api/mod/duplicates");
+    const list = document.getElementById("duplicates");
+    const side = g => `<a href="/game/${g.id}">${esc(g.title)}</a>
+        <span class="text-body-secondary">#${g.id} · ${esc(t("dup_products", { count: g.products }))}</span>`;
+    list.innerHTML = pairs.length ? pairs.map(p => `
+        <li class="list-group-item px-0">
+            <div class="text-body-secondary">${esc(p.platform)}
+                <span class="badge ${p.reason === "name" ? "text-bg-warning" : "text-bg-info"} ms-1">${esc(t(`dup_reason_${p.reason}`))}</span></div>
+            <div>${side(p.a)}</div><div>${side(p.b)}</div>
+            <div class="d-flex flex-wrap gap-2 mt-1">
+                <button type="button" class="btn btn-sm btn-primary" data-from="${p.b.id}" data-into="${p.a.id}">${esc(t("dup_merge_into", { id: p.a.id }))}</button>
+                <button type="button" class="btn btn-sm btn-primary" data-from="${p.a.id}" data-into="${p.b.id}">${esc(t("dup_merge_into", { id: p.b.id }))}</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-a="${p.a.id}" data-b="${p.b.id}">${esc(t("dup_not_same"))}</button>
+            </div>
+        </li>`).join("") : `<li class="list-group-item px-0 text-body-secondary">${esc(t("dup_none"))}</li>`;
+    list.querySelectorAll("[data-from]").forEach(b => b.onclick = async () => {
+        b.disabled = true;
+        const { ok, data } = await api("/api/mod/duplicates/merge", { body: { from_id: Number(b.dataset.from), into_id: Number(b.dataset.into) } });
+        showMessage(ok, ok ? t("dup_merged") : t(`error_${data?.error || "unknown"}`));
+        loadDuplicates();
+        loadPins();
+    });
+    list.querySelectorAll("[data-a]").forEach(b => b.onclick = async () => {
+        const { ok, data } = await api("/api/mod/duplicates/dismiss", { body: { a: Number(b.dataset.a), b: Number(b.dataset.b) } });
+        showMessage(ok, ok ? t("dup_dismissed") : t(`error_${data?.error || "unknown"}`));
+        loadDuplicates();
+    });
+}
+
+document.getElementById("match-search").onsubmit = e => {
+    e.preventDefault();
+    searchMatches(e.target.querySelector("[name=q]").value.trim());
+};
+
+// --- staff (admins) ---------------------------------------------------------------------------
+function renderStaff(staff) {
+    const list = document.getElementById("staff");
+    list.innerHTML = staff.map(u => `
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>${userLink(u.username)} <span class="badge text-bg-secondary">${esc(t(`role_${u.role}`))}</span></span>
+            ${u.role === "moderator" ? `<button type="button" class="btn btn-sm btn-danger" data-remove="${esc(u.username)}">${esc(t("mod_remove_moderator"))}</button>` : ""}
+        </li>`).join("");
+    list.querySelectorAll("[data-remove]").forEach(b => b.onclick = () => setRole(b.dataset.remove, "user"));
+}
+
+async function setRole(username, role) {
+    const { ok, data } = await api("/api/mod/staff", { body: { username, role } });
+    showMessage(ok, ok ? t("mod_role_saved", { user: username }) : t(`error_${data?.error || "unknown"}`));
+    if (ok) renderStaff(data);
+}
+
+document.getElementById("staff-form").onsubmit = e => {
+    e.preventDefault();
+    setRole(e.target.username.value.trim().replace(/^@/, ""), "moderator");
+    e.target.reset();
+};
+
+// --- tabs -------------------------------------------------------------------------------------
+const LOADERS = { reports: loadReports, problems: loadProblems, log: loadLog,
+                  matches: () => { loadPins(); loadDuplicates(); },
+                  staff: async () => renderStaff(await getJSON("/api/mod/staff")) };
+
+function showTab(name) {
+    document.querySelectorAll("[data-tab]").forEach(b => {
+        b.classList.toggle("active", b.dataset.tab === name);
+        b.setAttribute("aria-selected", b.dataset.tab === name);
+    });
+    document.querySelectorAll("[id^=tab-]").forEach(s => s.classList.toggle("d-none", s.id !== `tab-${name}`));
+    document.getElementById("message").classList.add("d-none");
+    LOADERS[name]();
+}
+
+document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+async function load() {
+    await renderAccountArea();
+    if (!currentUser) return location.assign("/account?next=/admin");
+    if (!["moderator", "admin"].includes(currentUser.role)) {
+        return document.getElementById("not-allowed").classList.remove("d-none");
+    }
+    document.getElementById("staff-tab").classList.toggle("d-none", currentUser.role !== "admin");
+    document.getElementById("tools").classList.remove("d-none");
+    showTab("reports");
+}
+
+applyI18n();
+load();

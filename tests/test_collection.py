@@ -39,6 +39,14 @@ def test_owned_games_with_status_and_stats(market):
     assert mine(client)["stats"]["owned"] == 1
 
 
+def test_hours_that_arent_numbers_are_refused(market):
+    client = market["client"]
+    sign_up(client, "collector_nan")
+    for hours in ("NaN", "sNaN", "Infinity"):
+        response = add(client, market["edition"], hours=hours)
+        assert (response.status_code, response.get_json()["error"]) == (400, "hours_invalid"), hours
+
+
 def test_wishlist_becomes_owned(market):
     client = market["client"]
     sign_up(client, "wisher")
@@ -76,7 +84,7 @@ def test_private_unless_made_public(market):
     sign_up(client, "shower")
     add(client, market["edition"], status="completed", notes="Só para mim.")
     assert client.get("/api/users/shower/collection").status_code == 404
-    assert client.put("/api/collection/settings", json={"public": True}, headers=HEADERS).get_json() == {"public": True}
+    assert client.put("/api/collection/settings", json={"public": True}, headers=HEADERS).get_json()["public"] is True
 
     sign_up(client, "visitor")
     public = client.get("/api/users/shower/collection").get_json()

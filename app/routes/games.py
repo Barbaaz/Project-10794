@@ -25,6 +25,7 @@ def catalog():
     q: search words (all of them in the title); store: only editions that store has in stock;
     genre: only games in that category (/api/genres); tags=coop,horror: only games with all of
     them (/api/tags); pegi=12: PEGI rating up to that age
+    kind=hardware (or console): consoles instead of games
     """
     sort = choice_arg("sort", "name", game_service.CATALOG_SORTS)
     page = int_arg("page", 1, minimum=1)
@@ -35,6 +36,7 @@ def catalog():
         genre=text_arg("genre"),
         tags=[t for t in (text_arg("tags") or "").split(",") if t][:5],
         pegi=int_arg("pegi", None),
+        kind=choice_arg("kind", "game", ("game", "hardware", *game_service.HARDWARE_KINDS)),
     ))
 
 

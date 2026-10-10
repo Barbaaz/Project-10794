@@ -61,7 +61,8 @@ def rematch_all(dry_run=False):
             if sp.id in pinned:
                 (game_id, edition_id), title, edition_name = pinned[sp.id], None, None    # names: as they are
             else:
-                product = {"external_name": sp.external_name, "console": codes.get(sp.platform_id), "image": sp.image_url}
+                product = {"external_name": sp.external_name, "console": codes.get(sp.platform_id), "image": sp.image_url,
+                           "kind": sp.kind}
                 game_id, edition_id, title, edition_name = matcher.match_details(product, sp.store_id not in match_only)
 
             if game_id:
@@ -102,7 +103,7 @@ def rekey_games(s):
     so a game keeps its id. Where the new key is already taken on that platform (both spellings
     were separate games), the rematch merges the two (and records it).
     """
-    games = s.scalars(select(Game).order_by(Game.id)).all()
+    games = s.scalars(select(Game).where(Game.kind == "game").order_by(Game.id)).all()    # hardware keys: core/hardware.py
     taken = {(g.platform_id, g.normalized_title) for g in games}
     updated = 0
     for g in games:

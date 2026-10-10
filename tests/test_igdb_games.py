@@ -37,6 +37,16 @@ def test_search_lists_our_platforms_only(igdb):
     assert client.get("/api/igdb/games?q=o").get_json() == []              # too short: IGDB isn't asked
 
 
+def test_search_words_stay_inside_the_query_text(igdb):
+    """A typed backslash would escape the closing quote of IGDB's search "…": it goes, like quotes."""
+    client = igdb["client"]
+    sign_up(client, "retro_seller3")
+    client.get('/api/igdb/games?q=okami \\" ; fields *; \\')
+    search = igdb["asked"][-1]
+    assert search.startswith('search "okami ; fields *;"; fields ')
+    assert "\\" not in search
+
+
 def test_picking_a_platform_creates_the_game_once(igdb):
     client = igdb["client"]
     sign_up(client, "retro_seller2")
@@ -106,3 +116,23 @@ def test_no_igdb_editions_without_an_igdb_match(igdb):
     client = igdb["client"]
     sign_up(client, "retro_seller5")
     assert client.get(f"/api/igdb/games/{igdb['game']}/editions").get_json() == []     # the market game has no IGDB id
+
+
+def test_a_game_from_igdb_can_go_into_the_collection_and_stays(igdb):
+    """/collection's "Adicionar um jogo": a game we don't have, created from IGDB, on the collection or the
+    wishlist; the rematch's orphan clean-up leaves it while it's in someone's collection."""
+    from db import session
+    from pipeline.rematch import delete_orphans
+
+    client = igdb["client"]
+    sign_up(client, "retro_collector")
+    made = client.post("/api/igdb/games", headers=HEADERS, json={"igdb_id": 9001, "platform": "PS2"}).get_json()
+    assert client.post("/api/collection", headers=HEADERS,
+                       json={"edition_id": made["edition_id"], "kind": "owned"}).status_code == 201
+    [item] = client.get("/api/collection").get_json()["items"]
+    assert (item["name"], item["kind"]) == ("Okami", "owned")
+
+    with session() as s:
+        delete_orphans(s)
+    assert client.get(f"/api/games/{made['game_id']}").status_code == 200
+    igdb["db"].execute("DELETE FROM collection_items WHERE edition_id = ?", made["edition_id"])

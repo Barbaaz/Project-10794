@@ -76,3 +76,6 @@ CLAUDE.md
 # Database backups (docker-compose.production.yml): real users' data
 backups/
 *.dump
+
+# Code reviews (local only: open security findings shouldn't be public before they're fixed)
+Reviews/

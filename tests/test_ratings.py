@@ -79,6 +79,19 @@ def test_an_overdue_rating_blocks_buying_and_selling(market):
     assert new_listing(market).status_code == 201
 
 
+def test_a_hidden_rating_cant_be_changed_or_answered(market):
+    """A moderator hid it: its writer can't rewrite it (nor the rated user reply), as with hidden reviews."""
+    client = market["client"]
+    conversation_id = completed_purchase(market)
+    rating = rate(client, conversation_id, 1, "Insultos…").get_json()["mine"]
+    market["db"].execute("UPDATE user_ratings SET hidden = true WHERE id = ?", rating["id"])
+    response = rate(client, conversation_id, 5, "Outro texto")
+    assert (response.status_code, response.get_json()["error"]) == (403, "rating_hidden")
+    log_in(client, "seller")
+    reply = client.post(f"/api/ratings/{rating['id']}/reply", json={"reply": "Não é verdade."}, headers=HEADERS)
+    assert (reply.status_code, reply.get_json()["error"]) == (403, "rating_hidden")
+
+
 def test_replies_and_the_edit_window(market):
     client = market["client"]
     conversation_id = completed_purchase(market)
