@@ -114,13 +114,16 @@ o que fez e anote tudo o que lhe pareça estranho, confuso, lento ou errado, mes
 
 ### A. Procurar e comparar preços (sem conta)
 
-- [ ] Percorra os separadores da página inicial: **Descontos e melhores preços**, **Pré-reservas**,
-      **Calendário de lançamentos**, **Catálogo**, **Edições especiais**
-- [ ] Pesquise um jogo (por exemplo "zelda", "fifa", "mario") e mude a ordenação (nome / preço)
-- [ ] Use os filtros: **plataforma** (PS5, Switch...), **loja**, **categoria**, **etiquetas**, **Idade** (PEGI)
-- [ ] Abra a página de um jogo: veja as **edições** (Standard, Deluxe...), o preço em cada loja,
-      o **gráfico de preços**, as imagens e os vídeos
-- [ ] Carregue em "Ver na loja": abre a página verdadeira da loja (o preço lá pode já ser outro)
+- [ ] Percorra os separadores da página inicial: **Melhores preços**, **Pré-reservas**,
+      **Lançamentos**, **Catálogo**, **Edições especiais**, **Consolas**
+- [ ] Pesquise um jogo na caixa **Procurar um jogo…**, no topo (por exemplo "zelda", "fifa", "mario")
+      e mude a ordenação (nome / preço)
+- [ ] Use os filtros: a **plataforma** (PS5, Switch... por cima dos jogos; as mais antigas em
+      **Outras**), e no Catálogo a **loja**, a **categoria**, as **etiquetas** e a **Idade** (PEGI)
+- [ ] Abra a página de um jogo: à direita, a **caixa de compra** (o melhor preço, as **edições**
+      Standard, Deluxe..., o preço em cada loja); à esquerda, a descrição, as **imagens e os vídeos**;
+      no fim, o **gráfico de preços** (passe o rato, ou o dedo, por cima de um dia)
+- [ ] Carregue numa loja (ou em "Ver na …"): abre a página verdadeira da loja (o preço lá pode já ser outro)
 - [ ] Mude o idioma (**PT / EN**) e ligue o **modo escuro**
 - [ ] Torne a janela do navegador estreita, do tamanho de um telemóvel: tudo continua legível,
       sem ter de deslizar para os lados?
@@ -130,11 +133,12 @@ o que fez e anote tudo o que lhe pareça estranho, confuso, lento ou errado, mes
 - [ ] Crie uma conta (**Entrar** → **Criar conta**). Pode usar um e-mail inventado: não é enviado nenhum e-mail
 - [ ] Saia e volte a entrar
 - [ ] Na estrela ☆ de um jogo, escolha **⭐ Quero** (lista de desejos) e **📚 Tenho** (coleção)
-- [ ] Abra a sua coleção (botão 📚 Coleção, no topo): mude o estado de um jogo, as horas jogadas, as notas
+- [ ] Abra a sua coleção (**Coleção**, no topo; 📚 num telemóvel): mude o estado de um jogo, as horas jogadas, as notas
 - [ ] Num jogo que existe em várias plataformas, carregue nos botões das plataformas no cartão
       (PS5, Switch 2...): os preços mudam para essa plataforma
-- [ ] Veja o separador **⭐ Lista de desejos** na página inicial
+- [ ] Veja o separador **Lista de desejos** na página inicial
 - [ ] Escreva uma **crítica** de um jogo (nota de 1 a 10) na página do jogo
+- [ ] Em **A minha conta**, descarregue **os seus dados** (um ficheiro com tudo o que o site guarda sobre si)
 
 ### C. Mercado de usados
 
@@ -142,10 +146,10 @@ Já existem utilizadores de demonstração, com anúncios e conversas: entre com
 **demo_bruno**, **demo_carla**, **demo_diogo** ou **demo_eva**, todos com a palavra-passe
 **demo12345**.
 
-- [ ] Veja o separador **👤 Usados** e abra um anúncio
+- [ ] Veja o separador **Usados** e abra um anúncio
 - [ ] Com a sua conta, envie uma mensagem a um vendedor e carregue em **Comprar**
 - [ ] Na conversa, peça mais fotografias; como vendedor, envie-as com o botão **📷** (do telemóvel também)
-- [ ] Ponha um jogo seu à venda (botão **🏷️ Vender** no topo, **🏷️ Vender** na estrela ☆ de um jogo, ou **Vender este jogo** na página de um jogo; se a sua edição não aparecer, veja "Outras edições (do IGDB)"): são precisas pelo menos 3 fotografias (servem
+- [ ] Ponha um jogo seu à venda (**Vender**, no topo (🏷️ num telemóvel), **🏷️ Vender** na estrela ☆ de um jogo, ou **Vender este jogo** na página de um jogo; se a sua edição não aparecer, veja "Outras edições (do IGDB)"): são precisas pelo menos 3 fotografias (servem
       quaisquer fotografias do computador ou do telemóvel)
 - [ ] Faça uma compra completa, do pedido à avaliação. Para fazer de comprador e de vendedor ao
       mesmo tempo, abra uma **janela anónima / privada** do navegador (Ctrl+Shift+N no Chrome e no
