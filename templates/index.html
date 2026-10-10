@@ -8,7 +8,7 @@
     <!-- installable on a phone (static/manifest.webmanifest, static/sw.js) -->
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
-    <meta name="theme-color" content="#0d6efd">
+    <meta name="theme-color" content="#2346d0">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
     <link href="/static/common.css" rel="stylesheet">
@@ -17,26 +17,53 @@
     <script src="/static/market.js"></script>
 
     <style>
-        .game-card .cover-link { display: block; overflow: hidden; background: #000; }
+        /* Cards without a box: the cover carries them (rounded), then platform, name and prices */
+        .game-card .cover-link { display: block; overflow: hidden; border-radius: .75rem; background: var(--bs-secondary-bg); }
         .game-card img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; transition: transform .3s ease; }
         /* A store's photo (square, a 3D box shot...) is shown whole on white, not cropped to the card;
            the game's IGDB cover already has the card's shape */
         .game-card img.store-photo { object-fit: contain; background: #fff; }
-        .game-card:hover img { transform: scale(1.04); }
-        .game-card .card-body { padding: .5rem; font-size: .8rem; }
-        /* Every card has the same layout: title always 2 lines tall, platform 1 line,
+        .game-card:hover img { transform: scale(1.03); }
+        @media (prefers-reduced-motion: reduce) { .game-card img { transition: none; } .game-card:hover img { transform: none; } }
+        .game-card .card-text { padding-top: .6rem; font-size: .85rem; }
+        /* Every card has the same layout: platform 1 line, title always 2 lines tall,
            extra line (release date, historical low...) 2 lines; longer text ends in "…" */
+        .card-platform { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-primary);
+                         line-height: 1.4; height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .game-title {
-            font-size: .85rem; font-weight: 600; line-height: 1.25; margin-bottom: .15rem;
+            font-size: .95rem; font-weight: 700; line-height: 1.25; margin-top: .1rem;
             height: 2.5em;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
-        .card-platform { line-height: 1.4; height: 1.4em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .platform-chip { --bs-btn-padding-y: .05rem; --bs-btn-padding-x: .4rem; --bs-btn-font-size: .72rem; }
+        .platform-chip { --bs-btn-padding-y: .05rem; --bs-btn-padding-x: .45rem; --bs-btn-font-size: .72rem; border-radius: 999px; }
         .card-extra {
-            line-height: 1.4; height: 2.8em; margin-bottom: .4rem;
+            line-height: 1.4; height: 2.8em; margin-top: .2rem; color: var(--bs-secondary-color);
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
+        /* Prices: the best one large, the others quiet lines; each opens the store's page */
+        .lead-offer { display: block; color: inherit; text-decoration: none; border-radius: .4rem; }
+        .lead-offer .amount { display: block; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.01em;
+                              font-variant-numeric: tabular-nums; line-height: 1.2; }
+        .lead-offer .amount .badge { font-size: .7rem; vertical-align: 3px; }
+        .lead-offer .was { font-size: .8rem; font-weight: 500; color: var(--bs-secondary-color); }
+        .lead-offer .where { display: block; color: var(--bs-secondary-color); font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .lead-offer:hover .amount { color: var(--bs-link-hover-color); }
+        .lead-offer.used .amount { color: var(--used); }
+        .lead-offer.out .amount { color: var(--bs-secondary-color); }
+        .offer-line { display: flex; justify-content: space-between; gap: .5rem; padding: .3rem 0 0; margin-top: .3rem;
+                      border-top: 1px solid var(--bs-border-color); color: var(--bs-secondary-color); text-decoration: none; font-size: .8rem; }
+        .offer-line:first-of-type { margin-top: .45rem; }
+        .offer-line .store { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+        .offer-line .price { font-weight: 700; color: var(--bs-body-color); white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .offer-line .price .badge { font-size: .65rem; }
+        .offer-line:hover .store, .offer-line:hover .price { color: var(--bs-link-hover-color); }
+        .offer-line.used .store, .offer-line.used .price { color: var(--used); }
+        .offer-line.out .price { color: var(--bs-secondary-color); font-weight: 500; }
+        .more-stores { display: block; margin-top: .45rem; font-size: .8rem; font-weight: 700; text-decoration: none; }
+        .more-stores:hover { text-decoration: underline; }
+        /* Cover badges: savings white with green text, a discount red, a pre-order dark */
+        .badge-save { background: #fff; color: #0f7a4a; }
+        .badge-pre { background: #14171f; color: #fff; }
         .fav-btn {
             position: absolute; top: .4rem; right: .4rem; width: 1.75rem; height: 1.75rem; padding: 0;
             border-radius: 50%; line-height: 1; font-size: 1.05rem;
@@ -46,16 +73,13 @@
         /* The star's menu (favourite, collection, wishlist), inside the cover so the card doesn't clip it */
         .card-menu { top: 2.4rem; right: .4rem; min-width: 9rem; font-size: .85rem; z-index: 5; }
         .card-menu .check { display: inline-block; width: 1.1rem; }
-        /* One button per store, linking to the product on the store's site */
-        .offer-btn {
-            display: flex; justify-content: space-between; align-items: baseline; gap: .4rem;
-            width: 100%; margin-top: .3rem; padding: .25rem .45rem; font-size: .78rem; text-align: left;
-        }
-        .offer-btn .store { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .offer-btn .price { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 700; }
-        .offer-btn .was { font-weight: 400; text-decoration: line-through; opacity: .75; margin-right: .2rem; }
-        .discount-badge { position: absolute; top: .4rem; left: .4rem; font-size: .8rem; }
-        .low-price-badge { position: absolute; bottom: .4rem; left: .4rem; font-size: .75rem; }
+        /* The search: rounded, like a shop's */
+        #search-form .form-control, #search-form .form-select, #search-form .btn { border-radius: 999px; min-height: 2.75rem; }
+        #search-form .form-control { padding-inline: 1.1rem; background: var(--bs-body-bg); }
+        .discount-badge { position: absolute; top: .5rem; left: .5rem; font-size: .78rem; font-weight: 800; border-radius: .4rem;
+                          box-shadow: 0 1px 3px rgb(0 0 0 / .2); }
+        .low-price-badge { position: absolute; bottom: .5rem; left: .5rem; font-size: .75rem; border-radius: .4rem;
+                           background: var(--save-bg); color: var(--save); }
         .release-date { width: 3.2rem; }
         .release-item img { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: #000; }
         .min-w-0 { min-width: 0; }

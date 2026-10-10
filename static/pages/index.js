@@ -31,45 +31,35 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
     const best = offers[0];
     const gameUrl = `/game/${group.game_id}`;
 
-    // Cheapest store in stock in green, the others grey; each opens the product on the store's site.
-    // Copies users sell take one of the spots, in price order, in their own colour (see usedButton)
+    // The best store price leads, large; the next stores and the copies users sell (see usedLine) follow
+    // as lines, in price order. Each opens the product on the store's site
     const used = group.used;
-    const storeSpots = used ? MAX_OFFERS - 1 : MAX_OFFERS;
-    const storeRows = offers.slice(0, storeSpots).map((o, i) => ({ price: o.price, html: `
-        <a href="${esc(o.url)}" target="_blank" rel="noopener"
-           class="btn offer-btn ${i === 0 && o.in_stock ? "btn-success" : "btn-secondary"} ${o.in_stock ? "" : "opacity-75"}"
-           title="${esc(t("view_at", { store: storeName(o.store) }))}">
-            <span class="store">${esc(storeName(o.store))}${o.condition === "used" ? ` · ${t("used")}` : ""}${o.in_stock ? "" : ` · ${t("sold_out")}`}</span>
-            <span class="price">
-                ${o.discount_percent && !coverBadge ? `<span class="badge text-bg-danger">-${o.discount_percent}%</span>` : ""}
-                ${o.was_price ? `<span class="was">${eur.format(o.was_price)}</span>` : ""}${eur.format(o.price)}
-            </span>
-        </a>` }));
-    if (used) storeRows.push({ price: used.price, html: usedButton(group) });
-    const rows = storeRows.sort((a, b) => a.price - b.price).map(r => r.html).join("");
-
-    const more = offers.length > storeSpots
-        ? `<a href="${gameUrl}" class="btn btn-primary offer-btn justify-content-center">${t("see_all_stores", { count: offers.length - storeSpots })}</a>`
+    const lineSpots = used ? MAX_OFFERS - 2 : MAX_OFFERS - 1;
+    const lines = offers.slice(1, 1 + lineSpots).map(o => ({ price: o.price, html: offerLine(o, coverBadge) }));
+    if (used) lines.push({ price: used.price, html: usedLine(group) });
+    const shown = 1 + Math.min(lineSpots, Math.max(offers.length - 1, 0));
+    const more = offers.length > shown
+        ? `<a href="${gameUrl}" class="more-stores">${t("see_all_stores", { count: offers.length - shown })}</a>`
         : offers.length || used ? "" : `<div class="small text-body-secondary">${t("no_offers")}</div>`;
 
     const col = document.createElement("div");
     col.className = "col";
     col.innerHTML = `
-        <div class="card h-100 shadow-sm overflow-hidden game-card">
+        <div class="h-100 game-card d-flex flex-column">
             <div class="position-relative">
                 <a href="${gameUrl}" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(group.cover || best?.image || group.image || "")}"
                     class="${group.cover ? "" : "store-photo"}" alt="" loading="lazy"></a>
                 ${coverBadge}
-                ${group.at_historical_low ? `<span class="badge text-bg-success low-price-badge"
+                ${group.at_historical_low ? `<span class="badge low-price-badge"
                     title="${esc(t("low_badge_hint"))}">${t("low_badge")}</span>` : ""}
                 <button type="button" class="btn btn-light fav-btn shadow-sm" data-edition="${group.edition_id}"
                     aria-label="${t("card_menu")}" aria-haspopup="menu" aria-expanded="false">${starButton(group)}</button>
             </div>
-            <div class="card-body d-flex flex-column">
-                <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(localName(group))}">${esc(localName(group))}</a>
+            <div class="card-text d-flex flex-column flex-grow-1">
                 ${platformLine(group)}
-                ${extraLine === null ? '<div class="mb-2"></div>' : `<div class="small card-extra">${extraLine}</div>`}
-                <div class="mt-auto">${rows}${more}</div>
+                <a href="${gameUrl}" class="link-body-emphasis text-decoration-none game-title" title="${esc(localName(group))}">${esc(localName(group))}</a>
+                ${extraLine === null ? "" : `<div class="small card-extra">${extraLine}</div>`}
+                <div class="mt-auto pt-2">${best ? leadOffer(best, coverBadge) : ""}${lines.sort((a, b) => a.price - b.price).map(r => r.html).join("")}${more}</div>
             </div>
         </div>`;
     col.querySelector(".fav-btn").onclick = e => toggleCardMenu(e.currentTarget, group);
@@ -94,7 +84,7 @@ function platformLine(group) {
         ? `<span title="${esc(t("review_score_hint", { count: group.review_count }))}">${fmtNumber(group.review_score)}/10 (${group.review_count})</span>` : "";
     const all = platformsOf(group);
     if (!all) {
-        return `<div class="text-body-secondary small card-platform">${esc(group.platform_name || group.console)}${reviews ? ` · ${reviews}` : ""}</div>`;
+        return `<div class="card-platform">${esc(group.platform_name || group.console)}${reviews ? ` · ${reviews}` : ""}</div>`;
     }
     const chips = all.map((g, i) => {
         const on = g.edition_id === group.edition_id;
@@ -105,43 +95,69 @@ function platformLine(group) {
         ${reviews ? `<div class="text-body-secondary small">${reviews}</div>` : ""}`;
 }
 
-// "👤 Usados (2) · 18,99 €": the copies users sell; one → that listing, several → the game page's list
-function usedButton(group) {
+// A store's discount on the price itself, unless the cover already says it
+const discountTag = (o, coverBadge) => o.discount_percent && !coverBadge
+    ? `<span class="badge text-bg-danger me-1">-${o.discount_percent}%</span>` : "";
+
+// The best offer: its price large, the store (and "used" / "sold out") under it
+function leadOffer(o, coverBadge) {
+    return `
+        <a href="${esc(o.url)}" target="_blank" rel="noopener" class="lead-offer ${o.in_stock ? "" : "out"}"
+           title="${esc(t("view_at", { store: storeName(o.store) }))}">
+            <span class="amount">${discountTag(o, coverBadge)}${eur.format(o.price)}${o.was_price ? ` <s class="was">${eur.format(o.was_price)}</s>` : ""}</span>
+            <span class="where">${esc(storeName(o.store))}${o.condition === "used" ? ` · ${t("used")}` : ""}${o.in_stock ? "" : ` · ${t("sold_out")}`}</span>
+        </a>`;
+}
+
+// Another store's offer: one quiet line
+function offerLine(o, coverBadge) {
+    return `
+        <a href="${esc(o.url)}" target="_blank" rel="noopener" class="offer-line ${o.in_stock ? "" : "out"}"
+           title="${esc(t("view_at", { store: storeName(o.store) }))}">
+            <span class="store">${esc(storeName(o.store))}${o.condition === "used" ? ` · ${t("used")}` : ""}${o.in_stock ? "" : ` · ${t("sold_out")}`}</span>
+            <span class="price">${discountTag(o, coverBadge)}${eur.format(o.price)}</span>
+        </a>`;
+}
+
+// "👤 Usados (2) 18,99 €": the copies users sell; one → that listing, several → the game page's list
+function usedLine(group) {
     const { count, price, listing_id } = group.used;
     const href = count === 1 ? `/listing/${listing_id}` : `/game/${group.game_id}#market`;
     return `
-        <a href="${href}" class="btn offer-btn btn-used" title="${esc(t("used_title", { count }))}">
+        <a href="${href}" class="offer-line used" title="${esc(t("used_title", { count }))}">
             <span class="store">👤 ${esc(t("used_from_users", { count }))}</span>
             <span class="price">${eur.format(price)}</span>
         </a>`;
 }
 
-// A game edition users sell, like the catalogue cards: cover, name, platform, then one button
-// per seller (seller and rating, condition, price; cheapest first) opening that listing
+// A game edition users sell, like the catalogue cards: cover, platform, name, then the cheapest copy
+// large (seller and rating, condition) and the next sellers as lines, each opening that listing
 function marketCard(group) {
-    const sellers = group.listings.slice(0, MAX_OFFERS).map((l, i) => `
-        <a href="/listing/${l.id}" class="btn offer-btn ${i === 0 ? "btn-used" : "btn-secondary"}"
-           title="${esc(`${sellerName(l)} · ${conditionLabel(l.condition)}`)}">
-            <span class="store seller-lines">@${esc(l.seller_username)}${l.seller_rating_count ? ` ★${fmtNumber(l.seller_rating)}` : ""}
-                <small>${esc(conditionLabel(l.condition))}</small></span>
+    const seller = l => `@${esc(l.seller_username)}${l.seller_rating_count ? ` ★${fmtNumber(l.seller_rating)}` : ""}`;
+    const [first, ...others] = group.listings;
+    const lead = `
+        <a href="/listing/${first.id}" class="lead-offer used" title="${esc(`${sellerName(first)} · ${conditionLabel(first.condition)}`)}">
+            <span class="amount">${eur.format(first.price)}</span>
+            <span class="where">${seller(first)} · ${esc(conditionLabel(first.condition))}</span>
+        </a>`;
+    const lines = others.slice(0, MAX_OFFERS - 1).map(l => `
+        <a href="/listing/${l.id}" class="offer-line" title="${esc(`${sellerName(l)} · ${conditionLabel(l.condition)}`)}">
+            <span class="store">${seller(l)} · ${esc(conditionLabel(l.condition))}</span>
             <span class="price">${eur.format(l.price)}</span>
         </a>`).join("");
     const more = group.listings.length > MAX_OFFERS
-        ? `<a href="/game/${group.game_id}#market" class="btn btn-primary offer-btn justify-content-center">
-              ${t("see_all_sellers", { count: group.listings.length - MAX_OFFERS })}</a>` : "";
-    const cover = group.image || group.listings[0]?.photos[0]?.thumb_url || "";
+        ? `<a href="/game/${group.game_id}#market" class="more-stores">${t("see_all_sellers", { count: group.listings.length - MAX_OFFERS })}</a>` : "";
+    const cover = group.image || first.photos[0]?.thumb_url || "";
     const col = document.createElement("div");
     col.className = "col";
     col.innerHTML = `
-        <div class="card h-100 shadow-sm overflow-hidden game-card">
+        <div class="h-100 game-card d-flex flex-column">
             <a href="/game/${group.game_id}#market" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(cover)}" alt="" loading="lazy"></a>
-            <div class="card-body d-flex flex-column">
+            <div class="card-text d-flex flex-column flex-grow-1">
+                <div class="card-platform">${esc(group.platform_name)} · ${esc(t("sellers_count", { count: group.listings.length }))}</div>
                 <a href="/game/${group.game_id}#market" class="link-body-emphasis text-decoration-none game-title"
                    title="${esc(localName(group))}">${esc(localName(group))}</a>
-                <div class="text-body-secondary small card-platform">${esc(group.platform_name)}
-                    · ${esc(t("sellers_count", { count: group.listings.length }))}</div>
-                <div class="mb-2"></div>
-                <div class="mt-auto">${sellers}${more}</div>
+                <div class="mt-auto pt-2">${lead}${lines}${more}</div>
             </div>
         </div>`;
     return col;
@@ -436,7 +452,7 @@ function renderCatalog(data, showPage = showCatalogPage) {
 function catalogCard(g) {
     if (!g.is_preorder) return makeCard(g, { again: catalogCard });
     return makeCard(g, {
-        coverBadge: `<span class="badge text-bg-primary discount-badge">${t("preorder")}</span>`,
+        coverBadge: `<span class="badge badge-pre discount-badge">${t("preorder")}</span>`,
         extraLine: `<span class="text-body-secondary">📅 ${esc(releaseLabel(g.release_date, g.date_is_estimate))}</span>`,
         again: catalogCard,
     });
@@ -608,7 +624,7 @@ function renderFront() {
 
 function cardGrid() {
     const grid = document.createElement("div");
-    grid.className = "row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 row-cols-xxl-8 g-2";
+    grid.className = "row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 row-cols-xxl-6 gx-3 gy-4";
     return grid;
 }
 
@@ -708,7 +724,7 @@ function renderDiscounts(offers) {
                         edition_id: o.edition_id, offers: o.offers || [o] };
         grid.appendChild(makeCard(group, {
             coverBadge: storeDeals
-                ? `<span class="badge text-bg-success discount-badge" title="${esc(t("vs_other_stores_hint", { percent: o.savings_percent }))}">${
+                ? `<span class="badge badge-save discount-badge" title="${esc(t("vs_other_stores_hint", { percent: o.savings_percent }))}">${
                     t("vs_other_stores", { saving: eur.format(o.savings ?? (o.next_price - o.price)) })}</span>`
                 : `<span class="badge text-bg-danger discount-badge">-${o.discount_percent}%</span>`,
         }));
@@ -720,7 +736,7 @@ function renderDiscounts(offers) {
 function renderPreorders(groups) {
     const grid = cardGrid();
     groups.forEach(g => grid.appendChild(makeCard(g, {
-        coverBadge: `<span class="badge text-bg-primary discount-badge">${t("preorder")}</span>`,
+        coverBadge: `<span class="badge badge-pre discount-badge">${t("preorder")}</span>`,
         extraLine: `📅 ${esc(releaseLabel(g.release_date, g.date_is_estimate))}`,
     })));
     return grid;
