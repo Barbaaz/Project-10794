@@ -45,6 +45,10 @@ def test_different_models_stay_apart():
     """Strict: Slim vs Pro, digital vs disc, colours, bundles."""
     assert hardware_key("Consola PS5 Slim Digital", "console") != hardware_key("Consola PS5 Slim", "console")
     assert hardware_key("Consola PS5 Pro", "console") != hardware_key("Consola PS5 Slim", "console")
+    # the platform is taken off the name, but the Xbox model stays (2026-10-10)
+    assert hardware_key("Consola Microsoft Xbox Series X 1TB", "console") != hardware_key("Xbox Series S 1TB", "console")
+    assert hardware_key("Console Xbox Series S 1TB", "console") == hardware_key("Consola Xbox Series S 1 TB", "console") \
+        == "console:1 series-s tb"
     assert hardware_key("Switch OLED (Branca)", "console") != hardware_key("Switch OLED (Neon Azul/Vermelho)", "console")
     assert hardware_key("Consola Nintendo Switch 2", "console") != hardware_key("Consola Nintendo Switch 2 + Mario Kart World", "console")
 

@@ -111,9 +111,14 @@ def hardware_key(name, kind):
     """
     # brackets are part of it here ("(Branco)", "(com fios)", "(Caixa Danificada)": another product);
     # wired is a different product, wireless is what a name usually leaves out
+    # the Xbox model: normalize_name takes "Xbox Series X" off as the platform, and an "Xbox Series X
+    # 1TB" isn't the "Series S 1TB" (2026-10-10)
+    model = re.findall(r"\bseries\s+([xs])\b", name, re.IGNORECASE)
     name = re.sub(r"[\[\]()/|]", " ", name)          # "Preto/Azul" is two words
     name = re.sub(r"\bcom\s+fios?\b", " wired ", name, flags=re.IGNORECASE)
     words = {KEY_WORDS.get(w, w) for w in normalize_name(name).split()} - KEY_FILLER
+    if len({m.lower() for m in model}) == 1:          # not "Series X|S"
+        words = (words - {"series", "x", "s"}) | {f"series-{model[0].lower()}"}
     return f"{kind}:{' '.join(sorted(words)) or 'standard'}"     # "Consola Nintendo Switch 2": the standard model
 
 
