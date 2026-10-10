@@ -3,11 +3,13 @@
 (HttpOnly, SameSite=Lax; see app/web.py), holding the user id and a mark of their password
 (auth_service.session_mark): a new password logs out every other session.
 """
+import json
+from datetime import date
 from functools import wraps
 
-from flask import Blueprint, abort, g, jsonify, request, session
+from flask import Blueprint, Response, abort, g, jsonify, request, session
 
-from app.services import auth_service
+from app.services import auth_service, export_service
 from app.services.auth_service import AccountError
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -137,6 +139,17 @@ def delete_account():
         return account_error(e)
     session.clear()
     return jsonify(ok=True)
+
+
+@bp.get("/export")
+@login_required
+def export():
+    """The user's own data as a JSON file to save (export_service)."""
+    data = export_service.export_user(current_user()["id"])
+    response = Response(json.dumps(data, ensure_ascii=False, indent=2), mimetype="application/json")
+    response.headers["Content-Disposition"] = f'attachment; filename="project10794-{date.today()}.json"'
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @bp.post("/logout")

@@ -112,6 +112,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `POST /api/auth/forgot` `{email, lang}` | E-mail a link to choose a new password (valid 1 hour, works once); the same answer whether or not the email has an account. Sent by SMTP once `SMTP_HOST` is set (`.env.example`), else only logged |
 | `POST /api/auth/reset` `{token, password}` | The new password from that link; logs in |
 | `POST /api/auth/password` `{current, password}` | A new password; other sessions are logged out |
+| `GET /api/auth/export` | The user's own data as a JSON file to save (GDPR): account, listings, conversations and messages, ratings given / received, reviews, collection, reports made, moderation actions |
 | `POST /api/auth/delete` `{password}` | Delete the account: anonymised (e-mail, password, names, collection, listing photos gone; ratings, reviews and messages kept as "deleted user"); not while a purchase is under way, not for an admin; logs out |
 | `POST /api/auth/logout` · `GET /api/auth/me` | Log out · the logged-in user (or `null`) |
 | `GET /api/listings?game_id=` · `GET /api/listings/<id>` | Pre-owned copies people sell (active / reserved), with photos; never the seller's email |
