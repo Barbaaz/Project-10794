@@ -83,7 +83,7 @@ async function loadCollection() {
     document.getElementById("collection-items").innerHTML = owned.map(i => `
         <li class="list-group-item px-0 d-flex justify-content-between gap-2">
             <a href="/game/${i.game_id}">${esc(localName(i) || "")}</a>
-            <span class="text-body-secondary text-nowrap">${esc(i.platform_name || "")}${i.status ? ` · ${esc(t(`status_play_${i.status}`))}` : ""}</span>
+            <span class="text-body-secondary text-nowrap">${esc(i.platform_name || "")}${i.status && i.status !== "owned" ? ` · ${esc(t(`status_play_${i.status}`))}` : ""}</span>
         </li>`).join("");
     document.getElementById("collection").classList.remove("d-none");
 }

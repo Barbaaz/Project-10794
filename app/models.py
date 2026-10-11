@@ -356,7 +356,8 @@ class DuplicateDismissal(Base):
 
 COLLECTION_KINDS = ("owned", "wishlist")
 FORMATS = ("physical", "digital")
-PLAY_STATUSES = ("backlog", "playing", "completed", "platinum", "abandoned")
+# the user's order (2026-10-11); "owned" = no other, what an owned item starts as
+PLAY_STATUSES = ("finished", "playing", "backlog", "paused", "dropped", "owned")
 
 
 class CollectionItem(Base):

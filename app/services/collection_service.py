@@ -102,7 +102,7 @@ def stats(rows):
         "hours": float(sum(r["hours"] or 0 for r in owned)),
         "worth_new": round(sum(new_prices), 2), "priced_new": len(new_prices),
         "worth_used": round(sum(used_prices), 2), "priced_used": len(used_prices),
-        "completed": sum(r["status"] in ("completed", "platinum") for r in owned),
+        "completed": sum(r["status"] == "finished" for r in owned),
         # achievements over the games that have a total (as a share of all their achievements)
         "achievements": sum(r["achievements"] or 0 for r in owned if r["achievements_total"]),
         "achievements_total": sum(r["achievements_total"] for r in owned if r["achievements_total"]),
@@ -124,6 +124,7 @@ def add(user_id, edition_id, kind, **changes):
                 raise CollectionError("collection_full")
             item = CollectionItem(user_id=user_id, game_id=edition.game_id, edition_id=edition.id, kind=kind,
                                   format="physical" if kind == "owned" else None,
+                                  status="owned" if kind == "owned" else None,
                                   wish_price=best_new_price(edition.id) if kind == "wishlist" else None)
             if kind == "wishlist":    # alerts from the price it was wished at (wish_alert_service)
                 item.alert_price, item.alert_checked_at = item.wish_price, NOW
@@ -170,7 +171,7 @@ def update(user_id, item_id, changes):
                                                          CollectionItem.edition_id == item.edition_id)).first():
                 s.delete(item)                   # already owned: the wish is just done
                 return None
-            item.kind, item.format, item.wish_price = "owned", "physical", None
+            item.kind, item.format, item.status, item.wish_price = "owned", "physical", "owned", None
         _apply(item, changes)
         item.updated_at = NOW
         return item.id
@@ -233,7 +234,7 @@ def _apply(item, changes):
     if "status" in changes:
         if changes["status"] not in (*PLAY_STATUSES, None, ""):
             raise CollectionError("play_status_invalid")
-        item.status = (changes["status"] or None) if item.kind == "owned" else None
+        item.status = (changes["status"] or "owned") if item.kind == "owned" else None
     if "hours" in changes:
         item.hours = _hours(changes["hours"])
     if "achievements" in changes or "achievements_total" in changes:
