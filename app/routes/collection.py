@@ -44,9 +44,11 @@ def item_ids():
 @bp.post("/collection")
 @login_required
 def add():
-    """{edition_id, kind: owned | wishlist, format?, status?, hours?, notes?} → {id}"""
+    """{edition_id | game_id + new_edition, kind: owned | wishlist, format?, status?, hours?, notes?} → {id}
+    (new_edition: an edition of the game we don't know, named by the user)"""
     data = body()
     item_id = collection_service.add(current_user()["id"], data.get("edition_id"), data.get("kind"),
+                                     game_id=data.get("game_id"), new_edition=data.get("new_edition"),
                                      **{k: data[k] for k in EDITABLE if k in data})
     return jsonify(id=item_id), 201
 
@@ -80,9 +82,9 @@ def import_from_steam():
 @bp.patch("/collection/<int:item_id>")
 @login_required
 def update(item_id):
-    """{format?, status?, hours?, notes?, kind: owned (a wishlist item bought)}"""
+    """{format?, status?, hours?, notes?, kind: owned (a wishlist item bought), edition_id | new_edition}"""
     data = body()
-    changes = {k: data[k] for k in (*EDITABLE, "kind") if k in data}
+    changes = {k: data[k] for k in (*EDITABLE, "kind", "edition_id", "new_edition") if k in data}
     return jsonify(id=collection_service.update(current_user()["id"], item_id, changes))
 
 

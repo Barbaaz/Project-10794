@@ -69,6 +69,14 @@ def get_game(game_id):
     return jsonify({**game, "wanted_by": collection_service.wanted_by(game_id)})
 
 
+@bp.get("/<int:game_id>/editions")
+def all_editions(game_id):
+    """Every edition of the game, Standard first (the collection's edition choice)"""
+    if not game_service.game_exists(game_id):
+        abort(404, description="Game not found")
+    return jsonify(game_service.all_editions(game_id))
+
+
 @bp.get("/<int:game_id>/prices")
 def price_history(game_id):
     if not game_service.game_exists(game_id):

@@ -29,6 +29,8 @@ MIN_WISHERS = 2
 SHOWCASE = ("favourites", "most_played", "most_valuable", "achievements")
 SHOWCASE_SIZE = 5           # games in each section but the favourites
 MAX_FAVOURITES = 10
+# An edition the user names (user, 2026-10-11: "Lumière Edition", which neither the stores nor IGDB list)
+MIN_EDITION_NAME, MAX_EDITION_NAME = 2, 100
 
 
 class CollectionError(Exception):
@@ -117,11 +119,32 @@ def stats(rows):
     }
 
 
-def add(user_id, edition_id, kind, **changes):
-    """Add an edition to the collection or the wishlist (the item, or the existing one)."""
+def named_edition(s, game_id, name):
+    """
+    The game's edition with this name (its key: "Lumiere Edition" is "Lumière Edition"), made if
+    there's none: an edition the user owns or wants that no store sells. Only shown on the game page
+    once a store sells it (game_service.get_game), so a typo stays in the user's collection.
+    """
+    from app.services.listing_service import _edition_named
+    from core.editions import is_excluded
+    name = " ".join((name or "").split())
+    if not MIN_EDITION_NAME <= len(name) <= MAX_EDITION_NAME or is_excluded(name):
+        raise CollectionError("edition_name_invalid")
+    if not s.get(Game, _int(game_id)):
+        raise CollectionError("not_found", 404)
+    return _edition_named(s, int(game_id), name)
+
+
+def add(user_id, edition_id, kind, game_id=None, new_edition=None, **changes):
+    """
+    Add an edition to the collection or the wishlist (the item, or the existing one); new_edition:
+    the name of the game_id's edition the user has, when it isn't one we know (named_edition).
+    """
     if kind not in COLLECTION_KINDS:
         raise CollectionError("kind_invalid")
     with session() as s:
+        if new_edition:
+            edition_id = named_edition(s, game_id, new_edition)
         edition = s.get(GameEdition, _int(edition_id))
         if not edition:
             raise CollectionError("not_found", 404)
@@ -174,6 +197,8 @@ def add_wishes(user_id, edition_ids):
 def update(user_id, item_id, changes):
     with session() as s:
         item = _own(s, user_id, item_id)
+        if changes.get("edition_id") or changes.get("new_edition"):         # the edition they really have
+            _move_to_edition(s, item, changes.get("edition_id"), changes.get("new_edition"))
         if changes.get("kind") == "owned" and item.kind == "wishlist":    # "I bought it"
             if s.scalars(select(CollectionItem.id).where(CollectionItem.user_id == user_id, CollectionItem.kind == "owned",
                                                          CollectionItem.edition_id == item.edition_id)).first():
@@ -183,6 +208,20 @@ def update(user_id, item_id, changes):
         _apply(item, changes)
         item.updated_at = NOW
         return item.id
+
+
+def _move_to_edition(s, item, edition_id, new_edition):
+    """Another edition of the item's game (one we know, or one the user names)."""
+    if new_edition:
+        edition_id = named_edition(s, item.game_id, new_edition)
+    edition = s.get(GameEdition, _int(edition_id))
+    if not edition or edition.game_id != item.game_id:
+        raise CollectionError("edition_invalid")
+    if edition.id != item.edition_id and s.scalars(select(CollectionItem.id).where(
+            CollectionItem.user_id == item.user_id, CollectionItem.kind == item.kind,
+            CollectionItem.edition_id == edition.id)).first():
+        raise CollectionError("already_in_collection", 409)
+    item.edition_id = edition.id
 
 
 def best_new_price(edition_id):

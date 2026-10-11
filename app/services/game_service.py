@@ -145,6 +145,16 @@ def get_game(game_id):
     return game
 
 
+def all_editions(game_id):
+    """Every edition of a game, Standard first ([{id, name, name_en}]): the collection's "Qual edição?",
+    also editions no store sells now (get_game shows only those with offers)."""
+    editions = fetch_all("SELECT id, name FROM game_editions WHERE game_id = ? "
+                         "ORDER BY CASE WHEN edition_key = '' THEN 0 ELSE 1 END, name, id", game_id)
+    for e in editions:
+        e["name_en"] = edition_en(e["name"])
+    return editions
+
+
 def other_platforms(game):
     """
     The same game on our other platforms (the same IGDB entry), for "Também para Xbox Series X|S,

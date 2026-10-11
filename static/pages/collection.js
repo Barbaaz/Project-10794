@@ -73,7 +73,7 @@ function field(label, control, cols = "col-6 col-md-4") {
 
 function ownedControls(item) {
     return `
-        <div class="row g-2 mt-1 d-none" data-editor id="editor-${item.id}">
+        <div class="row g-2 mt-1" data-editor>
             ${field(t("collection_status"), `
                 <select class="form-select form-select-sm" data-field="status">
                     ${STATUSES.map(x => `<option value="${x}" ${item.status === x ? "selected" : ""}>${t(`status_play_${x}`)}</option>`).join("")}
@@ -99,24 +99,20 @@ function ownedControls(item) {
         </div>`;
 }
 
-const openEditors = new Set();     // items whose editor is open (kept across a re-render)
-
 // One item as a card in the grid: cover, name, platform, prices, what the user wrote, buttons
 function itemRow(item) {
     const owned = item.kind === "owned";
-    const open = openEditors.has(String(item.id));
     return `
-        <div class="col ${open ? "item-open" : ""}" data-col="${item.id}">
+        <div class="col">
           <div class="card h-100 item-card overflow-hidden ${item.good_deal ? "border-success border-2" : ""}" data-id="${item.id}">
             <a href="/game/${item.game_id}" class="item-cover-link" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
             <div class="card-body p-2 d-flex flex-column min-w-0">
                     <a href="/game/${item.game_id}" class="item-title fw-semibold small link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
                     <div class="small text-body-secondary">${esc(item.platform_name || "")}</div>
                     <div class="small mt-1">${priceLine(item)}</div>
-                    ${owned ? `<div class="item-facts small mt-1" data-facts>${ownedFacts(item)}</div>${ownedControls(item)}` : ""}
+                    ${owned ? `<div class="item-facts small mt-1" data-facts>${ownedFacts(item)}</div>` : ""}
                     <div class="d-flex flex-wrap gap-1 mt-auto pt-2">
-                        ${owned ? `<button type="button" class="btn btn-sm btn-secondary" data-action="edit"
-                                           aria-expanded="${open}" aria-controls="editor-${item.id}">${t(open ? "collection_edit_done" : "collection_edit")}</button>` : ""}
+                        ${owned ? `<button type="button" class="btn btn-sm btn-secondary" data-action="edit" aria-haspopup="dialog">${t("collection_edit")}</button>` : ""}
                         ${owned
                             // only physical copies can be sold (a digital game can't be handed over)
                             ? (item.format === "digital" ? "" : `<a class="btn btn-sm btn-success" href="/sell?game_id=${item.game_id}&edition_id=${item.edition_id}">${t("collection_sell")}</a>`)
@@ -148,8 +144,10 @@ function renderItems() {
         b.classList.toggle("active", b.dataset.kind === kind);
         b.setAttribute("aria-selected", b.dataset.kind === kind);
     });
-    document.getElementById("add-game-title").textContent = t(kind === "owned" ? "collection_add_game_owned" : "collection_add_game_wish");
-    document.getElementById("steam-import").classList.toggle("d-none", kind !== "owned");
+    const addTitle = t(kind === "owned" ? "collection_add_game_owned" : "collection_add_game_wish");
+    document.getElementById("add-game-title").textContent = addTitle;
+    document.getElementById("open-add").textContent = addTitle;
+    document.getElementById("open-steam").classList.toggle("d-none", kind !== "owned");
     const status = document.getElementById("filter-status");
     status.classList.toggle("d-none", kind !== "owned");
     const words = document.getElementById("filter-text").value.toLowerCase().split(/\s+/).filter(Boolean);
@@ -167,50 +165,8 @@ function renderItems() {
 
     list.querySelectorAll("[data-id]").forEach(row => {
         const id = row.dataset.id;
-        row.querySelectorAll("[data-field]").forEach(input => input.onchange = async () => {
-            const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { [input.dataset.field]: input.value } });
-            if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
-            const item = data.items.find(i => String(i.id) === id);
-            const numeric = ["hours", "achievements", "achievements_total"].includes(input.dataset.field);
-            item[input.dataset.field] = numeric ? (input.value ? Number(input.value.replace(",", ".")) : null) : input.value || null;
-            row.querySelector("[data-facts]").innerHTML = ownedFacts(item);
-            data.stats = recount();
-            renderStats();
-        });
         const editButton = row.querySelector("[data-action=edit]");
-        const editor = row.querySelector("[data-editor]");
-        if (editButton) {
-            const show = open => {
-                editor.classList.toggle("d-none", !open);
-                list.querySelector(`[data-col="${id}"]`).classList.toggle("item-open", open);
-                editButton.setAttribute("aria-expanded", open);
-                editButton.textContent = t(open ? "collection_edit_done" : "collection_edit");
-                open ? openEditors.add(id) : openEditors.delete(id);
-            };
-            show(openEditors.has(id));
-            editButton.onclick = () => {
-                show(editor.classList.contains("d-none"));
-                if (!editor.classList.contains("d-none")) editor.querySelector("select, input").focus();
-            };
-        }
-        // the score is the user's review of the game (game page): one per game, kept in step on every card of it
-        const score = row.querySelector("[data-score]");
-        if (score) score.onchange = async () => {
-            const item = data.items.find(i => String(i.id) === id);
-            const { ok, data: answer } = await api(`/api/games/${item.game_id}/reviews/mine/score`,
-                                                   { method: "PUT", body: { score: score.value } });
-            if (!ok) {
-                score.value = item.score ?? "";
-                return showMessage(false, t(`error_${answer?.error || "unknown"}`));
-            }
-            data.items.filter(i => i.game_id === item.game_id).forEach(i => i.score = answer.score);
-            row.querySelector("[data-facts]").innerHTML = ownedFacts(item);
-            list.querySelectorAll("[data-id]").forEach(other => {
-                const same = data.items.find(i => String(i.id) === other.dataset.id)?.game_id === item.game_id;
-                if (same && other.querySelector("[data-score]")) other.querySelector("[data-score]").value = answer.score ?? "";
-            });
-            showMessage(true, t("collection_score_saved"));
-        };
+        if (editButton) editButton.onclick = () => openEditor(id);
         row.querySelector("[data-action=remove]").onclick = async () => {
             if (!confirm(t("collection_remove_confirm"))) return;
             const { ok } = await api(`/api/collection/${id}`, { method: "DELETE" });
@@ -223,6 +179,103 @@ function renderItems() {
         };
     });
 }
+
+// An owned game's details in a window over the grid (user, 2026-10-11: not inside the card); each
+// field is saved when it changes, the grid is drawn again on closing
+const dialog = document.getElementById("item-dialog");
+let editing = null;          // the id of the item in the window
+let reloadOnClose = false;   // its edition changed: its name and prices are the new edition's
+function openEditor(id) {
+    const item = data.items.find(i => String(i.id) === id);
+    editing = id;
+    const body = document.getElementById("item-dialog-body");
+    body.innerHTML = `
+        <div class="d-flex gap-3 align-items-start">
+            <img class="dialog-cover" src="${esc(item.image || "")}" alt="">
+            <div class="flex-grow-1 min-w-0">
+                <h2 id="item-dialog-title" class="h5 mb-0">${esc(localName(item) || "")}</h2>
+                <div class="small text-body-secondary">${esc(item.platform_name || "")}</div>
+            </div>
+            <button type="button" class="btn-close" data-close aria-label="${esc(t("collection_edit_done"))}"></button>
+        </div>
+        <form id="edition-change" class="row g-2 mt-2" novalidate>
+            <div class="col-12"><label class="form-label small text-body-secondary mb-0 d-block">${esc(t("collection_edition"))}
+                <select class="form-select form-select-sm" name="edition" disabled><option>…</option></select></label></div>
+            <div class="col-12 d-none" data-typed>
+                <div class="input-group input-group-sm">
+                    <input name="typed" class="form-control" maxlength="100" placeholder="${esc(t("collection_other_edition_placeholder"))}"
+                           aria-label="${esc(t("collection_other_edition"))}">
+                    <button type="submit" class="btn btn-secondary">${t("collection_edition_change")}</button>
+                </div>
+            </div>
+        </form>
+        ${ownedControls(item)}
+        <div class="d-flex justify-content-end mt-3">
+            <button type="button" class="btn btn-primary btn-sm" data-close>${t("collection_edit_done")}</button>
+        </div>`;
+    body.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
+    body.querySelectorAll("[data-field]").forEach(input => input.onchange = async () => {
+        const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { [input.dataset.field]: input.value } });
+        if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
+        const numeric = ["hours", "achievements", "achievements_total"].includes(input.dataset.field);
+        item[input.dataset.field] = numeric ? (input.value ? Number(input.value.replace(",", ".")) : null) : input.value || null;
+        data.stats = recount();
+        renderStats();
+    });
+    // the score is the user's review of the game (game page): one per game, kept in step on every item of it
+    const score = body.querySelector("[data-score]");
+    score.onchange = async () => {
+        const { ok, data: answer } = await api(`/api/games/${item.game_id}/reviews/mine/score`,
+                                               { method: "PUT", body: { score: score.value } });
+        if (!ok) {
+            score.value = item.score ?? "";
+            return showMessage(false, t(`error_${answer?.error || "unknown"}`));
+        }
+        data.items.filter(i => i.game_id === item.game_id).forEach(i => i.score = answer.score);
+        showMessage(true, t("collection_score_saved"));
+    };
+    dialog.showModal();
+    loadEditionChange(item);
+}
+
+// The item's edition in the edit window: one we know is saved when picked, a named one with "Mudar"
+async function loadEditionChange(item) {
+    const form = document.getElementById("edition-change");
+    const choices = await editionChoices(item.game_id);
+    const current = `id:${item.edition_id}`;
+    form.edition.innerHTML = [...choices, { value: "other", label: t("collection_other_edition") }].map(c =>
+        `<option value="${esc(c.value)}" ${c.value === current ? "selected" : ""}>${esc(c.label)}</option>`).join("");
+    form.edition.disabled = false;
+    const save = async () => {
+        const { ok, data: answer } = await api(`/api/collection/${item.id}`, { method: "PATCH", body: editionBody(form.edition.value, form.typed.value) });
+        if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
+        reloadOnClose = true;
+        showMessage(true, t("collection_edition_saved"));
+    };
+    form.edition.onchange = () => {
+        const other = form.edition.value === "other";
+        form.querySelector("[data-typed]").classList.toggle("d-none", !other);
+        other ? form.typed.focus() : save();
+    };
+    form.onsubmit = event => { event.preventDefault(); save(); };
+}
+dialog.onclick = event => { if (event.target === dialog) dialog.close(); };      // a click outside the window
+
+// "Adicionar um jogo" and "Importar da Steam" open their windows; ✕ or a click outside closes them
+for (const [button, box] of [["open-add", "add-dialog"], ["open-steam", "steam-dialog"]]) {
+    const window_ = document.getElementById(box);
+    document.getElementById(button).onclick = () => window_.showModal();
+    window_.onclick = event => { if (event.target === window_) window_.close(); };
+    window_.querySelectorAll("[data-close]").forEach(b => b.onclick = () => window_.close());
+}
+dialog.onclose = async () => {
+    if (reloadOnClose) {
+        reloadOnClose = false;
+        await load();
+    }
+    renderItems();
+    document.querySelector(`#items [data-id="${editing}"] [data-action=edit]`)?.focus();
+};
 
 // The statistics again after an edit in the page (the server counts them the same way)
 function recount() {
@@ -257,18 +310,66 @@ async function load() {
 
 // A game not in the collection yet, from the catalogue or (one no store sells) IGDB (user, 2026-10-07):
 // its Standard edition goes onto the open tab; a game IGDB has and we don't is created first
-async function addGame(gameId, editionId) {
-    if (!editionId) {        // a catalogue game: its Standard edition (the game's editions come Standard first)
-        const game = await fetch(`/api/games/${gameId}`).then(r => r.ok ? r.json() : null);
-        editionId = game?.editions[0]?.id;
-        if (!editionId) return showMessage(false, t("error_unknown"));
-    }
-    const { ok, data: answer } = await api("/api/collection", { body: { edition_id: editionId, kind } });
-    if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
-    clearAddSearch();
-    await load();
-    showMessage(true, t(kind === "owned" ? "collection_added_owned" : "collection_added_wish"));
+// Which edition (user, 2026-10-11: a "Lumière Edition" that neither the stores nor IGDB list): the
+// game's editions, IGDB's we don't have, or one the user names. Used to add a game and to change one
+async function editionChoices(gameId) {
+    const [ours, igdb] = await Promise.all([
+        fetch(`/api/games/${gameId}/editions`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/igdb/games/${gameId}/editions`).then(r => r.ok ? r.json() : []).catch(() => []),   // IGDB down: ours only
+    ]);
+    return [...ours.map(e => ({ value: `id:${e.id}`, label: localName(e) })),
+            ...igdb.map(name => ({ value: `new:${name}`, label: name }))];
 }
+
+// What to send for a choice: {edition_id} or {new_edition}
+function editionBody(value, typed) {
+    if (value === "other") return { new_edition: typed.trim() };
+    return value.startsWith("id:") ? { edition_id: Number(value.slice(3)) } : { new_edition: value.slice(4) };
+}
+
+async function addGame(gameId, editionId) {
+    const form = document.getElementById("add-step-edition");
+    const [choices, game] = await Promise.all([editionChoices(gameId),
+                                               fetch(`/api/games/${gameId}`).then(r => r.ok ? r.json() : null).catch(() => null)]);
+    const chosen = editionId ? `id:${editionId}` : choices[0]?.value || "other";
+    form.innerHTML = `
+        ${game ? `<p class="mb-2"><strong>${esc(localName(game, "title"))}</strong> <span class="text-body-secondary small">${esc(game.platform_name)}</span></p>` : ""}
+        <fieldset>
+            <legend class="h6">${t(kind === "owned" ? "collection_which_edition_owned" : "collection_which_edition_wish")}</legend>
+            ${[...choices, { value: "other", label: t("collection_other_edition") }].map((c, i) => `
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="edition" id="edition-${i}" value="${esc(c.value)}" ${c.value === chosen ? "checked" : ""}>
+                    <label class="form-check-label" for="edition-${i}">${esc(c.label)}</label>
+                </div>`).join("")}
+            <input name="typed" class="form-control form-control-sm mt-1" maxlength="100" ${chosen === "other" ? "" : "disabled"}
+                   placeholder="${esc(t("collection_other_edition_placeholder"))}" aria-label="${esc(t("collection_other_edition"))}">
+        </fieldset>
+        <div class="d-flex gap-2 justify-content-end mt-3">
+            <button type="button" class="btn btn-sm btn-secondary" data-back>${t("collection_back")}</button>
+            <button type="submit" class="btn btn-sm btn-primary">${t("collection_add_this")}</button>
+        </div>`;
+    form.querySelectorAll("[name=edition]").forEach(r => r.onchange = () => {
+        form.typed.disabled = form.edition.value !== "other";
+        if (!form.typed.disabled) form.typed.focus();
+    });
+    form.querySelector("[data-back]").onclick = () => showAddStep("game");
+    form.onsubmit = async event => {
+        event.preventDefault();
+        const { ok, data: answer } = await api("/api/collection", { body: { kind, game_id: gameId, ...editionBody(form.edition.value, form.typed.value) } });
+        if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
+        document.getElementById("add-dialog").close();
+        await load();
+        showMessage(true, t(kind === "owned" ? "collection_added_owned" : "collection_added_wish"));
+    };
+    showAddStep("edition");
+}
+
+function showAddStep(step) {
+    document.getElementById("add-step-game").classList.toggle("d-none", step !== "game");
+    document.getElementById("add-step-edition").classList.toggle("d-none", step !== "edition");
+    if (step === "game") clearAddSearch();
+}
+document.getElementById("add-dialog").addEventListener("close", () => showAddStep("game"));
 
 const clearAddSearch = gamePicker({
     search: document.getElementById("add-search"),

@@ -187,3 +187,36 @@ def test_profile_showcase_in_the_users_order(market):
         ("favourites", [market["other_game"], market["game"]]),
     ]
     assert showcase[0]["items"][0]["hours"] == 40
+
+
+def test_an_edition_no_store_sells(market):
+    """The user's own edition (user, 2026-10-11: "Lumière Edition"): named once, the same key twice is one."""
+    client = market["client"]
+    sign_up(client, "lumiere")
+    added = client.post("/api/collection", json={"kind": "owned", "game_id": market["game"], "new_edition": "Lumière Edition"},
+                        headers=HEADERS)
+    assert added.status_code == 201
+    item = next(i for i in mine(client)["items"] if i["id"] == added.get_json()["id"])
+    assert "Lumière Edition" in item["name"]
+    editions = client.get(f"/api/games/{market['game']}/editions").get_json()
+    assert [e["name"] for e in editions][-1] == "Lumière Edition"
+    # the same edition written without the accent: the one already there
+    again = client.post("/api/collection", json={"kind": "wishlist", "game_id": market["game"], "new_edition": "Lumiere Edition"},
+                        headers=HEADERS).get_json()["id"]
+    assert next(i for i in mine(client)["items"] if i["id"] == again)["edition_id"] == item["edition_id"]
+    for name in ("", "x", "Código na caixa", "y" * 101):
+        response = client.post("/api/collection", json={"kind": "owned", "game_id": market["game"], "new_edition": name}, headers=HEADERS)
+        assert response.get_json()["error"] in ("edition_name_invalid", "not_found"), name
+
+
+def test_changing_an_items_edition(market):
+    client = market["client"]
+    sign_up(client, "changer")
+    item = add(client, market["edition"]).get_json()["id"]
+    patch = lambda body: client.patch(f"/api/collection/{item}", json=body, headers=HEADERS)
+    assert patch({"new_edition": "Collector's Edition"}).status_code == 200
+    moved = next(i for i in mine(client)["items"] if i["id"] == item)
+    assert moved["edition_id"] != market["edition"]
+    assert patch({"edition_id": market["other_edition"]}).get_json()["error"] == "edition_invalid"   # another game's
+    add(client, market["edition"])                                                                 # Standard again...
+    assert patch({"edition_id": market["edition"]}).get_json()["error"] == "already_in_collection"  # ...so not twice
