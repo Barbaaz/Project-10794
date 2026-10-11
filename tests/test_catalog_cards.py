@@ -60,3 +60,12 @@ def test_one_deal_per_game_most_money_saved_first(catalogue):
         ("Big Saver", "PS5", 50.0),          # 33%, but 50 € saved
         ("Shared Game", "Switch", 35.0),     # its PS5 gap (20 €) left out: one deal per game
     ]
+
+
+def test_a_game_named_differently_on_another_platform_joins_its_card(catalogue, app_on_test_db):
+    """games.card_key (pipeline/card_keys.py): "Solo Game" on PS5 is "shared game" under another name."""
+    app_on_test_db.conn.cursor().execute("UPDATE games SET card_key = 'shared game' WHERE normalized_title = 'solo game'")
+    page = game_service.catalog()
+    assert page["total"] == 2
+    shared = {g["name"]: g for g in page["groups"]}["Shared Game"]
+    assert sorted(a["name"] for a in shared["alternatives"]) == ["Shared Game", "Solo Game"]

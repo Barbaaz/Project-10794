@@ -113,8 +113,8 @@ def _best_store_deals(limit, min_percent, max_percent, platform):
         -- one deal per game (its platforms and editions compete), the most money saved first: a
         -- percentage sort put the same -60% on every card (the gaps are capped at max_percent)
         picked AS (
-            SELECT gap.*, g.normalized_title,
-                   ROW_NUMBER() OVER (PARTITION BY g.normalized_title
+            SELECT gap.*,
+                   ROW_NUMBER() OVER (PARTITION BY COALESCE(g.card_key, g.normalized_title)
                                       ORDER BY gap.next_price - gap.price DESC, gap.offer_id) AS game_rn
             FROM gaps gap
             JOIN store_products sp ON sp.id = gap.offer_id

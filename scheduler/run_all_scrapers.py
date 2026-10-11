@@ -17,6 +17,7 @@ import sys
 from scheduler.jobs import (LIGHT_STORES, SCRAPERS, RanRecently, active_store_slugs, hours_since_last_run,
                             run_store, setup_logging)
 from scheduler.notify import notify, run_summary
+from pipeline import card_keys
 from pipeline.igdb import enrich_games, fill_names, fill_tags, fill_time_to_beat, fill_videos, refresh_critic_scores
 from app.services.chat_service import complete_overdue
 from app.services.wish_alert_service import check_all as wish_alerts
@@ -68,6 +69,12 @@ def main(light=False, due=False):
             refresh_critic_scores()
         except Exception as e:
             log.warning("IGDB lookup skipped: %s", e)
+
+    # One front-page card for a game the stores name differently on two platforms
+    try:
+        log.info("Cards: %d games under another platform's name", card_keys.refresh())
+    except Exception as e:
+        log.warning("Card keys skipped: %s", e)
 
     # Marketplace: purchases sent 7 days ago without a problem reported are completed
     # (also done whenever someone opens their messages; this covers quiet days)
