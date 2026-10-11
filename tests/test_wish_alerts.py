@@ -3,9 +3,9 @@ from decimal import Decimal
 
 import pytest
 
-from helpers import HEADERS, log_in, sign_up
+from helpers import HEADERS, log_in, new_listing, sign_up
 from app.services import wish_alert_service
-from app.services.wish_alert_service import change
+from app.services.wish_alert_service import change, used_change
 
 
 @pytest.fixture
@@ -57,7 +57,7 @@ def test_drop_and_back_in_stock_once(market, store):
     assert wish_alert_service.check_all() == {"users": 1, "items": 2, "sent": 1}
     to, subject, text = sent[0]
     assert to == "wisher@example.pt" and subject == "Lista de desejos: 2 jogos com novidades"
-    assert "desceu de 59,99 € para 44,99 € na Loja" in text and "de novo em stock: 20,00 € na Loja" in text
+    assert "desceu de 59,99 € para 44,99 € na Loja" in text and "à venda: 20,00 € na Loja" in text
     assert f"/game/{market['game']}" in text and "/collection?alerts_off=" in text
 
     assert wish_alert_service.check_all()["sent"] == 0           # the same news isn't sent twice
@@ -100,3 +100,23 @@ def test_login_keeps_the_language(market):
     client.post("/api/auth/logout", headers=HEADERS)
     client.post("/api/auth/login", headers=HEADERS, json={"login": "speaker", "password": "segredo123", "lang": "en"})
     assert market["db"].execute("SELECT lang FROM users WHERE username = 'speaker'").fetchone()[0] == "en"
+
+
+def test_used_change_rules():
+    assert used_change(None, True) == (None, True)              # first check: remembered
+    assert used_change(False, True) == ("used_for_sale", True)
+    assert used_change(True, True) == (None, True)              # still for sale: said already
+    assert used_change(True, False) == (None, False)
+
+
+def test_a_user_selling_a_wished_game(market, store):
+    prices, sent = store
+    client = market["client"]
+    sign_up(client, "looker")
+    wish(client, market["edition"])                              # looking for it: nobody sells it
+    assert wish_alert_service.check_all()["sent"] == 0
+    sign_up(client, "seller_of_it")
+    assert new_listing(market, price="25").status_code == 201
+    assert wish_alert_service.check_all() == {"users": 1, "items": 1, "sent": 1}
+    assert "à venda em segunda mão por um utilizador: 25,00 €" in sent[0][2]
+    assert wish_alert_service.check_all()["sent"] == 0           # once

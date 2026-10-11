@@ -382,6 +382,7 @@ class CollectionItem(Base):
     # wishlist alerts: the best new price at the last check (None: none in stock), and when
     alert_price = mapped_column(Numeric(10, 2))
     alert_checked_at = mapped_column(DateTime)
+    alert_used = mapped_column(Boolean)       # a user was selling a copy at the last check (None: not checked)
     created_at = created_at()
     updated_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 

@@ -43,6 +43,10 @@ function priceLine(item) {
             ${item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}</span>` : ""}
             ${item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : ""}
             ${item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : ""}`);
+    } else if (item.kind === "wishlist" && !item.used) {
+        // nobody sells it: "looking for", with an e-mail when a store or a user does (wish_alert_service)
+        parts.push(`<span class="badge text-bg-info">${t("collection_looking_for")}</span>
+            <span class="text-body-secondary">${t("collection_looking_for_help")}</span>`);
     } else {
         parts.push(`<span class="text-body-secondary">${t("collection_no_store_price")}</span>`);
     }
