@@ -139,6 +139,38 @@ function platformChips(items) {
     box.querySelectorAll("[data-platform]").forEach(b => b.onclick = () => { platform = b.dataset.platform; renderItems(); });
 }
 
+// The order and, on the wishlist, which wishes (user, 2026-10-11: "sort my wishlist and maybe filter it")
+const SORTS = { owned: ["name", "added", "value", "hours"], wishlist: ["name", "added", "price_asc", "price_desc", "drop"] };
+const WISH_FILTERS = {
+    "": () => true,
+    deals: i => i.good_deal,                                     // on sale, at its lowest, or cheaper than when wished
+    available: i => i.best_price !== null || !!i.used,
+    used: i => !!i.used,
+    looking: i => i.best_price === null && !i.used,              // nobody sells it ("À procura")
+};
+const sortBy = { owned: "name", wishlist: "name" };
+const price = i => i.best_price ?? i.used?.price ?? null;
+const last = (a, b, value, descending) => {                       // no value: at the end, either way
+    const x = value(a), y = value(b);
+    if (x === null || y === null) return (x === null) - (y === null);
+    return descending ? y - x : x - y;
+};
+const byName = (a, b) => (localName(a) || "").localeCompare(localName(b) || "", LOCALE);
+const ORDER = {
+    name: byName,
+    added: (a, b) => (b.created_at || "").localeCompare(a.created_at || ""),
+    value: (a, b) => last(a, b, price, true),
+    hours: (a, b) => last(a, b, i => i.hours ?? null, true),
+    price_asc: (a, b) => last(a, b, price, false),
+    price_desc: (a, b) => last(a, b, price, true),
+    drop: (a, b) => last(a, b, i => i.price_drop ?? null, true),
+};
+
+function sortOptions() {
+    const sort = document.getElementById("sort");
+    sort.innerHTML = SORTS[kind].map(s => `<option value="${s}" ${sortBy[kind] === s ? "selected" : ""}>${t(`sort_${s}`)}</option>`).join("");
+}
+
 function renderItems() {
     document.querySelectorAll("[data-kind]").forEach(b => {
         b.classList.toggle("active", b.dataset.kind === kind);
@@ -150,13 +182,17 @@ function renderItems() {
     document.getElementById("open-steam").classList.toggle("d-none", kind !== "owned");
     const status = document.getElementById("filter-status");
     status.classList.toggle("d-none", kind !== "owned");
+    const wish = document.getElementById("filter-wish");
+    wish.classList.toggle("d-none", kind !== "wishlist");
+    sortOptions();
     const words = document.getElementById("filter-text").value.toLowerCase().split(/\s+/).filter(Boolean);
     const listed = data.items.filter(i => i.kind === kind
         && (kind !== "owned" || !status.value || i.status === status.value)
+        && (kind !== "wishlist" || WISH_FILTERS[wish.value](i))
         && words.every(w => `${i.name || ""} ${i.name_en || ""}`.toLowerCase().includes(w)));
     platformChips(listed);
     const items = listed.filter(i => !platform || (i.platform_name || "?") === platform)
-        .sort((a, b) => (localName(a) || "").localeCompare(localName(b) || "", LOCALE));
+        .sort((a, b) => ORDER[sortBy[kind]](a, b) || byName(a, b));
     const list = document.getElementById("items");
     list.innerHTML = items.map(itemRow).join("");
     const empty = document.getElementById("empty");
@@ -434,6 +470,10 @@ async function start() {
     document.getElementById("filter-status").innerHTML = `<option value="">${t("collection_all_statuses")}</option>`
         + STATUSES.map(x => `<option value="${x}">${t(`status_play_${x}`)}</option>`).join("");
     document.getElementById("filter-status").onchange = renderItems;
+    document.getElementById("filter-wish").innerHTML = Object.keys(WISH_FILTERS).map(f =>
+        `<option value="${f}">${t(`wish_filter_${f || "all"}`)}</option>`).join("");
+    document.getElementById("filter-wish").onchange = renderItems;
+    document.getElementById("sort").onchange = event => { sortBy[kind] = event.target.value; renderItems(); };
     document.getElementById("filter-text").oninput = renderItems;
     document.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => {
         kind = b.dataset.kind;
