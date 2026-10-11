@@ -108,6 +108,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/games?q=&platform=&page=&per_page=` | Games matching every word of `q`, with `best_price` (in stock), number of `stores` / `editions`, `has_discount` |
 | `GET /api/games/<id>` | The game with its `editions`, each with its store `offers` (in stock first, cheapest first) |
 | `GET /api/games/<id>/prices?days=90` | Price history per offer |
+| `GET /api/games/<id>/editions` | Every edition of the game, Standard first, also those no store sells now (the collection's edition choice) |
 | `GET /api/discounts?platform=&min_percent=&page=` | Offers that are really on sale, biggest discount first |
 | `GET /api/discounts/featured?limit=12&min_percent=10` | Front page: biggest real discounts, one per game edition (new, in stock) |
 | `GET /api/deals?limit=12&min_percent=15` | Editions clearly cheaper at one store than at the next cheapest (15–60% gap, a comparison, not a discount), one per game, the most money saved (`savings`) first; shown while there are no real discounts |
@@ -149,7 +150,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `POST /api/ratings/<id>/reply` `{reply}` | The rated user answers a rating |
 | `GET /api/users/<username>` | Public profile: average rating, ratings received, listings, game reviews (never the email) |
 | `GET /api/collection` · `GET /api/collection/editions` | The user's collection and wishlist with current prices and statistics (per platform / status, hours, worth new / used) · which editions they have (for the game page's Tenho / Quero) |
-| `POST /api/collection` `{edition_id, kind: owned\|wishlist, format?, status?, hours?, notes?}` · `PATCH` / `DELETE /api/collection/<id>` | Add (owning one takes it off the wishlist) · edit (`kind: owned` = bought it) / remove |
+| `POST /api/collection` `{edition_id \| game_id + new_edition, kind: owned\|wishlist, format?, status?, hours?, notes?}` · `PATCH` / `DELETE /api/collection/<id>` | Add (owning one takes it off the wishlist; `new_edition`: an edition the user names, made if we don't have it) · edit (`kind: owned` = bought it; `edition_id` / `new_edition` = another edition of the game) / remove |
 | `PUT /api/collection/settings` `{public?, wish_alerts?, lang?}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes never shown, hours only in the showcase's "most played" when the user shows it); wishlist alerts by e-mail on / off · a public collection |
 | `PUT /api/collection/showcase` `{sections, favourites}` | The profile's showcase: which sections (`favourites`, `most_played`, `most_valuable`, `achievements`) it shows, in order, and the top 10 (owned item ids, in order). Shown with the public collection (`GET /api/users/<username>/collection` → `showcase`) |
 | `POST /api/collection/alerts-off` `{token}` | The link in a wishlist alert switches the alerts off (no log-in needed) |
