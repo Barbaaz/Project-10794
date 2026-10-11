@@ -208,7 +208,9 @@ function renderItems() {
         const editButton = row.querySelector("[data-action=edit]");
         if (editButton) editButton.onclick = () => openEditor(id);
         row.querySelector("[data-action=remove]").onclick = async () => {
-            if (!confirm(t("collection_remove_confirm"))) return;
+            const item = data.items.find(i => String(i.id) === id);
+            const fromSteam = item.kind === "owned" && item.format === "digital" && item.steam_app_id;   // not imported again
+            if (!confirm(t(fromSteam ? "collection_remove_confirm_steam" : "collection_remove_confirm"))) return;
             const { ok } = await api(`/api/collection/${id}`, { method: "DELETE" });
             if (ok) load();
         };
@@ -430,6 +432,7 @@ async function importSteam(profile) {
     buttons.forEach(b => b.disabled = false);
     if (!ok) return result.textContent = t(`error_${answer?.error || "unknown"}`);
     result.textContent = t("steam_imported", { total: answer.total, added: answer.added, updated: answer.updated })
+        + (answer.skipped ? " " + t("steam_skipped", { n: answer.skipped }) : "")
         + (answer.missing.length ? " " + t("steam_missing", { missing: answer.missing.length }) : "");
     const hours = h => h ? ` · ${fmtNumber(h)} h` : "";
     list.innerHTML = answer.missing.map(m => `

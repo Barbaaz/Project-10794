@@ -5,7 +5,9 @@ games only when the profile's game details are public. Each game is linked to ou
 IGDB's Steam ids (external_games, source 1), else by its name; those go in as owned, digital, with
 Steam's hours and achievements. Games we don't have are made from IGDB for the collection only (user,
 2026-10-11): they stay out of the catalogue until a store or a seller offers them. The profile is
-remembered, so the import can be refreshed with one button.
+remembered, so the import can be refreshed with one button. A Steam game the user took out of the
+collection is never imported again (SteamSkip): Steam sends games marked "private" when the site's
+key is the user's own, and no API we can use tells them apart.
 """
 import os
 import re
@@ -19,7 +21,7 @@ from decimal import Decimal
 import requests
 from sqlalchemy import select
 
-from app.models import CollectionItem, Game, GameEdition, Platform, User
+from app.models import CollectionItem, Game, GameEdition, Platform, SteamSkip, User
 from app.services import collection_service
 from app.services.igdb_game_service import IGDBGameError, _with_standard_edition, collection_editions, query
 from core.normalizer import normalize_name
@@ -172,6 +174,9 @@ def import_games(user_id, profile=None):
         if not steamid:
             raise SteamError("steam_profile_invalid")
     games = owned_games(steamid)
+    with session() as s:          # taken out of the collection before (private on Steam, or not wanted)
+        skipped = set(s.scalars(select(SteamSkip.app_id).where(SteamSkip.user_id == user_id)))
+    games = [g for g in games if g["appid"] not in skipped]
     with _last_lock:               # only a read library counts: a private profile made public can try again at once
         _last[user_id] = time.monotonic()
     try:
@@ -228,4 +233,4 @@ def import_games(user_id, profile=None):
     missing = [{"name": g["name"], "hours": round(g["minutes"] / 60, 1) if g["minutes"] else None}
                for g in games if g["appid"] not in editions]
     missing.sort(key=lambda m: m["name"].lower())
-    return {"added": added, "updated": updated, "total": len(games), "missing": missing}
+    return {"added": added, "updated": updated, "total": len(games), "skipped": len(skipped), "missing": missing}
