@@ -121,6 +121,40 @@ def create(user_id, igdb_id, platform_code):
         return _with_standard_edition(s, game)
 
 
+def collection_editions(igdb_ids, platform_code, batch=500):
+    """
+    {IGDB id: Standard edition id} for a Steam import (user, 2026-10-11): games we have already
+    (same IGDB game or name on the platform), the rest created from IGDB in a few requests, with
+    no games-a-day limit and no created_by. They only reach the catalogue if a store or a seller
+    offers them (game_service.catalog); IGDB games without a name are left out.
+    """
+    platform_igdb = IGDB_PLATFORMS[platform_code]
+    found = {}
+    with session() as s:
+        platform = s.scalars(select(Platform).where(Platform.code == platform_code)).one()
+        for game in s.scalars(select(Game).where(Game.igdb_id.in_(igdb_ids), Game.platform_id == platform.id)
+                              .order_by(Game.id)):
+            found.setdefault(game.igdb_id, _with_standard_edition(s, game)["edition_id"])
+        wanted = [i for i in dict.fromkeys(igdb_ids) if i not in found]
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        for start in range(0, len(wanted), batch):
+            ids = ",".join(str(int(i)) for i in wanted[start:start + batch])
+            for g in query(f"fields {FIELDS},platforms; where id = ({ids}); limit {batch};"):
+                if not g.get("name") or (g.get("platforms") and platform_igdb not in g["platforms"]):
+                    continue
+                key = normalize_name(g["name"])
+                game = s.scalars(select(Game).where(Game.normalized_title == key, Game.platform_id == platform.id)).first()
+                if game is None:
+                    info = game_info(g)
+                    game = Game(platform_id=platform.id, title=g["name"][:300], normalized_title=key,
+                                image_url=COVER_URL.format(info["cover_image_id"]) if info["cover_image_id"] else None,
+                                igdb_checked_at=now, **info)
+                    s.add(game)
+                    s.flush()
+                found[g["id"]] = _with_standard_edition(s, game)["edition_id"]
+    return found
+
+
 # Versions only sold as downloads: not a copy anyone can sell here (physical copies only)
 DIGITAL_VERSION = re.compile(r"digital|cloud|download", re.IGNORECASE)
 

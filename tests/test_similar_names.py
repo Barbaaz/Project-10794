@@ -1,6 +1,6 @@
 """Possible duplicates by name (core/similar_names.py): pairs found in the real catalogue, 2026-10-04."""
 from core.normalizer import normalize_name
-from core.similar_names import similar, similar_pairs
+from core.similar_names import card_keys, similar, similar_pairs
 
 
 def alike(a, b):
@@ -35,3 +35,18 @@ def test_pairs_need_the_same_platform_and_no_different_igdb_entries():
              (4, 5, normalize_name("Captain Toad: Treasure Tracker"), 10, "Captain Toad: Treasure Tracker"),
              (5, 5, normalize_name("CAPTAIN TOAD: TREASURE TREACKER"), 11, "CAPTAIN TOAD: TREASURE TREACKER")]
     assert similar_pairs(games) == [(1, 2)]        # 4 / 5: IGDB already says they're different games
+
+
+def test_one_card_across_platforms():
+    """The same IGDB game named differently on two platforms shares a card (user 2026-10-11)."""
+    games = [(1, "PS5", "resident evil 7", 19562, "Resident Evil 7"),
+             (2, "PS4", "resident evil 7 biohazard", 19562, "Resident Evil 7 Biohazard"),
+             (3, "XboxOne", "resident evil 7 biohazard", 19562, "Resident Evil 7 Biohazard"),
+             # an IGDB mismatch alone: names too different (numbers)
+             (4, "XboxOne", "monster energy supercross", 339556, "Monster Energy Supercross"),
+             (5, "PS5", "monster energy supercross 25", 339556, "Monster Energy Supercross 25"),
+             # two on one platform (a gift box named as a game): left alone
+             (6, "Switch", "hello kitty island adventure", 254871, "Hello Kitty Island Adventure"),
+             (7, "Switch", "hello kitty island adventure gift box", 254871, "Hello Kitty Island Adventure Gift Box"),
+             (8, "PS5", "hello kitty island adventure", 254871, "Hello Kitty Island Adventure")]
+    assert card_keys(games) == {1: "resident evil 7 biohazard"}

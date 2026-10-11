@@ -443,6 +443,9 @@ function historyTable(edition) {
 let marketLoaded = false;
 async function loadMarket() {
     document.getElementById("sell-link").href = `/sell?game_id=${GAME_ID}`;
+    const wanted = document.getElementById("market-wanted");
+    wanted.classList.toggle("d-none", !game.wanted_by);
+    if (game.wanted_by) wanted.innerHTML = `<span class="badge text-bg-info">${t("in_demand")}</span> ${esc(t("in_demand_game", { n: game.wanted_by }))}`;
     if (marketLoaded) return;
     marketLoaded = true;
     const listings = await fetch(`/api/listings?game_id=${GAME_ID}`).then(r => r.json()).catch(() => []);

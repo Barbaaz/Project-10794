@@ -130,6 +130,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/listings?game_id=` · `GET /api/listings/<id>` | Pre-owned copies people sell (active / reserved), with photos; never the seller's email |
 | `GET /api/listings?platform=&sort=newest\|price_asc\|price_desc&page=` | The "Used" tab: one group per game edition with its sellers' active listings, paged |
 | `GET /api/listings/mine` | The logged-in seller's listings |
+| `GET /api/listings/in-demand` | The games most users wish for (2 or more; counts only) → `[{game_id, name, platform, wishers, used}]`, for /sell. A game's `wanted_by` (`GET /api/games/<id>`) is the same count |
 | `POST /api/listings` (multipart: `game_id, edition_id, price, condition, description` + 3–10 `photos`) | Put a game up for sale; photos are re-saved without EXIF (no GPS location), 1600 px + thumbnail |
 | `PATCH /api/listings/<id>` `{price?, condition?, description?, status?}` | The seller changes it (status: active / reserved / sold / removed) |
 | `POST /api/listings/<id>/photos` · `DELETE /api/listings/<id>/photos/<photo_id>` | Add / remove photos (always 3–10) |
@@ -140,7 +141,8 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/igdb/games?q=` · `POST /api/igdb/games` `{igdb_id, platform}` | The sell form, for games the catalogue doesn't have (older platforms): IGDB games on our platforms · the game on that platform, created from IGDB if needed (20 per user per day) → `{game_id, edition_id}` |
 | `PUT /api/mod/games/<id>/title` `{title}` | Moderators: correct a store's typo in a game's title, kept by the processing and the rematch (`""` = the stores' title again) |
 | `PUT /api/mod/games/<id>/title-en` `{title_en}` | Moderators: a game's English name, shown when the page is in English (`""` = the store's title) |
-| `POST /api/collection/steam` `{profile}` | The user's Steam games (profile link, custom name or id; game details public) into the collection: those we have on PC as owned, digital, with Steam's hours → `{added, updated, total, missing: [{name, igdb_id, hours}]}`; one import per 10 min. Needs `STEAM_API_KEY` |
+| `GET /api/collection/steam` | The last Steam import's profile, for the refresh button → `{profile: {steam_id, imported_at} \| null}` |
+| `POST /api/collection/steam` `{profile?}` | The user's Steam games (profile link, custom name or id; game details public; none: the last one again) into the collection as owned, digital, with Steam's hours and achievements; games we don't have are made from IGDB, only in the collection until a store or seller offers them → `{added, updated, total, missing: [{name, hours}]}` (missing: unknown to IGDB); one import per 10 min. Needs `STEAM_API_KEY` |
 | `POST /api/collection/import` `{ids}` | Favourites an old browser kept (before accounts; favourites are now the wishlist), put on the wishlist (merged editions followed) → `{added}` |
 | `GET /api/ratings/pending` | Completed purchases the user still has to rate (`overdue` after 14 days: buying and selling blocked until rated) |
 | `POST /api/conversations/<id>/rating` `{stars, comment?}` | Rate the other side of a completed purchase (changeable for 14 days) |
@@ -148,7 +150,8 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/users/<username>` | Public profile: average rating, ratings received, listings, game reviews (never the email) |
 | `GET /api/collection` · `GET /api/collection/editions` | The user's collection and wishlist with current prices and statistics (per platform / status, hours, worth new / used) · which editions they have (for the game page's Tenho / Quero) |
 | `POST /api/collection` `{edition_id, kind: owned\|wishlist, format?, status?, hours?, notes?}` · `PATCH` / `DELETE /api/collection/<id>` | Add (owning one takes it off the wishlist) · edit (`kind: owned` = bought it) / remove |
-| `PUT /api/collection/settings` `{public?, wish_alerts?, lang?}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes and hours never shown); wishlist alerts by e-mail on / off · a public collection |
+| `PUT /api/collection/settings` `{public?, wish_alerts?, lang?}` · `GET /api/users/<username>/collection` | Show the collection on the profile (private by default; notes never shown, hours only in the showcase's "most played" when the user shows it); wishlist alerts by e-mail on / off · a public collection |
+| `PUT /api/collection/showcase` `{sections, favourites}` | The profile's showcase: which sections (`favourites`, `most_played`, `most_valuable`, `achievements`) it shows, in order, and the top 10 (owned item ids, in order). Shown with the public collection (`GET /api/users/<username>/collection` → `showcase`) |
 | `POST /api/collection/alerts-off` `{token}` | The link in a wishlist alert switches the alerts off (no log-in needed) |
 | `GET /api/games/<id>/reviews?page=` | Players' reviews of a game on that platform: average, count and how many gave each score 1–10, the user's own review, 20 shown reviews per page (newest first; hidden ones and blocked users' left out; `owner` = has the game in their collection). Catalogue / deals / wishlist cards carry `review_score` and `review_count` |
 | `PUT /api/games/<id>/reviews/mine` `{score: 1–10, title?, body?}` · `DELETE` | Write or change one's review (one per user and game) · delete it (not once a moderator hid it) |

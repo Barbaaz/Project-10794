@@ -21,7 +21,7 @@ def test_owned_games_with_status_and_stats(market):
     sign_up(client, "collector")
     item = add(client, market["edition"], status="playing", hours="12,5", notes="Comprado em 2025.").get_json()["id"]
     assert add(client, market["edition"]).get_json()["id"] == item               # the same edition once per list
-    add(client, market["other_edition"], format="digital", status="platinum")
+    add(client, market["other_edition"], format="digital", status="finished")
 
     data = mine(client)
     assert [i["kind"] for i in data["items"]] == ["owned", "owned"] and data["public"] is False
@@ -30,11 +30,14 @@ def test_owned_games_with_status_and_stats(market):
                                                                                  "Market Test Game")
     stats = data["stats"]
     assert (stats["owned"], stats["hours"], stats["completed"], stats["statuses"]) == \
-           (2, 12.5, 1, {"playing": 1, "platinum": 1})
+           (2, 12.5, 1, {"playing": 1, "finished": 1})
     assert stats["platforms"] == [["PlayStation 5", 2]]
 
-    assert client.patch(f"/api/collection/{item}", json={"status": "completed", "hours": 30}, headers=HEADERS).status_code == 200
+    assert client.patch(f"/api/collection/{item}", json={"status": "finished", "hours": 30}, headers=HEADERS).status_code == 200
     assert mine(client)["stats"]["completed"] == 2
+    # no status chosen: "owned" (what an owned game starts as)
+    assert client.patch(f"/api/collection/{item}", json={"status": ""}, headers=HEADERS).status_code == 200
+    assert next(i for i in mine(client)["items"] if i["id"] == item)["status"] == "owned"
     assert client.delete(f"/api/collection/{item}", headers=HEADERS).status_code == 200
     assert mine(client)["stats"]["owned"] == 1
 
@@ -56,7 +59,7 @@ def test_wishlist_becomes_owned(market):
 
     # "I bought it": the wish becomes an owned game
     assert client.patch(f"/api/collection/{wish}", json={"kind": "owned"}, headers=HEADERS).get_json() == {"id": wish}
-    assert [(i["kind"], i["format"]) for i in mine(client)["items"]] == [("owned", "physical")]
+    assert [(i["kind"], i["format"], i["status"]) for i in mine(client)["items"]] == [("owned", "physical", "owned")]
 
     # adding an owned game takes it off the wishlist
     add(client, market["other_edition"], kind="wishlist")
@@ -82,13 +85,13 @@ def test_checks(market):
 def test_private_unless_made_public(market):
     client = market["client"]
     sign_up(client, "shower")
-    add(client, market["edition"], status="completed", notes="Só para mim.")
+    add(client, market["edition"], status="paused", notes="Só para mim.")
     assert client.get("/api/users/shower/collection").status_code == 404
     assert client.put("/api/collection/settings", json={"public": True}, headers=HEADERS).get_json()["public"] is True
 
     sign_up(client, "visitor")
     public = client.get("/api/users/shower/collection").get_json()
-    assert [i["status"] for i in public["items"]] == ["completed"]
+    assert [i["status"] for i in public["items"]] == ["paused"]
     assert "notes" not in public["items"][0] and "hours" not in public["items"][0]        # notes stay private
     assert public["stats"]["owned"] == 1
 
@@ -146,3 +149,41 @@ def test_a_wish_remembers_its_price(market, monkeypatch):
     # bought: no longer a wish, no wish price
     client.patch(f"/api/collection/{wish}", json={"kind": "owned"}, headers=HEADERS)
     assert market["db"].execute("SELECT wish_price FROM collection_items WHERE id = ?", wish).fetchone()[0] is None
+
+
+def test_in_demand_from_two_wishers(market):
+    """Games users look for (user, 2026-10-11), counts only: one wish alone is never shown."""
+    client = market["client"]
+    demand = lambda: client.get("/api/listings/in-demand").get_json()
+    sign_up(client, "wants_one")
+    add(client, market["edition"], kind="wishlist")
+    assert demand() == [] and client.get(f"/api/games/{market['game']}").get_json()["wanted_by"] == 0
+    sign_up(client, "wants_two")
+    add(client, market["edition"], kind="wishlist")
+    assert [(g["game_id"], g["wishers"], g["used"]) for g in demand()] == [(market["game"], 2, 0)]
+    assert client.get(f"/api/games/{market['game']}").get_json()["wanted_by"] == 2
+
+
+def test_profile_showcase_in_the_users_order(market):
+    """The profile's sections and top 10 (user, 2026-10-11), shown with a public collection only."""
+    client = market["client"]
+    sign_up(client, "show_off")
+    first = add(client, market["edition"], hours="40", achievements=10, achievements_total=20).get_json()["id"]
+    second = add(client, market["other_edition"], hours="5").get_json()["id"]
+    put = lambda body: client.put("/api/collection/showcase", json=body, headers=HEADERS)
+    assert put({"sections": ["most_played", "favourites"], "favourites": [second, first]}).status_code == 200
+    assert mine(client)["profile_sections"] == ["most_played", "favourites"]
+    for body in ({"sections": ["most_played", "most_played"], "favourites": []},     # twice
+                 {"sections": ["secrets"], "favourites": []},
+                 {"sections": [], "favourites": list(range(1, 12))},                    # more than 10
+                 {"sections": [], "favourites": [999999]}):                              # not theirs
+        assert put(body).get_json()["error"] == "showcase_invalid", body
+
+    assert client.get("/api/users/show_off/collection").status_code == 404           # private: nothing shown
+    client.put("/api/collection/settings", json={"public": True}, headers=HEADERS)
+    showcase = client.get("/api/users/show_off/collection").get_json()["showcase"]
+    assert [(s["section"], [g["game_id"] for g in s["items"]]) for s in showcase] == [
+        ("most_played", [market["game"], market["other_game"]]),
+        ("favourites", [market["other_game"], market["game"]]),
+    ]
+    assert showcase[0]["items"][0]["hours"] == 40

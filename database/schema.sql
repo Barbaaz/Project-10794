@@ -82,6 +82,9 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS kind varchar(12) NOT NULL DEFAULT 'ga
 -- How many critics' reviews games.rating is made of (2026-10-10; before, rating was IGDB's total
 -- rating, critics and IGDB users mixed). NULL = not looked up yet, 0 = IGDB has no critics' score
 ALTER TABLE games ADD COLUMN IF NOT EXISTS rating_count integer NULL;
+-- The front page's card for a game written differently on another platform (2026-10-11,
+-- core/similar_names.card_keys, pipeline/card_keys.py); NULL = its own normalized_title
+ALTER TABLE games ADD COLUMN IF NOT EXISTS card_key varchar(300) NULL;
 
 -- Editions of a game: Standard, Deluxe, Day One, Collector's, Game Key Card...
 CREATE TABLE IF NOT EXISTS game_editions (

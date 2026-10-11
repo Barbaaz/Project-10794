@@ -14,7 +14,7 @@ Rules, on the matching keys (core/normalizer.py):
 - not two games IGDB matched to different entries (IGDB already tells them apart).
 """
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from difflib import SequenceMatcher
 
 from core.normalizer import numerals
@@ -95,3 +95,43 @@ def similar_pairs(games):
                     if similar(pa[1], pb[1], pa[3], pb[3]):
                         pairs.add((a, b))
     return sorted(pairs)
+
+
+def card_keys(games):
+    """
+    games: [(id, platform_id, key, igdb_id, title)]. {id: card key} for games that share a front-page
+    card with the same game on other platforms under another name ("Resident Evil 7" on PS5,
+    "Resident Evil 7 Biohazard" on PS4; user 2026-10-11: duplicates showing): the same IGDB entry and
+    similar names (an IGDB mismatch alone doesn't join "Supercross" and "Supercross 25"). A group with
+    two games on one platform is left as it is (a bundle or an edition the store named as a game).
+    The card key is the name most of the group has, else the longest.
+    """
+    by_igdb = defaultdict(list)
+    for game in games:
+        if game[3]:
+            by_igdb[game[3]].append(game)
+    keys = {}
+    for group in by_igdb.values():
+        if len({g[2] for g in group}) < 2:
+            continue
+        parent = {g[0]: g[0] for g in group}
+
+        def root(x):
+            while parent[x] != x:
+                x = parent[x]
+            return x
+        for a in group:
+            for b in group:
+                if a[0] < b[0] and a[1] != b[1] and (a[2] == b[2] or similar(a[2], b[2], a[4], b[4])):
+                    parent[root(a[0])] = root(b[0])
+        joined = defaultdict(list)
+        for g in group:
+            joined[root(g[0])].append(g)
+        for members in joined.values():
+            platforms = [g[1] for g in members]
+            if len({g[2] for g in members}) < 2 or len(platforms) != len(set(platforms)):
+                continue
+            count = Counter(g[2] for g in members)
+            key = max(count, key=lambda k: (count[k], len(k), k))
+            keys.update({g[0]: key for g in members if g[2] != key})
+    return keys

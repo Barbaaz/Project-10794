@@ -11,16 +11,24 @@ public (it then shows on their profile). When games / editions are merged, items
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models import (
-    COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, GameEdition, GameReview, User, fields,
+    COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, Game, GameEdition, GameReview, Listing, Platform,
+    User, fields,
 )
 from db import session
 
 MAX_ITEMS = 2000
 MAX_NOTES = 1000
 MAX_HOURS = Decimal("99999.9")
+# "In demand" (user, 2026-10-11): games this many users wish for, at least; one wish is never shown
+# (a wishlist is private)
+MIN_WISHERS = 2
+# The profile's showcase (user, 2026-10-11): sections the user shows, in their order (users.profile_sections)
+SHOWCASE = ("favourites", "most_played", "most_valuable", "achievements")
+SHOWCASE_SIZE = 5           # games in each section but the favourites
+MAX_FAVOURITES = 10
 
 
 class CollectionError(Exception):
@@ -31,21 +39,21 @@ class CollectionError(Exception):
 
 
 def collection(user_id):
-    """{items, stats, public, wish_alerts}: the user's collection with each edition's prices."""
+    """{items, stats, public, wish_alerts, profile_sections}: the user's collection with each edition's prices."""
     with session() as s:
         user = s.get(User, user_id)
         items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                           .order_by(CollectionItem.kind, CollectionItem.updated_at.desc(), CollectionItem.id.desc())).all()
         rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "achievements", "achievements_total",
-                       "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
-        public, alerts = user.collection_public, user.wish_alerts
+                       "favourite_rank", "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
+        public, alerts, sections = user.collection_public, user.wish_alerts, sections_of(user.profile_sections)
         # the user's review score of each game (one per game, as on the game page); a hidden one can't change
         reviews = {game_id: (score, hidden) for game_id, score, hidden in s.execute(
             select(GameReview.game_id, GameReview.score, GameReview.hidden).where(GameReview.user_id == user_id))}
     for r in rows:
         r["score"], r["score_locked"] = reviews.get(r["game_id"], (None, False))
     rows = with_prices(rows)                       # stats() needs the prices
-    return {"items": rows, "stats": stats(rows), "public": public, "wish_alerts": alerts}
+    return {"items": rows, "stats": stats(rows), "public": public, "wish_alerts": alerts, "profile_sections": sections}
 
 
 def with_prices(rows):
@@ -102,7 +110,7 @@ def stats(rows):
         "hours": float(sum(r["hours"] or 0 for r in owned)),
         "worth_new": round(sum(new_prices), 2), "priced_new": len(new_prices),
         "worth_used": round(sum(used_prices), 2), "priced_used": len(used_prices),
-        "completed": sum(r["status"] in ("completed", "platinum") for r in owned),
+        "completed": sum(r["status"] == "finished" for r in owned),
         # achievements over the games that have a total (as a share of all their achievements)
         "achievements": sum(r["achievements"] or 0 for r in owned if r["achievements_total"]),
         "achievements_total": sum(r["achievements_total"] for r in owned if r["achievements_total"]),
@@ -124,6 +132,7 @@ def add(user_id, edition_id, kind, **changes):
                 raise CollectionError("collection_full")
             item = CollectionItem(user_id=user_id, game_id=edition.game_id, edition_id=edition.id, kind=kind,
                                   format="physical" if kind == "owned" else None,
+                                  status="owned" if kind == "owned" else None,
                                   wish_price=best_new_price(edition.id) if kind == "wishlist" else None)
             if kind == "wishlist":    # alerts from the price it was wished at (wish_alert_service)
                 item.alert_price, item.alert_checked_at = item.wish_price, NOW
@@ -170,7 +179,7 @@ def update(user_id, item_id, changes):
                                                          CollectionItem.edition_id == item.edition_id)).first():
                 s.delete(item)                   # already owned: the wish is just done
                 return None
-            item.kind, item.format, item.wish_price = "owned", "physical", None
+            item.kind, item.format, item.status, item.wish_price = "owned", "physical", "owned", None
         _apply(item, changes)
         item.updated_at = NOW
         return item.id
@@ -214,7 +223,59 @@ def public_collection(username):
     data = collection(user_id)
     keep = ("kind", "status", "format", "edition_id", "game_id", "name", "name_en", "platform", "platform_name", "image",
             "best_price", "used")
-    return {"items": [{k: r[k] for k in keep} for r in data["items"]], "stats": data["stats"]}
+    return {"items": [{k: r[k] for k in keep} for r in data["items"]], "stats": data["stats"],
+            "showcase": showcase(data["items"], data["profile_sections"])}
+
+
+def sections_of(value):
+    """The showcase sections a user chose, in order (None: never chose: all of them)."""
+    if value is None:
+        return list(SHOWCASE)
+    return [s for s in value.split(",") if s in SHOWCASE]
+
+
+def showcase(rows, sections):
+    """
+    The profile's sections from the owned items, in the user's order, empty ones left out:
+    [{section, items: [{game_id, name, name_en, platform_name, image, hours, value, achievements, achievements_total}]}]
+    value = what it's worth now (best new store price, else the cheapest used copy).
+    """
+    owned = [r for r in rows if r["kind"] == "owned"]
+    for r in owned:
+        r["value"] = r["best_price"] if r["best_price"] is not None else (r["used"] or {}).get("price")
+    share = lambda r: r["achievements"] / r["achievements_total"]
+    picks = {
+        "favourites": sorted((r for r in owned if r["favourite_rank"]), key=lambda r: r["favourite_rank"])[:MAX_FAVOURITES],
+        "most_played": sorted((r for r in owned if r["hours"]), key=lambda r: (-r["hours"], r["id"]))[:SHOWCASE_SIZE],
+        "most_valuable": sorted((r for r in owned if r["value"]), key=lambda r: (-r["value"], r["id"]))[:SHOWCASE_SIZE],
+        "achievements": sorted((r for r in owned if r["achievements_total"] and r["achievements"]),
+                               key=lambda r: (-share(r), -r["achievements"], r["id"]))[:SHOWCASE_SIZE],
+    }
+    keep = ("game_id", "name", "name_en", "platform_name", "image", "hours", "value", "achievements", "achievements_total")
+    return [{"section": s, "items": [{k: r[k] for k in keep} for r in picks[s]]} for s in sections if picks[s]]
+
+
+def set_showcase(user_id, sections, favourites):
+    """The user's showcase: sections (in order, from SHOWCASE) and the top 10 (owned item ids, in order)."""
+    if not isinstance(sections, list) or not isinstance(favourites, list) or len(set(map(str, sections))) != len(sections)             or any(s not in SHOWCASE for s in sections):
+        raise CollectionError("showcase_invalid")
+    try:
+        ids = [_int(i) for i in favourites]
+    except CollectionError:
+        raise CollectionError("showcase_invalid")
+    if len(ids) > MAX_FAVOURITES or len(set(ids)) != len(ids):
+        raise CollectionError("showcase_invalid")
+    with session() as s:
+        owned = {i.id: i for i in s.scalars(select(CollectionItem).where(
+            CollectionItem.user_id == user_id, CollectionItem.kind == "owned"))}
+        if any(i not in owned for i in ids):
+            raise CollectionError("showcase_invalid")
+        for item in owned.values():
+            rank = ids.index(item.id) + 1 if item.id in ids else None
+            if item.favourite_rank != rank:
+                item.favourite_rank = rank
+        s.get(User, user_id).profile_sections = ",".join(sections)
+    return {"profile_sections": sections, "favourites": ids}
 
 
 def _own(s, user_id, item_id):
@@ -233,7 +294,7 @@ def _apply(item, changes):
     if "status" in changes:
         if changes["status"] not in (*PLAY_STATUSES, None, ""):
             raise CollectionError("play_status_invalid")
-        item.status = (changes["status"] or None) if item.kind == "owned" else None
+        item.status = (changes["status"] or "owned") if item.kind == "owned" else None
     if "hours" in changes:
         item.hours = _hours(changes["hours"])
     if "achievements" in changes or "achievements_total" in changes:
@@ -279,3 +340,41 @@ def _int(value):
         return int(value)
     except (TypeError, ValueError):
         raise CollectionError("not_found", 404)
+
+
+def _wishers():
+    """Users (active) wishing for each game, from MIN_WISHERS up: a select of (game_id, wishers)."""
+    return (select(CollectionItem.game_id, func.count(func.distinct(CollectionItem.user_id)).label("wishers"))
+            .join(User, User.id == CollectionItem.user_id)
+            .where(CollectionItem.kind == "wishlist", User.is_active)
+            .group_by(CollectionItem.game_id)
+            .having(func.count(func.distinct(CollectionItem.user_id)) >= MIN_WISHERS))
+
+
+def wanted_by(game_id):
+    """How many users wish for this game (0 under MIN_WISHERS), for the game page's "N procuram"."""
+    with session() as s:
+        row = s.execute(_wishers().where(CollectionItem.game_id == game_id)).first()
+    return row.wishers if row else 0
+
+
+def in_demand(limit=12):
+    """
+    The games most users are looking for (user, 2026-10-11: a reason to sell one), for /sell:
+    [{game_id, name, name_en, platform, platform_name, image, wishers, used}], used = copies for
+    sale now. Most wished first, then the ones nobody sells.
+    """
+    from app.services.common import IGDB_COVER
+    wishers = _wishers().subquery()
+    used = (select(GameEdition.game_id, func.count().label("used"))
+            .join(Listing, Listing.edition_id == GameEdition.id).join(User, User.id == Listing.user_id)
+            .where(Listing.status == "active", User.is_active).group_by(GameEdition.game_id).subquery())
+    with session() as s:
+        rows = s.execute(
+            select(Game, Platform.code, Platform.name, wishers.c.wishers, func.coalesce(used.c.used, 0).label("used"))
+            .join(wishers, wishers.c.game_id == Game.id).join(Platform, Platform.id == Game.platform_id)
+            .outerjoin(used, used.c.game_id == Game.id)
+            .order_by(wishers.c.wishers.desc(), func.coalesce(used.c.used, 0), Game.title, Game.id).limit(limit)).all()
+        return [{"game_id": g.id, "name": g.title, "name_en": g.title_en or None, "platform": code, "platform_name": name,
+                 "image": IGDB_COVER.format(g.cover_image_id) if g.cover_image_id else g.image_url,
+                 "wishers": n, "used": u} for g, code, name, n, u in rows]

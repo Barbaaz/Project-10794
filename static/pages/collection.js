@@ -1,5 +1,5 @@
 // The collection page (templates/collection.html). A file, not inline: the site's CSP only runs scripts from files.
-const STATUSES = ["backlog", "playing", "completed", "platinum", "abandoned"];
+const STATUSES = ["finished", "playing", "backlog", "paused", "dropped", "owned"];
 let data = null;
 let kind = new URLSearchParams(location.search).get("tab") === "wishlist" ? "wishlist" : "owned";
 
@@ -43,6 +43,10 @@ function priceLine(item) {
             ${item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}</span>` : ""}
             ${item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : ""}
             ${item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : ""}`);
+    } else if (item.kind === "wishlist" && !item.used) {
+        // nobody sells it: "looking for", with an e-mail when a store or a user does (wish_alert_service)
+        parts.push(`<span class="badge text-bg-info">${t("collection_looking_for")}</span>
+            <span class="text-body-secondary">${t("collection_looking_for_help")}</span>`);
     } else {
         parts.push(`<span class="text-body-secondary">${t("collection_no_store_price")}</span>`);
     }
@@ -53,7 +57,7 @@ function priceLine(item) {
 // What the user wrote about an owned game, in one line (the editor stays closed until "Editar")
 function ownedFacts(item) {
     const facts = [
-        item.status ? `<span class="badge text-bg-secondary">${esc(t(`status_play_${item.status}`))}</span>` : "",
+        item.status && item.status !== "owned" ? `<span class="badge text-bg-secondary">${esc(t(`status_play_${item.status}`))}</span>` : "",
         esc(t(`format_${item.format || "physical"}`)),
         item.score ? `★ ${item.score}/10` : "",
         item.hours ? `${fmtNumber(item.hours)} h` : "",
@@ -72,7 +76,6 @@ function ownedControls(item) {
         <div class="row g-2 mt-1 d-none" data-editor id="editor-${item.id}">
             ${field(t("collection_status"), `
                 <select class="form-select form-select-sm" data-field="status">
-                    <option value="">${t("collection_no_status")}</option>
                     ${STATUSES.map(x => `<option value="${x}" ${item.status === x ? "selected" : ""}>${t(`status_play_${x}`)}</option>`).join("")}
                 </select>`)}
             ${field(t("collection_format"), `
@@ -209,7 +212,7 @@ function recount() {
     owned.forEach(i => { if (i.status) statuses[i.status] = (statuses[i.status] || 0) + 1; });
     const withTotal = owned.filter(i => i.achievements_total);
     return { ...data.stats, statuses, hours: owned.reduce((sum, i) => sum + (i.hours || 0), 0),
-             completed: owned.filter(i => ["completed", "platinum"].includes(i.status)).length,
+             completed: owned.filter(i => i.status === "finished").length,
              achievements: withTotal.reduce((sum, i) => sum + (i.achievements || 0), 0),
              achievements_total: withTotal.reduce((sum, i) => sum + i.achievements_total, 0) };
 }
@@ -255,43 +258,42 @@ const clearAddSearch = gamePicker({
     igdbResults: document.getElementById("add-igdb-results"),
 }, addGame, code => showMessage(false, t(`error_${code}`)));
 
-// The user's Steam games (steam_service): the ones we have on PC go in at once; the others are listed,
-// with "Adicionar" for those IGDB knows (created like any IGDB game, within its games-a-day limit)
-async function importSteam(event) {
-    event.preventDefault();
-    const form = event.target, result = document.getElementById("steam-result"), list = document.getElementById("steam-missing");
-    const button = form.querySelector("button");
-    button.disabled = true;
+// The user's Steam games (steam_service): all go in at once, with hours and achievements (the ones no
+// store sells only in the collection); those IGDB doesn't know are listed. No profile: the last one again
+async function importSteam(profile) {
+    const result = document.getElementById("steam-result"), list = document.getElementById("steam-missing");
+    const buttons = document.querySelectorAll("#steam-form button, #steam-refresh");
+    buttons.forEach(b => b.disabled = true);
     result.textContent = t("steam_importing");
     list.innerHTML = "";
-    const { ok, data: answer } = await api("/api/collection/steam", { body: { profile: document.getElementById("steam-profile").value } });
-    button.disabled = false;
+    const { ok, data: answer } = await api("/api/collection/steam", { body: profile ? { profile } : {} });
+    buttons.forEach(b => b.disabled = false);
     if (!ok) return result.textContent = t(`error_${answer?.error || "unknown"}`);
-    result.textContent = t("steam_imported", { total: answer.total, added: answer.added, updated: answer.updated,
-                                                missing: answer.missing.length });
+    result.textContent = t("steam_imported", { total: answer.total, added: answer.added, updated: answer.updated })
+        + (answer.missing.length ? " " + t("steam_missing", { missing: answer.missing.length }) : "");
     const hours = h => h ? ` · ${fmtNumber(h)} h` : "";
-    list.innerHTML = answer.missing.map((m, i) => `
-        <div class="list-group-item d-flex justify-content-between align-items-center gap-2 py-1 small">
-            <span>${esc(m.name)}<span class="text-body-secondary">${hours(m.hours)}</span></span>
-            ${m.igdb_id ? `<button type="button" class="btn btn-sm btn-outline-primary" data-missing="${i}">${esc(t("steam_add"))}</button>`
-                        : `<span class="text-body-secondary">${esc(t("steam_not_in_igdb"))}</span>`}
-        </div>`).join("");
-    list.querySelectorAll("[data-missing]").forEach(b => b.onclick = async () => {
-        const m = answer.missing[b.dataset.missing];
-        b.disabled = true;
-        const made = await api("/api/igdb/games", { body: { igdb_id: m.igdb_id, platform: "PC" } });
-        const added = made.ok && await api("/api/collection", { body: { edition_id: made.data.edition_id, kind: "owned",
-                                                                         format: "digital", hours: m.hours ?? "" } });
-        if (!made.ok || !added.ok) {
-            b.disabled = false;
-            return showMessage(false, t(`error_${(made.ok ? added : made).data?.error || "unknown"}`));
-        }
-        b.replaceWith(Object.assign(document.createElement("span"), { className: "text-success", textContent: t("steam_added") }));
-        load();
-    });
+    list.innerHTML = answer.missing.map(m => `
+        <div class="list-group-item py-1 small">${esc(m.name)}<span class="text-body-secondary">${hours(m.hours)}</span></div>`).join("");
     if (answer.added || answer.updated) load();
+    loadSteamProfile();
 }
-document.getElementById("steam-form").onsubmit = importSteam;
+
+async function loadSteamProfile() {
+    const response = await fetch("/api/collection/steam");
+    const data = response.ok ? await response.json() : null;
+    const saved = data?.profile;
+    document.getElementById("steam-saved").classList.toggle("d-none", !saved);
+    if (!saved) return;
+    document.getElementById("steam-last").textContent = data.profile.imported_at
+        ? t("steam_last_import", { date: new Date(data.profile.imported_at).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) })
+        : "";
+}
+document.getElementById("steam-form").onsubmit = event => {
+    event.preventDefault();
+    importSteam(document.getElementById("steam-profile").value);
+};
+document.getElementById("steam-refresh").onclick = () => importSteam(null);
+loadSteamProfile();
 
 // The link in a wishlist alert e-mail (?alerts_off=…) works without logging in
 async function alertsOffFromLink() {

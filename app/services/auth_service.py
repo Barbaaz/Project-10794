@@ -170,7 +170,7 @@ def delete_account(user_id, password, ip="?"):
         s.execute(delete(CollectionItem).where(CollectionItem.user_id == user_id))
 
         logins = {(user.username or "").lower(), user.email}
-        user.username = user.password_hash = user.location = None
+        user.username = user.password_hash = user.location = user.steam_id = None
         user.email = f"deleted-{user.id}@deleted.invalid"         # unique and never a real address
         user.display_name = ""
         user.is_active = user.collection_public = user.wish_alerts = False

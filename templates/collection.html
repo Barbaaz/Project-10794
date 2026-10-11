@@ -77,6 +77,11 @@
                     <button type="submit" class="btn btn-primary" data-i18n="steam_import_button"></button>
                 </div>
             </form>
+            <!-- After a first import: the same profile again with one button -->
+            <div id="steam-saved" class="d-flex flex-wrap align-items-center gap-2 mt-2 d-none">
+                <button type="button" id="steam-refresh" class="btn btn-sm btn-secondary" data-i18n="steam_refresh"></button>
+                <span id="steam-last" class="small text-body-secondary"></span>
+            </div>
             <div id="steam-result" class="small mt-2"></div>
             <div id="steam-missing" class="list-group mt-1" style="max-height: 320px; overflow-y: auto;"></div>
         </details>

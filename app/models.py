@@ -59,6 +59,7 @@ class Game(Base):
     platform_id: Mapped[int] = mapped_column(ForeignKey("platforms.id"))
     title: Mapped[str] = mapped_column(Unicode(300))
     normalized_title: Mapped[str] = mapped_column(Unicode(300))     # the game key (core/editions.py)
+    card_key: Mapped[str | None] = mapped_column(Unicode(300))     # front-page card, when another platform's name (pipeline/card_keys.py)
     kind: Mapped[str] = mapped_column(String(12), server_default="game")   # game / console (core/hardware.py)
     title_en: Mapped[str | None] = mapped_column(Unicode(300))      # English name (IGDB / moderators)
     title_fixed: Mapped[bool] = mapped_column(Boolean, default=False)  # title corrected by a moderator: kept
@@ -165,6 +166,10 @@ class User(Base):
     collection_public: Mapped[bool] = mapped_column(Boolean, server_default=false())   # shown on their profile
     wish_alerts: Mapped[bool] = mapped_column(Boolean, server_default=true(), nullable=False)   # wishlist e-mails
     lang: Mapped[str] = mapped_column(String(2), server_default="pt", nullable=False)   # pt / en, for e-mails
+    steam_id: Mapped[str | None] = mapped_column(String(20))   # the last Steam import's profile (steam_service)
+    steam_imported_at = mapped_column(DateTime)
+    # the profile's showcase sections, in order, comma-separated (collection_service.SHOWCASE; None: all)
+    profile_sections: Mapped[str | None] = mapped_column(String(100))
     last_login_at = mapped_column(DateTime)
     created_at = created_at()
     deleted_at = mapped_column(DateTime)      # the user deleted their account: anonymised (auth_service.delete_account)
@@ -353,7 +358,8 @@ class DuplicateDismissal(Base):
 
 COLLECTION_KINDS = ("owned", "wishlist")
 FORMATS = ("physical", "digital")
-PLAY_STATUSES = ("backlog", "playing", "completed", "platinum", "abandoned")
+# the user's order (2026-10-11); "owned" = no other, what an owned item starts as
+PLAY_STATUSES = ("finished", "playing", "backlog", "paused", "dropped", "owned")
 
 
 class CollectionItem(Base):
@@ -378,6 +384,8 @@ class CollectionItem(Base):
     # wishlist alerts: the best new price at the last check (None: none in stock), and when
     alert_price = mapped_column(Numeric(10, 2))
     alert_checked_at = mapped_column(DateTime)
+    alert_used = mapped_column(Boolean)
+    favourite_rank: Mapped[int | None] = mapped_column(SmallInteger)   # 1-10: the profile's top 10 (owned)       # a user was selling a copy at the last check (None: not checked)
     created_at = created_at()
     updated_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 
