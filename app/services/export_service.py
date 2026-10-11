@@ -15,7 +15,7 @@ from app.services.photo_storage import storage
 from db import session
 
 ACCOUNT_FIELDS = ("id", "username", "display_name", "email", "location", "role", "lang", "collection_public",
-                  "wish_alerts", "created_at", "last_login_at")
+                  "wish_alerts", "steam_id", "steam_imported_at", "created_at", "last_login_at")
 
 
 def _game(game, edition=None):

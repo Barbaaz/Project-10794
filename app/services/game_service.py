@@ -159,6 +159,10 @@ def other_platforms(game):
         FROM games g JOIN platforms p ON p.id = g.platform_id
         LEFT JOIN current_offers o ON o.game_id = g.id AND o.is_active
         WHERE g.igdb_id = ? AND g.id <> ? AND g.kind = 'game'
+          -- sold by a store or a user: not a game only in someone's collection (a Steam import)
+          AND (EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active)
+               OR EXISTS (SELECT 1 FROM user_listings l JOIN game_editions le ON le.id = l.edition_id
+                          WHERE le.game_id = g.id AND l.status = 'active'))
         GROUP BY g.id, p.code, p.name
         ORDER BY p.name, g.id
         """,

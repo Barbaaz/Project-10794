@@ -59,10 +59,18 @@ def import_from_browser():
     return jsonify(collection_service.add_wishes(current_user()["id"], ids if isinstance(ids, list) else []))
 
 
+@bp.get("/collection/steam")
+@login_required
+def steam_profile():
+    """{profile: {steam_id, imported_at} | null}: the last import's profile, for the refresh button"""
+    return jsonify(profile=steam_service.saved_profile(current_user()["id"]))
+
+
 @bp.post("/collection/steam")
 @login_required
 def import_from_steam():
-    """{profile}: the user's Steam games into the collection → {added, updated, total, missing} (steam_service)"""
+    """{profile?}: the user's Steam games into the collection (no profile: the last one again)
+    → {added, updated, total, missing} (steam_service)"""
     try:
         return jsonify(steam_service.import_games(current_user()["id"], body().get("profile")))
     except SteamError as e:

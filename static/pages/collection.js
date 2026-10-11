@@ -255,43 +255,42 @@ const clearAddSearch = gamePicker({
     igdbResults: document.getElementById("add-igdb-results"),
 }, addGame, code => showMessage(false, t(`error_${code}`)));
 
-// The user's Steam games (steam_service): the ones we have on PC go in at once; the others are listed,
-// with "Adicionar" for those IGDB knows (created like any IGDB game, within its games-a-day limit)
-async function importSteam(event) {
-    event.preventDefault();
-    const form = event.target, result = document.getElementById("steam-result"), list = document.getElementById("steam-missing");
-    const button = form.querySelector("button");
-    button.disabled = true;
+// The user's Steam games (steam_service): all go in at once, with hours and achievements (the ones no
+// store sells only in the collection); those IGDB doesn't know are listed. No profile: the last one again
+async function importSteam(profile) {
+    const result = document.getElementById("steam-result"), list = document.getElementById("steam-missing");
+    const buttons = document.querySelectorAll("#steam-form button, #steam-refresh");
+    buttons.forEach(b => b.disabled = true);
     result.textContent = t("steam_importing");
     list.innerHTML = "";
-    const { ok, data: answer } = await api("/api/collection/steam", { body: { profile: document.getElementById("steam-profile").value } });
-    button.disabled = false;
+    const { ok, data: answer } = await api("/api/collection/steam", { body: profile ? { profile } : {} });
+    buttons.forEach(b => b.disabled = false);
     if (!ok) return result.textContent = t(`error_${answer?.error || "unknown"}`);
-    result.textContent = t("steam_imported", { total: answer.total, added: answer.added, updated: answer.updated,
-                                                missing: answer.missing.length });
+    result.textContent = t("steam_imported", { total: answer.total, added: answer.added, updated: answer.updated })
+        + (answer.missing.length ? " " + t("steam_missing", { missing: answer.missing.length }) : "");
     const hours = h => h ? ` · ${fmtNumber(h)} h` : "";
-    list.innerHTML = answer.missing.map((m, i) => `
-        <div class="list-group-item d-flex justify-content-between align-items-center gap-2 py-1 small">
-            <span>${esc(m.name)}<span class="text-body-secondary">${hours(m.hours)}</span></span>
-            ${m.igdb_id ? `<button type="button" class="btn btn-sm btn-outline-primary" data-missing="${i}">${esc(t("steam_add"))}</button>`
-                        : `<span class="text-body-secondary">${esc(t("steam_not_in_igdb"))}</span>`}
-        </div>`).join("");
-    list.querySelectorAll("[data-missing]").forEach(b => b.onclick = async () => {
-        const m = answer.missing[b.dataset.missing];
-        b.disabled = true;
-        const made = await api("/api/igdb/games", { body: { igdb_id: m.igdb_id, platform: "PC" } });
-        const added = made.ok && await api("/api/collection", { body: { edition_id: made.data.edition_id, kind: "owned",
-                                                                         format: "digital", hours: m.hours ?? "" } });
-        if (!made.ok || !added.ok) {
-            b.disabled = false;
-            return showMessage(false, t(`error_${(made.ok ? added : made).data?.error || "unknown"}`));
-        }
-        b.replaceWith(Object.assign(document.createElement("span"), { className: "text-success", textContent: t("steam_added") }));
-        load();
-    });
+    list.innerHTML = answer.missing.map(m => `
+        <div class="list-group-item py-1 small">${esc(m.name)}<span class="text-body-secondary">${hours(m.hours)}</span></div>`).join("");
     if (answer.added || answer.updated) load();
+    loadSteamProfile();
 }
-document.getElementById("steam-form").onsubmit = importSteam;
+
+async function loadSteamProfile() {
+    const response = await fetch("/api/collection/steam");
+    const data = response.ok ? await response.json() : null;
+    const saved = data?.profile;
+    document.getElementById("steam-saved").classList.toggle("d-none", !saved);
+    if (!saved) return;
+    document.getElementById("steam-last").textContent = data.profile.imported_at
+        ? t("steam_last_import", { date: new Date(data.profile.imported_at).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) })
+        : "";
+}
+document.getElementById("steam-form").onsubmit = event => {
+    event.preventDefault();
+    importSteam(document.getElementById("steam-profile").value);
+};
+document.getElementById("steam-refresh").onclick = () => importSteam(null);
+loadSteamProfile();
 
 // The link in a wishlist alert e-mail (?alerts_off=…) works without logging in
 async function alertsOffFromLink() {
