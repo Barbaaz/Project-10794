@@ -22,6 +22,7 @@ from app.models import (
     CollectionItem, Game, GameEdition, GameReview, Listing, MergedId, Platform, Store, StoreProduct,
 )
 from core.editions import edition_key_of, is_excluded
+from core.titles import best_title
 from core.normalizer import numerals, split_plus_numbers
 from db import session
 from pipeline.igdb import IGDB_COLUMNS
@@ -203,16 +204,20 @@ def report(s, merged):
 
 def refresh_names(s, model, column, max_len, candidates):
     """
-    Set each row's display name to the most common one among its products,
-    preferring mixed case ("Silent Hill: Townfall" over "SILENT HILL TOWNFALL").
+    Each row's display name from its products' names: the current one, while a product still uses
+    it, unless one of them is better written (core/titles.best_title; for a game, IGDB's English
+    name breaks ties).
     """
     rows = {row.id: row for row in s.scalars(select(model))}
     renamed = 0
 
     for row_id, names in candidates.items():
-        best = max(names, key=lambda n: (not n.isupper(), names[n], n))[:max_len]
         row = rows.get(row_id)
-        if row is not None and getattr(row, column) != best:
+        if row is None:
+            continue
+        current = getattr(row, column)        # kept only while a store still uses it (not a moderator's, cleared)
+        best = best_title(current if current in names else None, names, getattr(row, "title_en", None))[:max_len]
+        if getattr(row, column) != best:
             setattr(row, column, best)
             renamed += 1
 

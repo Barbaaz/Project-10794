@@ -6,6 +6,7 @@ from app.models import Game, GameEdition, StoreProduct
 from core.close_match import KeyIndex, expand
 from core.editions import EDITION_WORDS, parse_title, learn_phrase, edition_key_of, cut_display
 from core.hardware import display_name, hardware_key
+from core.titles import best_title
 
 MIN_TYPO_LENGTH = 5     # words this long may differ by a typo ("delixe" / "deluxe")
 TYPO_SIMILARITY = 0.8
@@ -157,11 +158,11 @@ class GameMatcher:
             select(Game).where(Game.normalized_title == game_key, Game.platform_id == platform_id)).first()
 
         if game:
-            # Prefer "Silent Hill: Townfall" over Mega Mania's "SILENT HILL TOWNFALL"
-            # (title is None for a shortened or mended name: not this game's own title;
-            # a title a moderator corrected is kept)
-            if title and not game.title_fixed and game.title.isupper() and not title.isupper():
-                game.title = title[:300]
+            # A better written name ("Silent Hill: Townfall" over Mega Mania's "SILENT HILL TOWNFALL";
+            # core/titles.best_title). title is None for a shortened or mended name: not this game's
+            # own title; a title a moderator corrected is kept
+            if title and not game.title_fixed:
+                game.title = best_title(game.title, {title: 1}, game.title_en)[:300]
             return game.id
         if not create:
             return None
