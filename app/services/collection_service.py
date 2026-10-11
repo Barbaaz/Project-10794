@@ -11,16 +11,20 @@ public (it then shows on their profile). When games / editions are merged, items
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models import (
-    COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, GameEdition, GameReview, User, fields,
+    COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, Game, GameEdition, GameReview, Listing, Platform,
+    User, fields,
 )
 from db import session
 
 MAX_ITEMS = 2000
 MAX_NOTES = 1000
 MAX_HOURS = Decimal("99999.9")
+# "In demand" (user, 2026-10-11): games this many users wish for, at least; one wish is never shown
+# (a wishlist is private)
+MIN_WISHERS = 2
 
 
 class CollectionError(Exception):
@@ -280,3 +284,41 @@ def _int(value):
         return int(value)
     except (TypeError, ValueError):
         raise CollectionError("not_found", 404)
+
+
+def _wishers():
+    """Users (active) wishing for each game, from MIN_WISHERS up: a select of (game_id, wishers)."""
+    return (select(CollectionItem.game_id, func.count(func.distinct(CollectionItem.user_id)).label("wishers"))
+            .join(User, User.id == CollectionItem.user_id)
+            .where(CollectionItem.kind == "wishlist", User.is_active)
+            .group_by(CollectionItem.game_id)
+            .having(func.count(func.distinct(CollectionItem.user_id)) >= MIN_WISHERS))
+
+
+def wanted_by(game_id):
+    """How many users wish for this game (0 under MIN_WISHERS), for the game page's "N procuram"."""
+    with session() as s:
+        row = s.execute(_wishers().where(CollectionItem.game_id == game_id)).first()
+    return row.wishers if row else 0
+
+
+def in_demand(limit=12):
+    """
+    The games most users are looking for (user, 2026-10-11: a reason to sell one), for /sell:
+    [{game_id, name, name_en, platform, platform_name, image, wishers, used}], used = copies for
+    sale now. Most wished first, then the ones nobody sells.
+    """
+    from app.services.common import IGDB_COVER
+    wishers = _wishers().subquery()
+    used = (select(GameEdition.game_id, func.count().label("used"))
+            .join(Listing, Listing.edition_id == GameEdition.id).join(User, User.id == Listing.user_id)
+            .where(Listing.status == "active", User.is_active).group_by(GameEdition.game_id).subquery())
+    with session() as s:
+        rows = s.execute(
+            select(Game, Platform.code, Platform.name, wishers.c.wishers, func.coalesce(used.c.used, 0).label("used"))
+            .join(wishers, wishers.c.game_id == Game.id).join(Platform, Platform.id == Game.platform_id)
+            .outerjoin(used, used.c.game_id == Game.id)
+            .order_by(wishers.c.wishers.desc(), func.coalesce(used.c.used, 0), Game.title, Game.id).limit(limit)).all()
+        return [{"game_id": g.id, "name": g.title, "name_en": g.title_en or None, "platform": code, "platform_name": name,
+                 "image": IGDB_COVER.format(g.cover_image_id) if g.cover_image_id else g.image_url,
+                 "wishers": n, "used": u} for g, code, name, n, u in rows]

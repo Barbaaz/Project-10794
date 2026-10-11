@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request
 
 from app.routes.auth import current_user, login_required
 from app.routes.params import choice_arg, int_arg, text_arg
-from app.services import igdb_game_service, listing_service
+from app.services import collection_service, igdb_game_service, listing_service
 from app.services.igdb_game_service import IGDBGameError
 from app.services.listing_service import ListingError
 
@@ -38,6 +38,12 @@ def for_game_or_all():
         int_arg("page", 1, minimum=1), int_arg("per_page", 48, minimum=1, maximum=100),
         kind=text_arg("kind") if text_arg("kind") in ("game", "hardware") else None,
     ))
+
+
+@bp.get("/in-demand")
+def in_demand():
+    """The games most users wish for (from MIN_WISHERS up), for /sell (collection_service.in_demand)"""
+    return jsonify(collection_service.in_demand())
 
 
 @bp.get("/mine")

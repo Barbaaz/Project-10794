@@ -149,3 +149,16 @@ def test_a_wish_remembers_its_price(market, monkeypatch):
     # bought: no longer a wish, no wish price
     client.patch(f"/api/collection/{wish}", json={"kind": "owned"}, headers=HEADERS)
     assert market["db"].execute("SELECT wish_price FROM collection_items WHERE id = ?", wish).fetchone()[0] is None
+
+
+def test_in_demand_from_two_wishers(market):
+    """Games users look for (user, 2026-10-11), counts only: one wish alone is never shown."""
+    client = market["client"]
+    demand = lambda: client.get("/api/listings/in-demand").get_json()
+    sign_up(client, "wants_one")
+    add(client, market["edition"], kind="wishlist")
+    assert demand() == [] and client.get(f"/api/games/{market['game']}").get_json()["wanted_by"] == 0
+    sign_up(client, "wants_two")
+    add(client, market["edition"], kind="wishlist")
+    assert [(g["game_id"], g["wishers"], g["used"]) for g in demand()] == [(market["game"], 2, 0)]
+    assert client.get(f"/api/games/{market['game']}").get_json()["wanted_by"] == 2

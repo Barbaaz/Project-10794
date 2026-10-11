@@ -31,6 +31,13 @@
     <h1 class="h3 mb-1" data-i18n="sell_title"></h1>
     <p class="small text-body-secondary mb-3" data-i18n="sell_physical_only"></p>
 
+    <!-- "In demand": the games most users are looking for (collection_service.in_demand); hidden when none -->
+    <section id="in-demand" class="card card-body py-2 mb-3 d-none">
+        <h2 class="h6 mb-1" data-i18n="in_demand_title"></h2>
+        <p class="small text-body-secondary mb-2" data-i18n="in_demand_help"></p>
+        <div id="in-demand-list" class="list-group list-group-flush"></div>
+    </section>
+
     <form id="sell-form" class="card shadow-sm" novalidate>
         <div class="card-body">
             <!-- 1. The game -->

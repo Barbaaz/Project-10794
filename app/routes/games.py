@@ -1,7 +1,7 @@
 from flask import Blueprint, abort, jsonify, request
 
 from app.routes.params import choice_arg, int_arg, page_args, text_arg
-from app.services import game_service
+from app.services import collection_service, game_service
 
 bp = Blueprint("games", __name__, url_prefix="/api/games")
 
@@ -65,7 +65,8 @@ def get_game(game_id):
     game = game_service.get_game(game_id)
     if not game:
         abort(404, description="Game not found")
-    return jsonify(game)
+    # users looking for it ("In demand"); a copy: get_game's answer may be cached
+    return jsonify({**game, "wanted_by": collection_service.wanted_by(game_id)})
 
 
 @bp.get("/<int:game_id>/prices")

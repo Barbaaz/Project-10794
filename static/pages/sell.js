@@ -133,3 +133,18 @@ async function start() {
     if (gameId) chooseGame(gameId, Number(params.get("edition_id")) || null);
 }
 start();
+
+// --- in demand ----------------------------------------------------------------------------
+// The games most users wish for: one click starts selling it
+async function loadInDemand() {
+    const games = await fetch("/api/listings/in-demand").then(r => r.ok ? r.json() : []).catch(() => []);
+    document.getElementById("in-demand").classList.toggle("d-none", !games.length);
+    document.getElementById("in-demand-list").innerHTML = games.map(g => `
+        <a class="list-group-item list-group-item-action d-flex align-items-center gap-2 px-0" href="/sell?game_id=${g.game_id}">
+            ${g.image ? `<img src="${esc(g.image)}" alt="" width="32" height="42" class="rounded object-fit-cover flex-shrink-0">` : ""}
+            <span class="flex-grow-1 text-truncate">${esc(localName(g, "name"))}
+                <span class="text-body-secondary small">· ${esc(g.platform_name)}</span></span>
+            <span class="small text-nowrap">${esc(t("in_demand_wishers", { n: g.wishers }))}${g.used ? "" : ` · <strong>${esc(t("in_demand_none_sold"))}</strong>`}</span>
+        </a>`).join("");
+}
+loadInDemand();

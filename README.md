@@ -118,6 +118,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/listings?game_id=` · `GET /api/listings/<id>` | Pre-owned copies people sell (active / reserved), with photos; never the seller's email |
 | `GET /api/listings?platform=&sort=newest\|price_asc\|price_desc&page=` | The "Used" tab: one group per game edition with its sellers' active listings, paged |
 | `GET /api/listings/mine` | The logged-in seller's listings |
+| `GET /api/listings/in-demand` | The games most users wish for (2 or more; counts only) → `[{game_id, name, platform, wishers, used}]`, for /sell. A game's `wanted_by` (`GET /api/games/<id>`) is the same count |
 | `POST /api/listings` (multipart: `game_id, edition_id, price, condition, description` + 3–10 `photos`) | Put a game up for sale; photos are re-saved without EXIF (no GPS location), 1600 px + thumbnail |
 | `PATCH /api/listings/<id>` `{price?, condition?, description?, status?}` | The seller changes it (status: active / reserved / sold / removed) |
 | `POST /api/listings/<id>/photos` · `DELETE /api/listings/<id>/photos/<photo_id>` | Add / remove photos (always 3–10) |
