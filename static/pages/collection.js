@@ -101,30 +101,46 @@ function ownedControls(item) {
 
 const openEditors = new Set();     // items whose editor is open (kept across a re-render)
 
+// One item as a card in the grid: cover, name, platform, prices, what the user wrote, buttons
 function itemRow(item) {
     const owned = item.kind === "owned";
     const open = openEditors.has(String(item.id));
     return `
-        <div class="list-group-item ${item.good_deal ? "border-start border-success border-4" : ""}" data-id="${item.id}">
-            <div class="d-flex gap-3">
-                <a href="/game/${item.game_id}" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
-                <div class="flex-grow-1 min-w-0">
-                    <a href="/game/${item.game_id}" class="fw-semibold link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
+        <div class="col ${open ? "item-open" : ""}" data-col="${item.id}">
+          <div class="card h-100 item-card overflow-hidden ${item.good_deal ? "border-success border-2" : ""}" data-id="${item.id}">
+            <a href="/game/${item.game_id}" class="item-cover-link" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
+            <div class="card-body p-2 d-flex flex-column min-w-0">
+                    <a href="/game/${item.game_id}" class="item-title fw-semibold small link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
                     <div class="small text-body-secondary">${esc(item.platform_name || "")}</div>
                     <div class="small mt-1">${priceLine(item)}</div>
                     ${owned ? `<div class="item-facts small mt-1" data-facts>${ownedFacts(item)}</div>${ownedControls(item)}` : ""}
-                    <div class="d-flex flex-wrap gap-2 mt-2">
+                    <div class="d-flex flex-wrap gap-1 mt-auto pt-2">
                         ${owned ? `<button type="button" class="btn btn-sm btn-secondary" data-action="edit"
                                            aria-expanded="${open}" aria-controls="editor-${item.id}">${t(open ? "collection_edit_done" : "collection_edit")}</button>` : ""}
                         ${owned
                             // only physical copies can be sold (a digital game can't be handed over)
                             ? (item.format === "digital" ? "" : `<a class="btn btn-sm btn-success" href="/sell?game_id=${item.game_id}&edition_id=${item.edition_id}">${t("collection_sell")}</a>`)
                             : `<button type="button" class="btn btn-sm btn-success" data-action="bought">${t("collection_bought")}</button>`}
-                        <button type="button" class="btn btn-sm btn-danger ms-auto" data-action="remove">${t("collection_remove")}</button>
+                        <button type="button" class="btn btn-sm btn-danger ms-auto" data-action="remove"
+                                aria-label="${esc(t("collection_remove"))}" title="${esc(t("collection_remove"))}">✕</button>
                     </div>
-                </div>
             </div>
+          </div>
         </div>`;
+}
+
+// One button per platform in the list (with how many), "Todas" first; the chosen one filters the grid
+let platform = "";
+function platformChips(items) {
+    const counts = {};
+    items.forEach(i => counts[i.platform_name || "?"] = (counts[i.platform_name || "?"] || 0) + 1);
+    const names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b, LOCALE));
+    if (platform && !counts[platform]) platform = "";
+    const box = document.getElementById("filter-platforms");
+    box.classList.toggle("d-none", names.length < 2);
+    box.innerHTML = [["", t("collection_all_platforms"), items.length], ...names.map(n => [n, n, counts[n]])].map(([value, label, n]) =>
+        `<button type="button" class="chip-btn" data-platform="${esc(value)}" aria-pressed="${platform === value}">${esc(label)} <span class="opacity-75">${n}</span></button>`).join("");
+    box.querySelectorAll("[data-platform]").forEach(b => b.onclick = () => { platform = b.dataset.platform; renderItems(); });
 }
 
 function renderItems() {
@@ -137,9 +153,11 @@ function renderItems() {
     const status = document.getElementById("filter-status");
     status.classList.toggle("d-none", kind !== "owned");
     const words = document.getElementById("filter-text").value.toLowerCase().split(/\s+/).filter(Boolean);
-    const items = data.items.filter(i => i.kind === kind
+    const listed = data.items.filter(i => i.kind === kind
         && (kind !== "owned" || !status.value || i.status === status.value)
-        && words.every(w => `${i.name || ""} ${i.name_en || ""}`.toLowerCase().includes(w)))
+        && words.every(w => `${i.name || ""} ${i.name_en || ""}`.toLowerCase().includes(w)));
+    platformChips(listed);
+    const items = listed.filter(i => !platform || (i.platform_name || "?") === platform)
         .sort((a, b) => (localName(a) || "").localeCompare(localName(b) || "", LOCALE));
     const list = document.getElementById("items");
     list.innerHTML = items.map(itemRow).join("");
@@ -164,6 +182,7 @@ function renderItems() {
         if (editButton) {
             const show = open => {
                 editor.classList.toggle("d-none", !open);
+                list.querySelector(`[data-col="${id}"]`).classList.toggle("item-open", open);
                 editButton.setAttribute("aria-expanded", open);
                 editButton.textContent = t(open ? "collection_edit_done" : "collection_edit");
                 open ? openEditors.add(id) : openEditors.delete(id);

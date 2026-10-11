@@ -15,7 +15,12 @@
     <script src="/static/i18n.js"></script>
     <script src="/static/market.js"></script>
     <style>
-        .item-cover { width: 64px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: var(--bs-secondary-bg); }
+        /* the collection as a grid of covers (user, 2026-10-11); an item being edited takes the whole row */
+        .item-cover { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--bs-secondary-bg); }
+        .item-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        #items > .item-open { width: 100%; flex: 0 0 100%; }
+        .item-open .item-card { flex-direction: row; }
+        .item-open .item-cover-link { flex: 0 0 120px; }
         .stat { min-width: 7.5rem; flex: 1 1 7.5rem; max-width: 11rem; }
         .item-facts { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: center; }
     </style>
@@ -90,7 +95,9 @@
                    data-i18n-placeholder="collection_filter" data-i18n-aria-label="collection_filter">
             <select id="filter-status" class="form-select form-select-sm w-auto" data-i18n-aria-label="collection_status"></select>
         </div>
-        <div id="items" class="list-group"></div>
+        <!-- one button per console / platform in this list (collection.js platformChips) -->
+        <div id="filter-platforms" class="d-flex flex-wrap gap-2 mb-3" role="group" data-i18n-aria-label="collection_platforms"></div>
+        <div id="items" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3"></div>
         <p id="empty" class="text-body-secondary d-none"></p>
     </div>
 </div>
