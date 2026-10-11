@@ -18,7 +18,8 @@ from scheduler.jobs import (LIGHT_STORES, SCRAPERS, RanRecently, active_store_sl
                             run_store, setup_logging)
 from scheduler.notify import notify, run_summary
 from pipeline import card_keys
-from pipeline.igdb import enrich_games, fill_names, fill_tags, fill_time_to_beat, fill_videos, refresh_critic_scores
+from pipeline.igdb import (enrich_games, fill_names, fill_steam_ids, fill_tags, fill_time_to_beat, fill_videos,
+                           refresh_critic_scores)
 from app.services.chat_service import complete_overdue
 from app.services.wish_alert_service import check_all as wish_alerts
 
@@ -67,6 +68,7 @@ def main(light=False, due=False):
             fill_names()
             fill_time_to_beat()
             refresh_critic_scores()
+            fill_steam_ids()
         except Exception as e:
             log.warning("IGDB lookup skipped: %s", e)
 

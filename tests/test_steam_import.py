@@ -61,6 +61,7 @@ def test_every_game_goes_in_with_steam_hours_and_achievements(steam):
     assert (elden["achievements"], elden["achievements_total"]) == (12, 42)
     assert items["Portal 2"]["hours"] is None
     assert items["Portal"]["hours"] == 1.5                    # made from IGDB, with its information...
+    assert (elden["steam_app_id"], items["Portal"]["steam_app_id"]) == (1245620, 400)   # "Ver na Steam"
     portal = steam["db"].execute("SELECT summary, created_by FROM games WHERE igdb_id = 71").fetchone()
     assert tuple(portal) == ("Thinking with portals", None)
     catalogue = client.get("/api/games/catalog?q=portal").get_json()["groups"]
@@ -103,3 +104,22 @@ def test_private_unknown_and_invalid_profiles(steam, monkeypatch):
 
 def test_importing_needs_a_login(steam):
     assert steam_import(steam["client"], "ana").status_code == 401
+
+
+def test_a_game_taken_out_is_not_imported_again(steam):
+    """Games marked "private" on Steam (user, 2026-10-11): Steam still sends them to the key's owner,
+    so the user takes them out once and imports leave them out; adding one by hand brings it back."""
+    client = steam["client"]
+    sign_up(client, "private_games")
+    steam_import(client, "ana")
+    elden = next(i for i in client.get("/api/collection").get_json()["items"] if i["name"] == "Elden Ring")
+    assert client.delete(f"/api/collection/{elden['id']}", headers=HEADERS).get_json() == {"ok": True, "steam_skipped": True}
+    steam_service._last.clear()
+    answer = steam_import(client, "").get_json()
+    assert (answer["added"], answer["skipped"]) == (0, 1)
+    assert "Elden Ring" not in [i["name"] for i in client.get("/api/collection").get_json()["items"]]
+    assert client.get("/api/auth/export").get_json()["steam_skipped_apps"] == [1245620]      # their data (GDPR)
+
+    client.post("/api/collection", json={"edition_id": elden["edition_id"], "kind": "owned"}, headers=HEADERS)
+    steam_service._last.clear()
+    assert steam_import(client, "").get_json()["skipped"] == 0         # wanted again

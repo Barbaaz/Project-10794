@@ -22,7 +22,7 @@ NOW = func.utcnow()      # the database's clock, in UTC (database/schema.sql)
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages", "message_photos",
                  "user_ratings", "reports", "moderation_log", "match_overrides",
-                 "collection_items", "game_reviews", "duplicate_dismissals"}
+                 "collection_items", "game_reviews", "duplicate_dismissals", "steam_skips"}
 
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
 ROLES = ("user", "moderator", "admin")
@@ -59,6 +59,7 @@ class Game(Base):
     platform_id: Mapped[int] = mapped_column(ForeignKey("platforms.id"))
     title: Mapped[str] = mapped_column(Unicode(300))
     normalized_title: Mapped[str] = mapped_column(Unicode(300))     # the game key (core/editions.py)
+    steam_app_id: Mapped[int | None] = mapped_column(Integer)      # PC: its Steam app (0: none; pipeline/igdb.fill_steam_ids)
     card_key: Mapped[str | None] = mapped_column(Unicode(300))     # front-page card, when another platform's name (pipeline/card_keys.py)
     kind: Mapped[str] = mapped_column(String(12), server_default="game")   # game / console (core/hardware.py)
     title_en: Mapped[str | None] = mapped_column(Unicode(300))      # English name (IGDB / moderators)
@@ -355,6 +356,14 @@ class DuplicateDismissal(Base):
 
 
 # --- game collection ---------------------------------------------------------------------
+
+class SteamSkip(Base):
+    """A Steam game the user took out of their collection: the Steam import leaves it out (steam_service)."""
+    __tablename__ = "steam_skips"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    app_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    created_at = created_at()
+
 
 COLLECTION_KINDS = ("owned", "wishlist")
 FORMATS = ("physical", "digital")

@@ -11,11 +11,11 @@ public (it then shows on their profile). When games / editions are merged, items
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from app.models import (
     COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, Game, GameEdition, GameReview, Listing, Platform,
-    User, fields,
+    SteamSkip, User, fields,
 )
 from db import session
 
@@ -52,8 +52,11 @@ def collection(user_id):
         # the user's review score of each game (one per game, as on the game page); a hidden one can't change
         reviews = {game_id: (score, hidden) for game_id, score, hidden in s.execute(
             select(GameReview.game_id, GameReview.score, GameReview.hidden).where(GameReview.user_id == user_id))}
+        steam = dict(s.execute(select(Game.id, Game.steam_app_id).where(
+            Game.id.in_({r["game_id"] for r in rows}), Game.steam_app_id > 0)).all()) if rows else {}
     for r in rows:
         r["score"], r["score_locked"] = reviews.get(r["game_id"], (None, False))
+        r["steam_app_id"] = steam.get(r["game_id"])          # "Ver na Steam" (a PC game)
     rows = with_prices(rows)                       # stats() needs the prices
     return {"items": rows, "stats": stats(rows), "public": public, "wish_alerts": alerts, "profile_sections": sections}
 
@@ -162,6 +165,8 @@ def add(user_id, edition_id, kind, game_id=None, new_edition=None, **changes):
             s.add(item)
         _apply(item, changes)
         s.flush()
+        if kind == "owned" and edition.game.steam_app_id:      # added by hand: Steam imports take it again
+            s.execute(delete(SteamSkip).where(SteamSkip.user_id == user_id, SteamSkip.app_id == edition.game.steam_app_id))
         if kind == "owned":       # bought it: off the wishlist
             for wanted in s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id,
                                                                  CollectionItem.kind == "wishlist",
@@ -233,9 +238,15 @@ def best_new_price(edition_id):
 
 
 def remove(user_id, item_id):
+    """Take an item out; an owned digital game on Steam isn't imported from Steam again (SteamSkip:
+    user 2026-10-11, games marked private on Steam)."""
     with session() as s:
-        s.delete(_own(s, user_id, item_id))
-    return {"ok": True}
+        item = _own(s, user_id, item_id)
+        app_id = item.game.steam_app_id if item.kind == "owned" and item.format == "digital" else None
+        if app_id and not s.get(SteamSkip, (user_id, app_id)):
+            s.add(SteamSkip(user_id=user_id, app_id=app_id))
+        s.delete(item)
+    return {"ok": True, "steam_skipped": bool(app_id)}
 
 
 def set_settings(user_id, changes):
