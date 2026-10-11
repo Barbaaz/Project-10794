@@ -168,6 +168,8 @@ class User(Base):
     lang: Mapped[str] = mapped_column(String(2), server_default="pt", nullable=False)   # pt / en, for e-mails
     steam_id: Mapped[str | None] = mapped_column(String(20))   # the last Steam import's profile (steam_service)
     steam_imported_at = mapped_column(DateTime)
+    # the profile's showcase sections, in order, comma-separated (collection_service.SHOWCASE; None: all)
+    profile_sections: Mapped[str | None] = mapped_column(String(100))
     last_login_at = mapped_column(DateTime)
     created_at = created_at()
     deleted_at = mapped_column(DateTime)      # the user deleted their account: anonymised (auth_service.delete_account)
@@ -382,7 +384,8 @@ class CollectionItem(Base):
     # wishlist alerts: the best new price at the last check (None: none in stock), and when
     alert_price = mapped_column(Numeric(10, 2))
     alert_checked_at = mapped_column(DateTime)
-    alert_used = mapped_column(Boolean)       # a user was selling a copy at the last check (None: not checked)
+    alert_used = mapped_column(Boolean)
+    favourite_rank: Mapped[int | None] = mapped_column(SmallInteger)   # 1-10: the profile's top 10 (owned)       # a user was selling a copy at the last check (None: not checked)
     created_at = created_at()
     updated_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 

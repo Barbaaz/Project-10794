@@ -15,7 +15,7 @@ from app.services.photo_storage import storage
 from db import session
 
 ACCOUNT_FIELDS = ("id", "username", "display_name", "email", "location", "role", "lang", "collection_public",
-                  "wish_alerts", "steam_id", "steam_imported_at", "created_at", "last_login_at")
+                  "wish_alerts", "profile_sections", "steam_id", "steam_imported_at", "created_at", "last_login_at")
 
 
 def _game(game, edition=None):
@@ -61,7 +61,7 @@ def export_user(user_id):
             for r in s.scalars(select(Rating).where(column == user_id).order_by(Rating.id))]
 
         collection = [fields(i, "id", "kind", "format", "status", "hours", "achievements", "achievements_total",
-                             "notes", "wish_price", "created_at", "updated_at", **_game(i.game, i.edition))
+                             "favourite_rank", "notes", "wish_price", "created_at", "updated_at", **_game(i.game, i.edition))
                       for i in s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                                          .order_by(CollectionItem.id))]
 

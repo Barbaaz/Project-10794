@@ -75,8 +75,10 @@ function showGameReviews(reviews) {
 // The user's collection, if they made it public (app/services/collection_service.py)
 async function loadCollection() {
     const response = await fetch(`/api/users/${encodeURIComponent(USERNAME)}/collection`);
+    if (currentUser && currentUser.id === USER_ID) loadShowcaseEditor(response.ok);
     if (!response.ok) return;
-    const { items, stats } = await response.json();
+    const { items, stats, showcase } = await response.json();
+    showShowcase(showcase);
     document.getElementById("collection-summary").textContent =
         t("profile_collection_summary", { owned: stats.owned, completed: stats.completed, wishlist: stats.wishlist });
     const owned = items.filter(i => i.kind === "owned").sort((a, b) => (a.name || "").localeCompare(b.name || "", LOCALE));
@@ -87,6 +89,111 @@ async function loadCollection() {
         </li>`).join("");
     document.getElementById("collection").classList.remove("d-none");
 }
+
+// --- the showcase ---------------------------------------------------------------------------
+const SECTIONS = ["favourites", "most_played", "most_valuable", "achievements"];
+const MAX_FAVOURITES = 10;
+
+function showShowcase(sections) {
+    const caption = (section, g, i) => ({
+        favourites: `#${i + 1}`,
+        most_played: `${fmtNumber(g.hours)} h`,
+        most_valuable: g.value != null ? eur.format(g.value) : "",
+        achievements: `🏆 ${g.achievements}/${g.achievements_total}`,
+    })[section];
+    document.getElementById("showcase").innerHTML = sections.map(s => `
+        <section class="mb-4">
+            <h2 class="h5">${esc(t(`showcase_${s.section}`))}</h2>
+            <div class="row row-cols-3 row-cols-sm-5 g-2">${s.items.map((g, i) => `
+                <div class="col"><a href="/game/${g.game_id}" class="d-block text-decoration-none text-body small">
+                    ${g.image ? `<img src="${esc(g.image)}" alt="" class="w-100 rounded mb-1 object-fit-cover" style="aspect-ratio: 3 / 4;">`
+                              : `<div class="w-100 rounded mb-1 bg-body-secondary" style="aspect-ratio: 3 / 4;"></div>`}
+                    <div class="text-truncate fw-semibold">${esc(localName(g) || "")}</div>
+                    <div class="text-body-secondary text-truncate">${esc(caption(s.section, g, i))} · ${esc(g.platform_name || "")}</div>
+                </a></div>`).join("")}
+            </div>
+        </section>`).join("");
+}
+
+// The user's own profile: which sections, in what order, and the top 10 (from their owned games)
+let editor = null;          // {order: [{section, shown}], favourites: [item], owned: [item]}
+async function loadShowcaseEditor(isPublic) {
+    const response = await fetch("/api/collection");
+    if (!response.ok) return;
+    const data = await response.json();
+    const owned = data.items.filter(i => i.kind === "owned")
+        .sort((a, b) => (localName(a) || "").localeCompare(localName(b) || "", LOCALE));
+    editor = {
+        order: [...data.profile_sections.map(s => ({ section: s, shown: true })),
+                ...SECTIONS.filter(s => !data.profile_sections.includes(s)).map(s => ({ section: s, shown: false }))],
+        favourites: owned.filter(i => i.favourite_rank).sort((a, b) => a.favourite_rank - b.favourite_rank),
+        owned,
+    };
+    document.getElementById("showcase-private").classList.toggle("d-none", isPublic);
+    document.getElementById("showcase-editor").classList.remove("d-none");
+    renderEditor();
+}
+
+function moveButtons(kind, i, last) {
+    return `<button type="button" class="btn btn-sm btn-secondary" data-${kind}-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="${esc(t("showcase_up"))}">↑</button>
+            <button type="button" class="btn btn-sm btn-secondary" data-${kind}-down="${i}" ${i === last ? "disabled" : ""} aria-label="${esc(t("showcase_down"))}">↓</button>`;
+}
+
+function swap(list, i, j) {
+    [list[i], list[j]] = [list[j], list[i]];
+    renderEditor();
+}
+
+function renderEditor() {
+    const sections = document.getElementById("showcase-section-list");
+    sections.innerHTML = editor.order.map((o, i) => `
+        <li class="list-group-item d-flex align-items-center gap-2 py-1">
+            <label class="form-check-label d-flex align-items-center gap-2 flex-grow-1">
+                <input type="checkbox" class="form-check-input mt-0" data-shown="${i}" ${o.shown ? "checked" : ""}>
+                ${esc(t(`showcase_${o.section}`))}</label>
+            ${moveButtons("section", i, editor.order.length - 1)}
+        </li>`).join("");
+    sections.querySelectorAll("[data-shown]").forEach(b => b.onchange = () => editor.order[b.dataset.shown].shown = b.checked);
+    sections.querySelectorAll("[data-section-up]").forEach(b => b.onclick = () => swap(editor.order, +b.dataset.sectionUp, +b.dataset.sectionUp - 1));
+    sections.querySelectorAll("[data-section-down]").forEach(b => b.onclick = () => swap(editor.order, +b.dataset.sectionDown, +b.dataset.sectionDown + 1));
+
+    const favourites = document.getElementById("showcase-favourite-list");
+    favourites.innerHTML = editor.favourites.map((f, i) => `
+        <li class="list-group-item d-flex align-items-center gap-2 py-1">
+            <span class="flex-grow-1 text-truncate">${esc(localName(f) || "")} <span class="small text-body-secondary">${esc(f.platform_name || "")}</span></span>
+            ${moveButtons("favourite", i, editor.favourites.length - 1)}
+            <button type="button" class="btn btn-sm btn-danger" data-remove="${i}" aria-label="${esc(t("showcase_remove"))}">✕</button>
+        </li>`).join("");
+    favourites.querySelectorAll("[data-favourite-up]").forEach(b => b.onclick = () => swap(editor.favourites, +b.dataset.favouriteUp, +b.dataset.favouriteUp - 1));
+    favourites.querySelectorAll("[data-favourite-down]").forEach(b => b.onclick = () => swap(editor.favourites, +b.dataset.favouriteDown, +b.dataset.favouriteDown + 1));
+    favourites.querySelectorAll("[data-remove]").forEach(b => b.onclick = () => { editor.favourites.splice(+b.dataset.remove, 1); renderEditor(); });
+
+    const chosen = new Set(editor.favourites.map(f => f.id));
+    const choices = editor.owned.filter(i => !chosen.has(i.id));
+    document.getElementById("showcase-add").innerHTML = choices.map(i =>
+        `<option value="${i.id}">${esc(localName(i) || "")} · ${esc(i.platform_name || "")}</option>`).join("");
+    const full = editor.favourites.length >= MAX_FAVOURITES || !choices.length;
+    document.getElementById("showcase-add").disabled = full;
+    document.getElementById("showcase-add-button").disabled = full;
+}
+
+document.getElementById("showcase-add-button").onclick = () => {
+    const id = Number(document.getElementById("showcase-add").value);
+    const item = editor.owned.find(i => i.id === id);
+    if (item && editor.favourites.length < MAX_FAVOURITES) editor.favourites.push(item);
+    renderEditor();
+};
+
+document.getElementById("showcase-save").onclick = async () => {
+    const status = document.getElementById("showcase-saved");
+    const { ok, data } = await api("/api/collection/showcase", { method: "PUT", body: {
+        sections: editor.order.filter(o => o.shown).map(o => o.section),
+        favourites: editor.favourites.map(f => f.id),
+    } });
+    status.className = `small ${ok ? "text-success" : "text-danger"}`;
+    status.textContent = ok ? t("showcase_saved") : t(`error_${data?.error || "unknown"}`);
+    if (ok) loadCollection();
+};
 
 applyI18n();
 load();

@@ -25,6 +25,10 @@ MAX_HOURS = Decimal("99999.9")
 # "In demand" (user, 2026-10-11): games this many users wish for, at least; one wish is never shown
 # (a wishlist is private)
 MIN_WISHERS = 2
+# The profile's showcase (user, 2026-10-11): sections the user shows, in their order (users.profile_sections)
+SHOWCASE = ("favourites", "most_played", "most_valuable", "achievements")
+SHOWCASE_SIZE = 5           # games in each section but the favourites
+MAX_FAVOURITES = 10
 
 
 class CollectionError(Exception):
@@ -35,21 +39,21 @@ class CollectionError(Exception):
 
 
 def collection(user_id):
-    """{items, stats, public, wish_alerts}: the user's collection with each edition's prices."""
+    """{items, stats, public, wish_alerts, profile_sections}: the user's collection with each edition's prices."""
     with session() as s:
         user = s.get(User, user_id)
         items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                           .order_by(CollectionItem.kind, CollectionItem.updated_at.desc(), CollectionItem.id.desc())).all()
         rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "achievements", "achievements_total",
-                       "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
-        public, alerts = user.collection_public, user.wish_alerts
+                       "favourite_rank", "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
+        public, alerts, sections = user.collection_public, user.wish_alerts, sections_of(user.profile_sections)
         # the user's review score of each game (one per game, as on the game page); a hidden one can't change
         reviews = {game_id: (score, hidden) for game_id, score, hidden in s.execute(
             select(GameReview.game_id, GameReview.score, GameReview.hidden).where(GameReview.user_id == user_id))}
     for r in rows:
         r["score"], r["score_locked"] = reviews.get(r["game_id"], (None, False))
     rows = with_prices(rows)                       # stats() needs the prices
-    return {"items": rows, "stats": stats(rows), "public": public, "wish_alerts": alerts}
+    return {"items": rows, "stats": stats(rows), "public": public, "wish_alerts": alerts, "profile_sections": sections}
 
 
 def with_prices(rows):
@@ -219,7 +223,59 @@ def public_collection(username):
     data = collection(user_id)
     keep = ("kind", "status", "format", "edition_id", "game_id", "name", "name_en", "platform", "platform_name", "image",
             "best_price", "used")
-    return {"items": [{k: r[k] for k in keep} for r in data["items"]], "stats": data["stats"]}
+    return {"items": [{k: r[k] for k in keep} for r in data["items"]], "stats": data["stats"],
+            "showcase": showcase(data["items"], data["profile_sections"])}
+
+
+def sections_of(value):
+    """The showcase sections a user chose, in order (None: never chose: all of them)."""
+    if value is None:
+        return list(SHOWCASE)
+    return [s for s in value.split(",") if s in SHOWCASE]
+
+
+def showcase(rows, sections):
+    """
+    The profile's sections from the owned items, in the user's order, empty ones left out:
+    [{section, items: [{game_id, name, name_en, platform_name, image, hours, value, achievements, achievements_total}]}]
+    value = what it's worth now (best new store price, else the cheapest used copy).
+    """
+    owned = [r for r in rows if r["kind"] == "owned"]
+    for r in owned:
+        r["value"] = r["best_price"] if r["best_price"] is not None else (r["used"] or {}).get("price")
+    share = lambda r: r["achievements"] / r["achievements_total"]
+    picks = {
+        "favourites": sorted((r for r in owned if r["favourite_rank"]), key=lambda r: r["favourite_rank"])[:MAX_FAVOURITES],
+        "most_played": sorted((r for r in owned if r["hours"]), key=lambda r: (-r["hours"], r["id"]))[:SHOWCASE_SIZE],
+        "most_valuable": sorted((r for r in owned if r["value"]), key=lambda r: (-r["value"], r["id"]))[:SHOWCASE_SIZE],
+        "achievements": sorted((r for r in owned if r["achievements_total"] and r["achievements"]),
+                               key=lambda r: (-share(r), -r["achievements"], r["id"]))[:SHOWCASE_SIZE],
+    }
+    keep = ("game_id", "name", "name_en", "platform_name", "image", "hours", "value", "achievements", "achievements_total")
+    return [{"section": s, "items": [{k: r[k] for k in keep} for r in picks[s]]} for s in sections if picks[s]]
+
+
+def set_showcase(user_id, sections, favourites):
+    """The user's showcase: sections (in order, from SHOWCASE) and the top 10 (owned item ids, in order)."""
+    if not isinstance(sections, list) or not isinstance(favourites, list) or len(set(map(str, sections))) != len(sections)             or any(s not in SHOWCASE for s in sections):
+        raise CollectionError("showcase_invalid")
+    try:
+        ids = [_int(i) for i in favourites]
+    except CollectionError:
+        raise CollectionError("showcase_invalid")
+    if len(ids) > MAX_FAVOURITES or len(set(ids)) != len(ids):
+        raise CollectionError("showcase_invalid")
+    with session() as s:
+        owned = {i.id: i for i in s.scalars(select(CollectionItem).where(
+            CollectionItem.user_id == user_id, CollectionItem.kind == "owned"))}
+        if any(i not in owned for i in ids):
+            raise CollectionError("showcase_invalid")
+        for item in owned.values():
+            rank = ids.index(item.id) + 1 if item.id in ids else None
+            if item.favourite_rank != rank:
+                item.favourite_rank = rank
+        s.get(User, user_id).profile_sections = ",".join(sections)
+    return {"profile_sections": sections, "favourites": ids}
 
 
 def _own(s, user_id, item_id):

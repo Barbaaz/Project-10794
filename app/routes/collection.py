@@ -101,6 +101,14 @@ def settings():
     return jsonify(collection_service.set_settings(current_user()["id"], changes))
 
 
+@bp.put("/collection/showcase")
+@login_required
+def showcase():
+    """{sections: [...], favourites: [item ids]}: what the profile shows, in order, and the top 10"""
+    data = body()
+    return jsonify(collection_service.set_showcase(current_user()["id"], data.get("sections"), data.get("favourites")))
+
+
 @bp.post("/collection/alerts-off")
 def alerts_off():
     """{token}: the link in a wishlist alert e-mail switches them off, logged in or not"""

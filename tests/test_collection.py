@@ -162,3 +162,28 @@ def test_in_demand_from_two_wishers(market):
     add(client, market["edition"], kind="wishlist")
     assert [(g["game_id"], g["wishers"], g["used"]) for g in demand()] == [(market["game"], 2, 0)]
     assert client.get(f"/api/games/{market['game']}").get_json()["wanted_by"] == 2
+
+
+def test_profile_showcase_in_the_users_order(market):
+    """The profile's sections and top 10 (user, 2026-10-11), shown with a public collection only."""
+    client = market["client"]
+    sign_up(client, "show_off")
+    first = add(client, market["edition"], hours="40", achievements=10, achievements_total=20).get_json()["id"]
+    second = add(client, market["other_edition"], hours="5").get_json()["id"]
+    put = lambda body: client.put("/api/collection/showcase", json=body, headers=HEADERS)
+    assert put({"sections": ["most_played", "favourites"], "favourites": [second, first]}).status_code == 200
+    assert mine(client)["profile_sections"] == ["most_played", "favourites"]
+    for body in ({"sections": ["most_played", "most_played"], "favourites": []},     # twice
+                 {"sections": ["secrets"], "favourites": []},
+                 {"sections": [], "favourites": list(range(1, 12))},                    # more than 10
+                 {"sections": [], "favourites": [999999]}):                              # not theirs
+        assert put(body).get_json()["error"] == "showcase_invalid", body
+
+    assert client.get("/api/users/show_off/collection").status_code == 404           # private: nothing shown
+    client.put("/api/collection/settings", json={"public": True}, headers=HEADERS)
+    showcase = client.get("/api/users/show_off/collection").get_json()["showcase"]
+    assert [(s["section"], [g["game_id"] for g in s["items"]]) for s in showcase] == [
+        ("most_played", [market["game"], market["other_game"]]),
+        ("favourites", [market["other_game"], market["game"]]),
+    ]
+    assert showcase[0]["items"][0]["hours"] == 40

@@ -38,6 +38,27 @@
             </div>
         </div>
 
+        <!-- The showcase (collection_service.showcase): the sections the user chose, in their order;
+             only with a public collection. On their own profile, "Personalizar" edits it -->
+        <details id="showcase-editor" class="card card-body py-2 mb-3 d-none">
+            <summary class="fw-semibold" data-i18n="showcase_edit"></summary>
+            <p id="showcase-private" class="small text-body-secondary mt-2 mb-0 d-none" data-i18n="showcase_private"></p>
+            <h3 class="h6 mt-3 mb-1" data-i18n="showcase_sections"></h3>
+            <ul id="showcase-section-list" class="list-group mb-3"></ul>
+            <h3 class="h6 mb-1" data-i18n="showcase_favourites"></h3>
+            <p class="small text-body-secondary mb-1" data-i18n="showcase_favourites_help"></p>
+            <ol id="showcase-favourite-list" class="list-group list-group-numbered mb-2"></ol>
+            <div class="input-group input-group-sm mb-3">
+                <select id="showcase-add" class="form-select" data-i18n-aria-label="showcase_add"></select>
+                <button type="button" id="showcase-add-button" class="btn btn-secondary" data-i18n="showcase_add"></button>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" id="showcase-save" class="btn btn-primary btn-sm" data-i18n="showcase_save"></button>
+                <span id="showcase-saved" class="small" role="status"></span>
+            </div>
+        </details>
+        <div id="showcase" class="mb-2"></div>
+
         <h2 class="h5" data-i18n="profile_ratings"></h2>
         <div id="ratings" class="list-group mb-4"></div>
         <p id="no-ratings" class="small text-body-secondary d-none" data-i18n="profile_no_ratings"></p>
