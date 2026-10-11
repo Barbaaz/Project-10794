@@ -59,6 +59,7 @@ class Game(Base):
     platform_id: Mapped[int] = mapped_column(ForeignKey("platforms.id"))
     title: Mapped[str] = mapped_column(Unicode(300))
     normalized_title: Mapped[str] = mapped_column(Unicode(300))     # the game key (core/editions.py)
+    steam_app_id: Mapped[int | None] = mapped_column(Integer)      # PC: its Steam app (0: none; pipeline/igdb.fill_steam_ids)
     card_key: Mapped[str | None] = mapped_column(Unicode(300))     # front-page card, when another platform's name (pipeline/card_keys.py)
     kind: Mapped[str] = mapped_column(String(12), server_default="game")   # game / console (core/hardware.py)
     title_en: Mapped[str | None] = mapped_column(Unicode(300))      # English name (IGDB / moderators)

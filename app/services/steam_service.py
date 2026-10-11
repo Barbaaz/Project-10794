@@ -19,7 +19,7 @@ from decimal import Decimal
 import requests
 from sqlalchemy import select
 
-from app.models import CollectionItem, Game, Platform, User
+from app.models import CollectionItem, Game, GameEdition, Platform, User
 from app.services import collection_service
 from app.services.igdb_game_service import IGDBGameError, _with_standard_edition, collection_editions, query
 from core.normalizer import normalize_name
@@ -219,6 +219,11 @@ def import_games(user_id, profile=None):
     with session() as s:
         user = s.get(User, user_id)
         user.steam_id, user.steam_imported_at = steamid, datetime.now(timezone.utc).replace(tzinfo=None)
+        # each linked game's Steam app, for "Ver na Steam" (IGDB fills the others: pipeline/igdb.fill_steam_ids)
+        for edition_id, g in targets.items():
+            game = s.get(GameEdition, edition_id).game
+            if not game.steam_app_id:
+                game.steam_app_id = g["appid"]
 
     missing = [{"name": g["name"], "hours": round(g["minutes"] / 60, 1) if g["minutes"] else None}
                for g in games if g["appid"] not in editions]

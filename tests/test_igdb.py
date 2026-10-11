@@ -151,6 +151,40 @@ def test_refresh_critic_scores_keeps_games_igdb_did_not_return(monkeypatch):
     assert {params[-1]: params[:-1] for params in conn.c.updates} == {1: (89, 30), 2: (None, 0)}
 
 
+def test_fill_steam_ids_marks_games_without_one(monkeypatch):
+    """PC games' Steam apps for "Ver na Steam"; 0 when IGDB links none, so they aren't asked again."""
+    import db
+    import pipeline.igdb as igdb
+
+    class FakeCursor:
+        updates = []
+        def execute(self, sql, *params):
+            self.rows = [(1,), (2,)] if sql.startswith("SELECT") else None
+            if not sql.startswith("SELECT"):
+                self.updates.append(params)
+            return self
+        def fetchall(self):
+            return self.rows
+
+    class FakeConn:
+        c = FakeCursor()
+        def cursor(self):
+            return self.c
+        def commit(self): pass
+        def rollback(self): pass
+        def close(self): pass
+
+    class FakeClient:
+        def query(self, body, endpoint):
+            assert endpoint == "external_games" and "external_game_source = 1" in body
+            return [{"game": 1, "uid": "1245620"}, {"game": 1, "uid": "9999999"}, {"game": 2, "uid": "not a number"}]
+
+    conn = FakeConn()
+    monkeypatch.setattr(db, "get_connection", lambda: conn)
+    assert igdb.fill_steam_ids(FakeClient()) == 2
+    assert {params[1]: params[0] for params in conn.c.updates} == {1: 1245620, 2: 0}
+
+
 def test_videos_trailers_first():
     from pipeline.igdb import video_list
     videos = json.loads(video_list({"videos": [

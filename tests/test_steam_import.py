@@ -61,6 +61,7 @@ def test_every_game_goes_in_with_steam_hours_and_achievements(steam):
     assert (elden["achievements"], elden["achievements_total"]) == (12, 42)
     assert items["Portal 2"]["hours"] is None
     assert items["Portal"]["hours"] == 1.5                    # made from IGDB, with its information...
+    assert (elden["steam_app_id"], items["Portal"]["steam_app_id"]) == (1245620, 400)   # "Ver na Steam"
     portal = steam["db"].execute("SELECT summary, created_by FROM games WHERE igdb_id = 71").fetchone()
     assert tuple(portal) == ("Thinking with portals", None)
     catalogue = client.get("/api/games/catalog?q=portal").get_json()["groups"]

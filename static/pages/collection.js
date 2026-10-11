@@ -43,6 +43,10 @@ function priceLine(item) {
             ${item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}</span>` : ""}
             ${item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : ""}
             ${item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : ""}`);
+    } else if (item.steam_app_id) {
+        // no store here sells it, but it's on Steam (a PC game; user, 2026-10-11)
+        parts.push(`<a class="btn btn-sm btn-secondary" href="https://store.steampowered.com/app/${Number(item.steam_app_id)}/"
+                       target="_blank" rel="noopener">${t("collection_on_steam")}</a>`);
     } else if (item.kind === "wishlist" && !item.used) {
         // nobody sells it: "looking for", with an e-mail when a store or a user does (wish_alert_service)
         parts.push(`<span class="badge text-bg-info">${t("collection_looking_for")}</span>
@@ -144,9 +148,9 @@ const SORTS = { owned: ["name", "added", "value", "hours"], wishlist: ["name", "
 const WISH_FILTERS = {
     "": () => true,
     deals: i => i.good_deal,                                     // on sale, at its lowest, or cheaper than when wished
-    available: i => i.best_price !== null || !!i.used,
+    available: i => i.best_price !== null || !!i.used || !!i.steam_app_id,
     used: i => !!i.used,
-    looking: i => i.best_price === null && !i.used,              // nobody sells it ("À procura")
+    looking: i => i.best_price === null && !i.used && !i.steam_app_id,   // nobody sells it ("À procura")
 };
 const sortBy = { owned: "name", wishlist: "name" };
 const price = i => i.best_price ?? i.used?.price ?? null;

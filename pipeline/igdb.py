@@ -9,6 +9,7 @@ screenshots, YouTube trailers, game modes, themes, time to beat) for the game pa
     python -m pipeline.igdb --time-to-beat   # time to beat (rushed / normal / 100%) of matched games
     python -m pipeline.igdb --names          # English names of games matched before they were kept
     python -m pipeline.igdb --critics        # critics' scores of matched games (also each full run)
+    python -m pipeline.igdb --steam          # PC games' Steam app ids (also each full run)
 
 Credentials: a Twitch developer app, in the environment variables IGDB_CLIENT_ID and
 IGDB_CLIENT_SECRET (never in the code). IGDB allows 4 requests per second; we stay under it.
@@ -337,6 +338,39 @@ def fill_tags(client=None):
     return fill_missing("game_modes", "game_modes.name,themes.name", tag_lists, client)
 
 
+STEAM_SOURCE = 1             # IGDB external_game_source: Steam
+
+
+def fill_steam_ids(client=None):
+    """
+    PC games' Steam app ids, from IGDB's links to Steam (external_games), for the collection's
+    "Ver na Steam" when no store here sells the game; 0 when IGDB has none, so it isn't asked again.
+    """
+    with connection() as conn:
+        cursor = conn.cursor()
+        ids = [r[0] for r in cursor.execute(
+            "SELECT DISTINCT g.igdb_id FROM games g JOIN platforms p ON p.id = g.platform_id "
+            "WHERE p.code = 'PC' AND g.igdb_id IS NOT NULL AND g.steam_app_id IS NULL").fetchall()]
+        if not ids:
+            return 0
+        client = client or IGDBClient()
+        for start in range(0, len(ids), BATCH):
+            batch = ids[start:start + BATCH]
+            found = {}
+            for row in client.query(f"fields game,uid; where external_game_source = {STEAM_SOURCE} "
+                                    f"& game = ({','.join(map(str, batch))}); sort uid asc; limit {BATCH};",
+                                    "external_games"):
+                if str(row.get("uid", "")).isdigit():
+                    found.setdefault(row["game"], int(row["uid"]))
+            for igdb_id in batch:
+                cursor.execute("UPDATE games SET steam_app_id = ? FROM platforms p WHERE p.id = games.platform_id "
+                               "AND p.code = 'PC' AND games.igdb_id = ? AND games.steam_app_id IS NULL",
+                               found.get(igdb_id, 0), igdb_id)
+            conn.commit()
+    log.info("IGDB: Steam ids asked for %d PC games", len(ids))
+    return len(ids)
+
+
 def refresh_critic_scores(client=None):
     """
     Critics' scores of every matched game, asked again each full run: reviews come out around a
@@ -445,10 +479,13 @@ if __name__ == "__main__":
     parser.add_argument("--time-to-beat", action="store_true", help="only fill the time to beat of matched games")
     parser.add_argument("--names", action="store_true", help="only fill the English names of matched games")
     parser.add_argument("--critics", action="store_true", help="only refresh the critics' scores of matched games")
+    parser.add_argument("--steam", action="store_true", help="only fill PC games' Steam app ids")
     args = parser.parse_args()
     setup_logging()
     if args.critics:
         refresh_critic_scores()
+    elif args.steam:
+        fill_steam_ids()
     elif args.names:
         fill_names()
     elif args.videos:

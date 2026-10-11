@@ -85,6 +85,9 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS rating_count integer NULL;
 -- The front page's card for a game written differently on another platform (2026-10-11,
 -- core/similar_names.card_keys, pipeline/card_keys.py); NULL = its own normalized_title
 ALTER TABLE games ADD COLUMN IF NOT EXISTS card_key varchar(300) NULL;
+-- A PC game's Steam app (2026-10-11: "Ver na Steam" when no store here sells it), from IGDB
+-- (pipeline/igdb.fill_steam_ids) or a user's Steam import; 0 = IGDB knows none; NULL = not asked yet
+ALTER TABLE games ADD COLUMN IF NOT EXISTS steam_app_id integer NULL;
 
 -- Editions of a game: Standard, Deluxe, Day One, Collector's, Game Key Card...
 CREATE TABLE IF NOT EXISTS game_editions (
