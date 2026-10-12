@@ -319,7 +319,11 @@ def igdb_games(lists):
 
 
 def _editions(lists):
-    """{trophy list id: edition id}: our game of that name on one of its consoles, else IGDB's (made)."""
+    """
+    {trophy list id: edition id}: our game of that name on the list's first console (the one played on,
+    else the newest), else IGDB's (made), else ours on another of its consoles: a game once made on the
+    Vita for a "PSVITA,PS4" list played on a PS4 doesn't keep it on the Vita (user, 2026-10-12).
+    """
     editions = {}
     with session() as s:
         codes = {code: pid for code, pid in s.execute(select(Platform.code, Platform.id)
@@ -329,14 +333,22 @@ def _editions(lists):
                 .where(Game.platform_id.in_(codes.values()), Game.kind == "game").order_by(Game.id)):
             ours.setdefault((platform_id, key), game_id)
             by_words.setdefault((platform_id, frozenset(words(title))), set()).add(game_id)
-        for l in lists:
-            key = key_of(l["name"])
-            game_id = next((ours[(codes[p], key)] for p in l["platforms"] if (codes.get(p), key) in ours), None)
-            if game_id is None:        # the same words but an edition's (user, 2026-10-12: the same game, not a
-                same = [by_words.get((codes[p], frozenset(words(clean(l["name"])))), set()) for p in l["platforms"]]
-                game_id = next((min(ids) for ids in same if len(ids) == 1), None)   # second one beside it)
-            if game_id:
-                editions[l["id"]] = _with_standard_edition(s, s.get(Game, game_id))["edition_id"]
+
+        def ours_on(l, consoles):
+            """Our game of the list's name on these consoles; else of its words but an edition's, when only one
+            game has them (user, 2026-10-12: the same game, not a second one beside it)"""
+            key, same = key_of(l["name"]), frozenset(words(clean(l["name"])))
+            for code in consoles:
+                if (codes.get(code), key) in ours:
+                    return ours[(codes[code], key)]
+            return next((min(ids) for ids in (by_words.get((codes.get(c), same), set()) for c in consoles) if len(ids) == 1), None)
+
+        def link(found):
+            for l, game_id in found:
+                if game_id:
+                    editions[l["id"]] = _with_standard_edition(s, s.get(Game, game_id))["edition_id"]
+
+        link((l, ours_on(l, l["platforms"][:1])) for l in lists)
     unknown = [l for l in lists if l["id"] not in editions]
     if unknown:
         try:
@@ -346,6 +358,8 @@ def _editions(lists):
                 editions.update({lid: made[i] for lid, (i, c) in linked.items() if c == code and i in made})
         except IGDBGameError:
             pass                         # IGDB down: our games alone
+    with session() as s:
+        link((l, ours_on(l, l["platforms"][1:])) for l in lists if l["id"] not in editions)
     return editions
 
 

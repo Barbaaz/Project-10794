@@ -304,3 +304,14 @@ def test_a_name_with_edition_words_is_our_game(psn):
     psn_import(client, "Ana_PS")
     bloodborne = items_of(client)["Bloodborne"]
     assert (bloodborne["game_id"], bloodborne["hours"]) == (psn["games"][0], 50.5)
+
+
+def test_a_game_made_on_the_wrong_console_doesnt_keep_the_list_there(psn):
+    """A Vita game made for a "PSVITA,PS4" list before 2026-10-12: the list, played on a PS4, is our PS4 game."""
+    c = psn["db"]
+    vita = c.execute("SELECT id FROM platforms WHERE code = 'PSVita'").fetchone()[0]
+    psn["games"].append(c.execute("INSERT INTO games (platform_id, title, normalized_title) VALUES (?, 'Bloodborne', 'bloodborne') "
+                                  "RETURNING id", vita).fetchone()[0])
+    lists = [{"id": "A", "name": "Bloodborne", "platforms": ["PS4", "PSVita"], "earned": 1, "total": 9, "platinum": None}]
+    edition = psn_service._editions(lists)["A"]
+    assert c.execute("SELECT game_id FROM game_editions WHERE id = ?", edition).fetchone()[0] == psn["games"][0]
