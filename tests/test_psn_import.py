@@ -238,3 +238,13 @@ def test_a_game_taken_out_stays_out_whatever_brings_it(psn):
     psn_service._last.clear()
     psn_import(client, "")
     assert "Bloodborne" not in items_of(client)
+
+
+def test_of_two_games_of_one_name_the_newest(monkeypatch):
+    """IGDB lists 1993's DOOM on the PS4 (a port, and remasters): a PS4 player's "DOOM" is 2016's."""
+    monkeypatch.setattr(psn_service, "query", lambda body, endpoint="games": [
+        {"id": 673, "name": "Doom", "platforms": [6, 48], "first_release_date": 755222400, "game_type": 0},  # 1993
+        {"id": 7351, "name": "DOOM", "platforms": [48], "first_release_date": 1463097600, "game_type": 0},  # 2016
+        {"id": 313161, "name": "Doom", "platforms": [48], "first_release_date": 1723075200, "game_type": 9},
+    ] if body.startswith("fields") else [])                                     # 1993's again, in 2024: a remaster
+    assert psn_service.igdb_games([{"id": "A", "name": "DOOM", "platforms": ["PS4"]}]) == {"A": (7351, "PS4")}

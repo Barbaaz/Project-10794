@@ -35,7 +35,7 @@ from app.services.igdb_game_service import (
 )
 from core.normalizer import normalize_name
 from db import session
-from pipeline.igdb import IGDB_PLATFORMS
+from pipeline.igdb import IGDB_PLATFORMS, REMAKE
 
 log = logging.getLogger(__name__)
 
@@ -274,26 +274,31 @@ def igdb_games(lists):
     """
     platforms = ",".join(str(IGDB_PLATFORMS[p]) for p in PLATFORMS.values())
     where = (f"platforms = ({platforms}) & game_type = ({','.join(map(str, GAME_TYPES))}) & version_parent = null")
-    found = {}
+    fields = "fields name,platforms,first_release_date,game_type;"
+    found, released = {}, {}
 
     def take(games, same):
+        """Of the games of the same name on its console, a game or a remake before a remaster or a port,
+        then the newest: on a PS4, "DOOM" is 2016's, not 1993's re-released in 2019 and 2024 (IGDB's
+        remasters), as for the stores' remakes (pipeline/igdb.py)"""
         for g in games:
             for l in lists:
                 code = next((p for p in l["platforms"] if IGDB_PLATFORMS[p] in (g.get("platforms") or [])), None)
-                if code and l["id"] not in found and same(l, g.get("name") or ""):
-                    found[l["id"]] = (g["id"], code)
+                rank = (g.get("game_type") in (0, REMAKE), g.get("first_release_date") or 0)
+                if code and same(l, g.get("name") or "") and (l["id"] not in found or rank > released[l["id"]]):
+                    found[l["id"]], released[l["id"]] = (g["id"], code), rank
 
     names = list(dict.fromkeys(clean(l["name"]).replace('"', " ").replace("\\", " ").strip() for l in lists))
     for start in range(0, len(names), IGDB_NAMES):
         either = " | ".join(f'name ~ "{n}"' for n in names[start:start + IGDB_NAMES] if n)
         if either:
-            take(query(f"fields name,platforms; where ({either}) & {where}; limit 500;"),
+            take(query(f"{fields} where ({either}) & {where}; limit 500;"),
                  lambda l, name: key_of(l["name"]) == normalize_name(name))
     left = list(dict.fromkeys(clean(l["name"]).replace('"', " ").replace("\\", " ").strip()
                               for l in lists if l["id"] not in found))
     for name in left[:MAX_SEARCHES]:
         if words(name):
-            take(query(f'search "{name}"; fields name,platforms; where {where}; limit 10;'),
+            take(query(f'search "{name}"; {fields} where {where}; limit 10;'),
                  lambda l, other: clean(l["name"]).replace('"', " ").replace("\\", " ").strip() == name
                  and words(name) == words(other))
     return found
