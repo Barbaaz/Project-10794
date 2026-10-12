@@ -26,7 +26,12 @@
         }
         /* the statistics (collection.js renderStats; user, 2026-10-12: reworked): equal tiles, a value and
            one line under it, a meter for a share; the statuses and platforms as part-to-whole bars */
-        .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .5rem; }
+        .stat-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: .5rem; }
+        .settings-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .5rem; }
+        .setting-row { display: flex; align-items: flex-start; gap: .75rem; padding: .75rem .9rem; border: 1px solid var(--bs-border-color);
+                       border-radius: .75rem; background: var(--bs-body-bg); }
+        .setting-icon { font-size: 1.25rem; line-height: 1.2; }
+        .setting-row .form-switch .form-check-input { width: 2.5em; height: 1.35em; margin-top: .1rem; cursor: pointer; }
         @media (max-width: 575.98px) {      /* two a row: a last one alone takes the row */
             .stat-row > .stat-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
         }
@@ -67,23 +72,33 @@
 
 <div class="container pb-4" style="max-width: 1320px;">
 
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-        <h1 class="h3 mb-0" data-i18n="collection_title"></h1>
-        <div class="d-flex flex-wrap gap-3">
-            <div class="form-check form-switch mb-0">
-                <input class="form-check-input" type="checkbox" role="switch" id="public-switch">
-                <label class="form-check-label small" for="public-switch" data-i18n="collection_public"></label>
+    <h1 class="h3 mb-3" data-i18n="collection_title"></h1>
+    <!-- Who sees the collection, and the wishlist e-mails (user, 2026-10-12: reworked): one row each, what it
+         means in a line, the switch on the right; a public collection's page and its link (collection.js renderSharing) -->
+    <div class="settings-panel mb-3">
+        <div class="setting-row">
+            <span id="public-icon" class="setting-icon" aria-hidden="true"></span>
+            <div class="flex-grow-1 min-w-0">
+                <label class="fw-semibold small d-block" for="public-switch" id="public-title"></label>
+                <div id="public-text" class="small text-body-secondary"></div>
+                <div id="public-actions" class="small d-flex flex-wrap gap-2 mt-1 d-none">
+                    <a id="public-page"></a>
+                    <button type="button" id="public-copy" class="btn btn-link btn-sm p-0 align-baseline" data-i18n="collection_copy_link"></button>
+                </div>
             </div>
-            <div class="form-check form-switch mb-0">
-                <input class="form-check-input" type="checkbox" role="switch" id="alerts-switch"
-                       aria-describedby="alerts-hint">
-                <label class="form-check-label small" for="alerts-switch" data-i18n="collection_wish_alerts"
-                       data-i18n-title="collection_wish_alerts_hint"></label>
-                <span id="alerts-hint" class="visually-hidden" data-i18n="collection_wish_alerts_hint"></span>
+            <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="public-switch"
+                 aria-describedby="public-text"></div>
+        </div>
+        <div class="setting-row">
+            <span class="setting-icon" aria-hidden="true">🔔</span>
+            <div class="flex-grow-1 min-w-0">
+                <label class="fw-semibold small d-block" for="alerts-switch" data-i18n="collection_alerts_title"></label>
+                <div id="alerts-hint" class="small text-body-secondary" data-i18n="collection_wish_alerts_hint"></div>
             </div>
+            <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="alerts-switch"
+                 aria-describedby="alerts-hint"></div>
         </div>
     </div>
-    <div id="public-link" class="small mb-3 d-none"></div>
 
     <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
     <div id="message" class="alert d-none py-2 small" role="alert"></div>

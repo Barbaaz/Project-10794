@@ -439,10 +439,25 @@ function recount() {
              achievements_total: withTotal.reduce((sum, i) => sum + i.achievements_total, 0) };
 }
 
-function renderPublicLink() {
-    const box = document.getElementById("public-link");
-    box.classList.toggle("d-none", !data.public);
-    box.innerHTML = data.public ? `${esc(t("collection_public_at"))} <a href="/user/${encodeURIComponent(currentUser.username)}">/user/${esc(currentUser.username)}</a>` : "";
+// Who sees the collection: private, or public with its page and its link to share
+function renderSharing() {
+    const open = data.public, page = `/user/${encodeURIComponent(currentUser.username)}/collection`;
+    document.getElementById("public-icon").textContent = open ? "🌐" : "🔒";
+    document.getElementById("public-title").textContent = t(open ? "collection_public_on" : "collection_public_off");
+    document.getElementById("public-text").textContent = t(open ? "collection_public_on_text" : "collection_public_off_text");
+    document.getElementById("public-actions").classList.toggle("d-none", !open);
+    const link = document.getElementById("public-page");
+    link.href = page;
+    link.textContent = t("collection_public_see");
+    document.getElementById("public-copy").onclick = async event => {
+        try {
+            await navigator.clipboard.writeText(location.origin + page);
+            event.target.textContent = t("collection_link_copied");
+        } catch (e) {
+            event.target.textContent = location.origin + page;        // no clipboard: the link to copy by hand
+        }
+        setTimeout(() => event.target.textContent = t("collection_copy_link"), 2500);
+    };
 }
 
 async function load() {
@@ -452,7 +467,7 @@ async function load() {
     data = await response.json();
     document.getElementById("public-switch").checked = data.public;
     document.getElementById("alerts-switch").checked = data.wish_alerts;
-    renderPublicLink();
+    renderSharing();
     renderStats();
     renderItems();
     document.getElementById("content").classList.remove("d-none");
@@ -608,7 +623,8 @@ async function start() {
     });
     document.getElementById("public-switch").onchange = async e => {
         const { ok } = await api("/api/collection/settings", { method: "PUT", body: { public: e.target.checked } });
-        if (ok) { data.public = e.target.checked; renderPublicLink(); }
+        if (ok) { data.public = e.target.checked; renderSharing(); }
+        else e.target.checked = !e.target.checked;
     };
     document.getElementById("alerts-switch").onchange = async e => {
         const { ok } = await api("/api/collection/settings", { method: "PUT",
