@@ -248,3 +248,59 @@ def test_of_two_games_of_one_name_the_newest(monkeypatch):
         {"id": 313161, "name": "Doom", "platforms": [48], "first_release_date": 1723075200, "game_type": 9},
     ] if body.startswith("fields") else [])                                     # 1993's again, in 2024: a remaster
     assert psn_service.igdb_games([{"id": "A", "name": "DOOM", "platforms": ["PS4"]}]) == {"A": (7351, "PS4")}
+
+
+def test_a_list_shared_by_consoles_is_the_one_played():
+    """User, 2026-10-12: "PSVITA,PS4" lists came in as Vita games; the console played on, else the newest."""
+    lists = [{"id": "A", "name": "Bastion", "platforms": ["PS4", "PSVita"], "earned": 1, "total": 23, "platinum": None},
+             {"id": "B", "name": "Stardew Valley", "platforms": ["PS4", "PS3", "PSVita"], "earned": 0, "total": 50,
+              "platinum": None}]
+    played = [{"id": "CUSA1", "name": "Stardew Valley", "platforms": ["PS4"], "minutes": 70, "plus": False}]
+    games = {g["id"]: g for g in psn_service.games_of(lists, played)}
+    assert games["A"]["platforms"][0] == "PS4" and games["B"]["platforms"][0] == "PS4"
+
+
+def test_the_newest_console_of_a_shared_list_comes_first(psn):
+    psn["player"]["lists"] = [{"npCommunicationId": "NPWR1", "trophyTitleName": "Bastion", "trophyTitlePlatform": "PSVITA,PS4",
+                               "definedTrophies": trophies(20, 2, 1, 0), "earnedTrophies": trophies(1, 0, 0, 0)}]
+    assert psn_service.trophy_lists("4242")[0]["platforms"] == ["PS4", "PSVita"]
+
+
+def test_a_game_on_the_wrong_console_moves_and_comes_back(psn):
+    """User, 2026-10-12: a list shared by the Vita and the PS4 was a Vita game; a refresh moves it to the PS4,
+    and one taken out on the Vita comes in on the PS4."""
+    c = psn["db"]
+    vita = c.execute("SELECT id FROM platforms WHERE code = 'PSVita'").fetchone()[0]
+    vita_game = c.execute("INSERT INTO games (platform_id, title, normalized_title) VALUES (?, 'Bloodborne', 'bloodborne') "
+                          "RETURNING id", vita).fetchone()[0]
+    psn["games"].append(vita_game)
+    vita_edition = c.execute("INSERT INTO game_editions (game_id, edition_key, name) VALUES (?, '', 'Standard') RETURNING id",
+                             vita_game).fetchone()[0]
+    client = psn["client"]
+    sign_up(client, "wrong_console")
+    psn["player"]["lists"][0]["trophyTitlePlatform"] = "PSVITA,PS4"
+    item = client.post("/api/collection", json={"edition_id": vita_edition, "kind": "owned", "format": "digital"},
+                       headers=HEADERS).get_json()["id"]
+    c.execute("UPDATE collection_items SET psn_id = 'NPWR00001_00' WHERE id = ?", item)       # imported before the fix
+    assert psn_import(client, "Ana_PS").get_json()["moved"] == 1
+    assert items_of(client)["Bloodborne"]["platform_name"] == "PlayStation 4"
+
+    client.delete(f"/api/collection/{item}", headers=HEADERS)            # taken out on the PS4: stays out there
+    psn_service._last.clear()
+    assert "Bloodborne" not in items_of(client) and psn_import(client, "").get_json()["skipped"] == 1
+    c.execute("UPDATE psn_skips SET edition_id = ?", vita_edition)       # taken out on the Vita: comes in on the PS4
+    psn_service._last.clear()
+    psn_import(client, "")
+    assert items_of(client)["Bloodborne"]["platform_name"] == "PlayStation 4"
+
+
+def test_a_name_with_edition_words_is_our_game(psn):
+    """User, 2026-10-12, "normalize and match the names so the database stays consistent": a trophy list
+    "Bloodborne Game of the Year Edition" is our Bloodborne, not a second game of IGDB's beside it."""
+    psn["player"]["lists"][0]["trophyTitleName"] = "Bloodborne™ Game of the Year Edition"
+    psn["player"]["played"][0]["name"] = "Bloodborne GOTY"
+    client = psn["client"]
+    sign_up(client, "edition_words")
+    psn_import(client, "Ana_PS")
+    bloodborne = items_of(client)["Bloodborne"]
+    assert (bloodborne["game_id"], bloodborne["hours"]) == (psn["games"][0], 50.5)

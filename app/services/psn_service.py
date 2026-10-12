@@ -28,7 +28,7 @@ from urllib.parse import parse_qs, urlparse
 import requests
 from sqlalchemy import select
 
-from app.models import CollectionItem, Game, Platform, PsnSkip, User
+from app.models import CollectionItem, Game, GameEdition, Platform, PsnSkip, User
 from app.services import collection_service
 from app.services.igdb_game_service import (
     GAME_TYPES, IGDBGameError, _with_standard_edition, collection_editions, query,
@@ -50,6 +50,10 @@ TROPHY_TITLES = "https://m.np.playstation.com/api/trophy/v1/users/{}/trophyTitle
 PLAYED = "https://m.np.playstation.com/api/gamelist/v2/users/{}/titles"
 
 PLATFORMS = {"PS5": "PS5", "PS4": "PS4", "PS3": "PS3", "PSVITA": "PSVita"}    # PSN's → ours (not PSPC)
+# A trophy list shared by consoles ("PSVITA,PS4": bought once, played on either) is the game on the
+# console the player played it on, else the newest of them (user, 2026-10-12: PS4 games came in as Vita
+# games, PSN naming the Vita first)
+NEWEST_FIRST = ["PS5", "PS4", "PS3", "PSVita"]
 PLAYED_PLATFORMS = {"ps5_native_game": "PS5", "ps4_game": "PS4"}             # played games: PS4 / PS5 only
 PLAYED_IDS = {"PPSA": "PS5", "CUSA": "PS4"}      # the console of a game PSN files as "unknown", by its title id
 WAIT_SECONDS = 10 * 60           # one import per user in this time
@@ -62,7 +66,7 @@ MAX_SEARCHES = 200               # IGDB searches for the names it doesn't have a
 ONLINE_ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,15}")
 # a trophy list's name has marks and words a game's name doesn't: "Uncharted™: Drake's Fortune Trophies",
 # "Gran Turismo® 7", "Crash Bandicoot (PS4)"
-NOISE = re.compile(r"[™®©]|\s+troph(?:y set|ies)\s*$"
+NOISE = re.compile(r"[™®©]|\s+troph(?:y set|ies|y)\s*$"
                    r"|\s*[(\[]?\b(?:PS4 & PS5|PS[345]|PS ?Vita|PlayStation ?[345])\b[)\]]?\s*$", re.IGNORECASE)
 
 QUOTES = str.maketrans("‘’“”", "''\"\"")
@@ -181,7 +185,8 @@ def trophy_lists(account_id):
         if status != 200:
             raise PsnError("psn_unavailable", 503)
         for t in data.get("trophyTitles") or []:
-            platforms = [PLATFORMS[p] for p in (t.get("trophyTitlePlatform") or "").split(",") if p in PLATFORMS]
+            platforms = sorted({PLATFORMS[p] for p in (t.get("trophyTitlePlatform") or "").split(",") if p in PLATFORMS},
+                               key=NEWEST_FIRST.index)
             defined, earned = t.get("definedTrophies") or {}, t.get("earnedTrophies") or {}
             if platforms and t.get("npCommunicationId"):
                 lists.append({"id": t["npCommunicationId"], "name": t.get("trophyTitleName") or t["npCommunicationId"],
@@ -227,15 +232,24 @@ def games_of(lists, played):
     """
     games = [{**l, "minutes": 0, "plus": []} for l in lists]
     by_key = {(code, key_of(g["name"])): g for g in games for code in g["platforms"]}
+    by_words = {}
+    for g in games:
+        for code in g["platforms"]:
+            by_words.setdefault((code, frozenset(words(clean(g["name"])))), []).append(g)
     for p in played:
         key = (p["platforms"][0], key_of(p["name"]))
         game = by_key.get(key)
+        if game is None:               # "Hitman World of Assassination Deluxe": that list, when only one has the words
+            same = by_words.get((key[0], frozenset(words(clean(p["name"])))), [])
+            game = same[0] if len(same) == 1 else None
         if game is None:
             game = by_key[key] = {"id": p["id"], "name": p["name"], "platforms": p["platforms"],
                                   "earned": None, "total": None, "platinum": None, "minutes": 0, "plus": []}
             games.append(game)
         game["minutes"] += p["minutes"]
         game["plus"].append(p["plus"])
+        if p["minutes"] and game["platforms"][0] != key[0]:      # played there: that console first
+            game["platforms"] = [key[0], *(c for c in game["platforms"] if c != key[0])]
     return games
 
 
@@ -310,13 +324,17 @@ def _editions(lists):
     with session() as s:
         codes = {code: pid for code, pid in s.execute(select(Platform.code, Platform.id)
                                                        .where(Platform.code.in_(PLATFORMS.values())))}
-        ours = {}
-        for game_id, platform_id, key in s.execute(select(Game.id, Game.platform_id, Game.normalized_title).where(
-                Game.platform_id.in_(codes.values()), Game.kind == "game").order_by(Game.id)):
+        ours, by_words = {}, {}
+        for game_id, platform_id, key, title in s.execute(select(Game.id, Game.platform_id, Game.normalized_title, Game.title)
+                .where(Game.platform_id.in_(codes.values()), Game.kind == "game").order_by(Game.id)):
             ours.setdefault((platform_id, key), game_id)
+            by_words.setdefault((platform_id, frozenset(words(title))), set()).add(game_id)
         for l in lists:
             key = key_of(l["name"])
             game_id = next((ours[(codes[p], key)] for p in l["platforms"] if (codes.get(p), key) in ours), None)
+            if game_id is None:        # the same words but an edition's (user, 2026-10-12: the same game, not a
+                same = [by_words.get((codes[p], frozenset(words(clean(l["name"])))), set()) for p in l["platforms"]]
+                game_id = next((min(ids) for ids in same if len(ids) == 1), None)   # second one beside it)
             if game_id:
                 editions[l["id"]] = _with_standard_edition(s, s.get(Game, game_id))["edition_id"]
     unknown = [l for l in lists if l["id"] not in editions]
@@ -329,6 +347,23 @@ def _editions(lists):
         except IGDBGameError:
             pass                         # IGDB down: our games alone
     return editions
+
+
+def _moved_to_console(user_id, item_id, edition_id, platforms):
+    """
+    An item imported on another of its trophy list's consoles than the one it's on now (a list shared
+    by the Vita and the PS4, put on the Vita before 2026-10-12) goes to this edition, on the right
+    console. An edition the user chose on the same console stays; so does an item whose copy is
+    there already (the same edition and format). True when moved.
+    """
+    with session() as s:
+        item, edition = s.get(CollectionItem, item_id), s.get(GameEdition, edition_id)
+        now, then = item.game.platform.code, edition.game.platform.code
+        if item.edition_id == edition_id or now == then or now not in PLATFORMS.values() or now not in platforms \
+                or collection_service._other(s, item, item.kind, item.format, edition_id):
+            return False
+        item.edition_id, item.game_id = edition.id, edition.game_id
+        return True
 
 
 def import_games(user_id, name=None, ps_plus=False):
@@ -356,14 +391,16 @@ def import_games(user_id, name=None, ps_plus=False):
         games = [g for g in games if g not in plus_only]
     with session() as s:          # taken out of the collection before (borrowed, or not wanted)
         skips = s.execute(select(PsnSkip.psn_id, PsnSkip.edition_id).where(PsnSkip.user_id == user_id)).all()
-    skipped = {psn_id for psn_id, _ in skips}
-    games = [g for g in games if g["id"] not in skipped]
+    # a game taken out stays out on the console it was taken out from (its edition; a trophy list and a
+    # played game of another name or region can be the same game), not on another: a list once put on
+    # the wrong console (a Vita game played on a PS4) comes back on the right one (user, 2026-10-12)
+    skipped_editions = {edition_id for _, edition_id in skips if edition_id}
+    games = [g for g in games if g["id"] not in {psn_id for psn_id, edition_id in skips if not edition_id}]
     with _last_lock:               # only read trophies count: a private profile made public can try again at once
         _last[user_id] = time.monotonic()
     editions = _editions(games)
-    # and its edition: a trophy list and a played game of another name (or region) can be the same game
-    skipped_editions = {edition_id for _, edition_id in skips if edition_id}
-    editions = {gid: e for gid, e in editions.items() if e not in skipped_editions}
+    skipped = {gid for gid, e in editions.items() if e in skipped_editions}
+    editions = {gid: e for gid, e in editions.items() if gid not in skipped}
 
     targets, minutes = {}, {}      # edition id → its trophy list with the most earned (else a played game), minutes
     rank = lambda g: (g["total"] is not None, g["earned"] or 0)
@@ -380,13 +417,15 @@ def import_games(user_id, name=None, ps_plus=False):
         by_edition = {i.edition_id: i.id for i in items}
         had = {i.id: (i.hours, i.achievements, i.achievements_total, i.platinum, i.psn_id) for i in items}
 
-    added = updated = 0
+    added = updated = moved = 0
     for edition_id, l in targets.items():
         hours = min((Decimal(minutes[edition_id]) / 60).quantize(Decimal("0.1")), collection_service.MAX_HOURS) \
             or None                                       # a few minutes: none
         trophies = {"achievements": l["earned"], "achievements_total": l["total"] or None, "platinum": l["platinum"]} \
             if l["total"] is not None else {}             # a played game without a trophy list: none to say
         item_id = by_list.get(l["id"]) or by_edition.get(edition_id)
+        if item_id is not None and _moved_to_console(user_id, item_id, edition_id, l["platforms"]):
+            moved += 1
         if item_id is None:
             try:
                 item_id = collection_service.add(user_id, edition_id, "owned", format="digital", **trophies,
@@ -414,5 +453,5 @@ def import_games(user_id, name=None, ps_plus=False):
     missing = [{"name": clean(g["name"]), "platform": "/".join(g["platforms"])}
                for g in games if g["id"] not in editions]
     missing.sort(key=lambda m: m["name"].lower())
-    return {"added": added, "updated": updated, "total": len(games), "skipped": len(skipped),
+    return {"added": added, "updated": updated, "moved": moved, "total": len(games), "skipped": len(skipped),
             "ps_plus": 0 if ps_plus else len(plus_only), "missing": missing}
