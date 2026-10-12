@@ -150,6 +150,10 @@ h4, h5, h6, .h4, .h5, .h6 { font-weight: 700; letter-spacing: -0.01em; }
 /* a collection as a grid of covers (user, 2026-10-11): /collection and a user's public one. The card's
    rows have fixed heights (user, 2026-10-12: "all aligned"): a two-line title, then one line each */
 .item-cover { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--bs-secondary-bg); }
+.cover-badges { position: absolute; top: .4rem; left: .4rem; right: .4rem; display: flex; justify-content: space-between;
+                gap: .25rem; pointer-events: none; }
+.cover-badges .badge { box-shadow: 0 1px 3px rgb(0 0 0 / .35); }
+.cover-platinum { background: linear-gradient(135deg, #e9eef5, #9fb3c8); color: #1d2a38; }
 .item-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
               line-height: 1.3; min-height: 2.6em; }
 .item-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.5em; }

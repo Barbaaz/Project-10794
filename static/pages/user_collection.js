@@ -11,7 +11,10 @@ const chosen = {};                     // the sidebar's ticked boxes (collection
 function card(i) {
     return `
         <div class="col"><div class="card h-100 overflow-hidden">
-            <a href="/game/${i.game_id}" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(i.image || "")}" alt="" loading="lazy"></a>
+            <div class="position-relative">
+                <a href="/game/${i.game_id}" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(i.image || "")}" alt="" loading="lazy"></a>
+                ${coverBadges(i)}
+            </div>
             <div class="card-body p-2 min-w-0">
                 <a href="/game/${i.game_id}" class="item-title fw-semibold small link-body-emphasis text-decoration-none">${esc(localName(i) || "")}</a>
                 <div class="item-line small text-body-secondary">${esc(i.platform_name || "")}</div>

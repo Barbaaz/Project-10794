@@ -110,7 +110,10 @@ function itemRow(item) {
     return `
         <div class="col">
           <div class="card h-100 item-card overflow-hidden ${item.good_deal ? "border-success border-2" : ""}" data-id="${item.id}">
-            <a href="/game/${item.game_id}" class="item-cover-link" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
+            <div class="position-relative">
+                <a href="/game/${item.game_id}" class="item-cover-link" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
+                ${coverBadges(item)}
+            </div>
             <div class="card-body p-2 d-flex flex-column min-w-0">
                     <a href="/game/${item.game_id}" class="item-title fw-semibold small link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
                     <div class="item-line small text-body-secondary">${esc(item.platform_name || "")}</div>

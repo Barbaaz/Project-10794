@@ -82,16 +82,26 @@ function filtersToggle(button, sidebar, selected) {
     button.onclick = () => button.setAttribute("aria-expanded", sidebar.classList.toggle("open"));
 }
 
-// A card's facts in fixed rows, so the cards' rows line up: status and format; hours, trophies, platinum, score
+// "Terminado" and "Platina" over the cover's top corners (user, 2026-10-12); outside the cover's link,
+// which screen readers skip, so they're read
+function coverBadges(item) {
+    const finished = item.status === "finished"
+        ? `<span class="badge text-bg-success">✓ ${esc(t("status_play_finished"))}</span>` : "<span></span>";
+    const platinum = item.platinum ? `<span class="badge cover-platinum">🏆 ${esc(t("collection_platinum"))}</span>` : "";
+    return item.status === "finished" || item.platinum ? `<div class="cover-badges">${finished}${platinum}</div>` : "";
+}
+
+// A card's facts in fixed rows, so the cards' rows line up: status (but finished, on the cover) and format;
+// hours, trophies, score
 function factRows(item) {
     const first = [
-        item.status && item.status !== "owned" ? `<span class="badge text-bg-secondary">${esc(t(`status_play_${item.status}`))}</span>` : "",
+        item.status && !["owned", "finished"].includes(item.status)
+            ? `<span class="badge text-bg-secondary">${esc(t(`status_play_${item.status}`))}</span>` : "",
         `<span>${esc(t(`format_${item.format || "physical"}`))}</span>`,
     ].join("");
     const second = [
         item.hours ? `<span>⏱ ${fmtNumber(item.hours)} h</span>` : "",
         item.achievements_total ? `<span>🏆 ${item.achievements ?? 0}/${item.achievements_total}</span>` : "",
-        item.platinum ? `<span class="badge text-bg-info">${esc(t("collection_platinum"))}</span>` : "",
         item.score ? `<span>★ ${item.score}/10</span>` : "",
     ].join("");
     return `<div class="item-facts small">${first}</div><div class="item-facts small">${second}</div>`;
