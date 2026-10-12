@@ -21,7 +21,11 @@ async function load() {
     document.getElementById("average").innerHTML = user.rating_count ? `★ ${fmtNumber(user.rating)}` : "—";
     document.getElementById("count").textContent = t("profile_rating_count", { count: user.rating_count });
 
+    const where = document.getElementById("location");
+    where.textContent = user.location ? `📍 ${user.location}` : "";
+    where.classList.toggle("d-none", !user.location);
     const mine = currentUser && currentUser.id === user.id;     // the person can answer their ratings
+    document.getElementById("edit-profile").classList.toggle("d-none", !mine);
     document.getElementById("report-user").innerHTML = mine ? "" : reportButton("user", user.id);
     const list = document.getElementById("ratings");
     list.innerHTML = user.ratings.map(r => `
@@ -116,16 +120,11 @@ async function loadCollection() {
         link.href = `/compare/${encodeURIComponent(USERNAME)}`;
         link.classList.remove("d-none");
     }
-    const { items, stats, showcase } = await response.json();
+    const { stats, showcase } = await response.json();
     showShowcase(showcase);
     document.getElementById("collection-summary").textContent =
         t("profile_collection_summary", { owned: stats.owned, completed: stats.completed, wishlist: stats.wishlist });
-    const owned = items.filter(i => i.kind === "owned").sort((a, b) => (a.name || "").localeCompare(b.name || "", LOCALE));
-    document.getElementById("collection-items").innerHTML = owned.map(i => `
-        <li class="list-group-item px-0 d-flex justify-content-between gap-2">
-            <a href="/game/${i.game_id}">${esc(localName(i) || "")}</a>
-            <span class="text-body-secondary text-nowrap">${esc(i.platform_name || "")}${i.status && i.status !== "owned" ? ` · ${esc(t(`status_play_${i.status}`))}` : ""}</span>
-        </li>`).join("");
+    document.getElementById("collection-link").href = `/user/${encodeURIComponent(USERNAME)}/collection`;
     document.getElementById("collection").classList.remove("d-none");
 }
 

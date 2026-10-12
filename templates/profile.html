@@ -30,11 +30,13 @@
             <div>
                 <h1 id="name" class="h3 mb-0"></h1>
                 <div id="since" class="text-body-secondary small"></div>
+                <div id="location" class="text-body-secondary small d-none"></div>
                 <div id="report-user"></div>
                 <!-- following (follow_service): counts, the button, and "compare" with a public collection -->
                 <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
                     <span id="follow-counts" class="small text-body-secondary"></span>
                     <button type="button" id="follow-button" class="btn btn-sm btn-primary d-none"></button>
+                    <a id="edit-profile" href="/account#profile" class="btn btn-sm btn-secondary d-none" data-i18n="edit_profile"></a>
                     <a id="compare-link" class="btn btn-sm btn-secondary d-none" data-i18n="compare_collections"></a>
                 </div>
             </div>
@@ -76,11 +78,11 @@
         <div id="ratings" class="list-group mb-4"></div>
         <p id="no-ratings" class="small text-body-secondary d-none" data-i18n="profile_no_ratings"></p>
 
-        <!-- Only when the user made their collection public -->
+        <!-- Only when the user made their collection public: how many, and its own page (user, 2026-10-12) -->
         <section id="collection" class="mb-4 d-none">
             <h2 class="h5" data-i18n="profile_collection"></h2>
-            <p id="collection-summary" class="small text-body-secondary"></p>
-            <ul id="collection-items" class="list-group list-group-flush small"></ul>
+            <p id="collection-summary" class="small text-body-secondary mb-2"></p>
+            <a id="collection-link" class="btn btn-sm btn-primary" data-i18n="profile_see_collection"></a>
         </section>
 
         <!-- Their reviews of games (app/services/review_service.py); only when there are some -->

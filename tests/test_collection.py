@@ -92,7 +92,8 @@ def test_private_unless_made_public(market):
     sign_up(client, "visitor")
     public = client.get("/api/users/shower/collection").get_json()
     assert [i["status"] for i in public["items"]] == ["paused"]
-    assert "notes" not in public["items"][0] and "hours" not in public["items"][0]        # notes stay private
+    assert "notes" not in public["items"][0]                       # notes stay private; hours show (comparisons,
+    assert "hours" in public["items"][0]                           # the collection's own page: user, 2026-10-12)
     assert public["stats"]["owned"] == 1
 
 

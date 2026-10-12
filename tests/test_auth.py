@@ -243,3 +243,21 @@ def test_changes_need_our_pages_header(client):
     # a form on another site can't add this header: the request is refused
     response = client.post("/api/auth/register", json={"username": "x_user", "email": "x@x.pt", "password": "segredo123"})
     assert (response.status_code, response.get_json()["error"]) == (403, "missing_request_header")
+
+
+def test_editing_the_profile(market):
+    """User, 2026-10-12: the display name and the location can be changed (an empty name is the username)."""
+    from helpers import HEADERS, sign_up
+    client = market["client"]
+    sign_up(client, "edita")
+    edit = lambda **fields: client.patch("/api/auth/profile", json=fields, headers=HEADERS)
+    assert edit(display_name="  Edite Silva ", location="Braga").get_json()["display_name"] == "Edite Silva"
+    profile = client.get("/api/users/edita").get_json()
+    assert (profile["display_name"], profile["location"]) == ("Edite Silva", "Braga")
+    assert edit(display_name="", location="  ").get_json()["display_name"] == "edita"
+    assert client.get("/api/users/edita").get_json()["location"] is None
+    assert edit(location="x" * 101).get_json()["error"] == "location_long"
+    assert edit(display_name="x" * 101).status_code == 400
+    assert client.patch("/api/auth/profile", json={"location": "Faro"}).status_code in (400, 403)   # no X-Requested-With
+    client.post("/api/auth/logout", headers=HEADERS)
+    assert edit(location="Faro").status_code == 401

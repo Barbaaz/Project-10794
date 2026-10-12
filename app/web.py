@@ -134,6 +134,12 @@ def profile_page(username):
     return render_template("profile.html", username=username)
 
 
+@app.route("/user/<username>/collection")
+def user_collection_page(username):
+    """A user's public collection as a grid of covers (user, 2026-10-12: its own page, not a list in the profile)."""
+    return render_template("user_collection.html", username=username)
+
+
 @app.route("/compare/<username>")
 def compare_page(username):
     """The user's collection beside another user's (follow_service.compare)."""

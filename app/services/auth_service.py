@@ -83,6 +83,27 @@ def register(username, email, password, display_name=None, lang=None, ip=None):
     return get_user(user_id)
 
 
+MAX_LOCATION = 100
+
+
+def update_profile(user_id, changes):
+    """{display_name?, location?}: what the profile shows besides the username (user, 2026-10-12: there was
+    no way to change them). An empty display name is the username; an empty location, none."""
+    with session() as s:
+        user = s.get(User, user_id)
+        if "display_name" in changes:
+            name = (changes["display_name"] or "").strip() or user.username
+            if len(name) > 100:
+                raise AccountError("display_name_long")
+            user.display_name = name
+        if "location" in changes:
+            location = (changes["location"] or "").strip()
+            if len(location) > MAX_LOCATION:
+                raise AccountError("location_long")
+            user.location = location or None
+    return get_user(user_id)
+
+
 def authenticate(login, password, ip="?", lang=None):
     """The user for this username / email and password; AccountError("login_failed" / "login_locked")."""
     login = (login or "").strip()

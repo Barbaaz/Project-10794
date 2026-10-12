@@ -146,3 +146,8 @@ h4, h5, h6, .h4, .h5, .h6 { font-weight: 700; letter-spacing: -0.01em; }
 /* Game search results (market.js gamePicker: the sell form, the collection) */
 .game-option img { width: 32px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .2rem; background: #000; flex-shrink: 0; }
 .min-w-0 { min-width: 0; }
+
+/* a collection as a grid of covers (user, 2026-10-11): /collection and a user's public one */
+.item-cover { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--bs-secondary-bg); }
+.item-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.item-facts { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: center; }

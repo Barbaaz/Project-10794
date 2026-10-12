@@ -128,6 +128,18 @@ def change_password():
     return jsonify(user)
 
 
+@bp.patch("/profile")
+@login_required
+def update_profile():
+    """{display_name?, location?}: the profile's name and location → the account"""
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(auth_service.update_profile(current_user()["id"], {k: data[k] for k in ("display_name", "location")
+                                                                          if k in data and (data[k] is None or isinstance(data[k], str))}))
+    except AccountError as e:
+        return account_error(e)
+
+
 @bp.post("/delete")
 @login_required
 def delete_account():

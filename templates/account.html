@@ -107,6 +107,30 @@
             <dl id="account-facts" class="row mb-3"></dl>
             <button type="button" id="logout" class="btn btn-secondary" data-i18n="log_out"></button>
 
+            <!-- What the profile shows besides the username (user, 2026-10-12: "how is a user supposed to edit
+                 his profile?"); the profile's own page has the showcase, /collection the public switch -->
+            <form id="profile-form" class="border-top mt-4 pt-3" style="max-width: 420px;" novalidate>
+                <h2 class="h6" data-i18n="edit_profile"></h2>
+                <div class="mb-3">
+                    <label class="form-label" for="profile-display-name" data-i18n="display_name"></label>
+                    <input id="profile-display-name" name="display_name" class="form-control" autocomplete="name" maxlength="100"
+                           aria-describedby="profile-display-help">
+                    <div id="profile-display-help" class="form-text" data-i18n="display_name_help"></div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="profile-location" data-i18n="profile_location"></label>
+                    <input id="profile-location" name="location" class="form-control" autocomplete="address-level2" maxlength="100"
+                           data-i18n-placeholder="profile_location_placeholder" aria-describedby="profile-location-help">
+                    <div id="profile-location-help" class="form-text" data-i18n="profile_location_help"></div>
+                </div>
+                <div class="alert alert-danger d-none py-2" role="alert"></div>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <button type="submit" class="btn btn-primary" data-i18n="profile_save"></button>
+                    <a id="profile-view" class="btn btn-link" data-i18n="profile_view_mine"></a>
+                </div>
+                <p class="small text-body-secondary mt-2 mb-0" data-i18n="profile_edit_more"></p>
+            </form>
+
             <!-- A new password: this session stays, the others (other devices) are logged out -->
             <form id="password-form" class="border-top mt-4 pt-3" style="max-width: 420px;" novalidate>
                 <h2 class="h6" data-i18n="change_password"></h2>

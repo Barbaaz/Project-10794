@@ -291,7 +291,7 @@ def public_collection(username):
         user_id = user.id
     data = collection(user_id)
     keep = ("kind", "status", "format", "edition_id", "game_id", "name", "name_en", "platform", "platform_name", "image",
-            "best_price", "used")
+            "best_price", "used", "hours", "achievements", "achievements_total", "platinum")
     return {"items": [{k: r[k] for k in keep} for r in data["items"]], "stats": data["stats"],
             "showcase": showcase(data["items"], data["profile_sections"])}
 
