@@ -21,6 +21,7 @@ async function load() {
     document.getElementById("average").innerHTML = user.rating_count ? `★ ${fmtNumber(user.rating)}` : "—";
     document.getElementById("count").textContent = t("profile_rating_count", { count: user.rating_count });
 
+    document.getElementById("avatar").innerHTML = avatarImage(user.avatar, 72);
     const where = document.getElementById("location");
     where.textContent = user.location ? `📍 ${user.location}` : "";
     where.classList.toggle("d-none", !user.location);
@@ -83,6 +84,7 @@ async function loadFollowing() {
     const people = await fetch("/api/following").then(r => r.ok ? r.json() : []);
     document.getElementById("following-list").innerHTML = people.map(p => `
         <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+            ${avatarImage(p.avatar, 32)}
             <a href="/user/${encodeURIComponent(p.username)}" class="me-auto">${esc(userLabel(p.username))}</a>
             ${p.collection_public ? `<a href="/compare/${encodeURIComponent(p.username)}" class="btn btn-sm btn-secondary">${t("compare_collections")}</a>`
                                   : `<span class="small text-body-secondary">${t("compare_private")}</span>`}

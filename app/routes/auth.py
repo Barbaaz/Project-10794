@@ -11,6 +11,7 @@ from flask import Blueprint, Response, abort, g, jsonify, request, session
 
 from app.services import auth_service, export_service
 from app.services.auth_service import AccountError
+from app.services.photo_storage import PhotoError
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -138,6 +139,25 @@ def update_profile():
                                                                           if k in data and (data[k] is None or isinstance(data[k], str))}))
     except AccountError as e:
         return account_error(e)
+
+
+@bp.post("/avatar")
+@login_required
+def upload_avatar():
+    """multipart "avatar": the profile picture (a square, metadata removed) → the account"""
+    upload = request.files.get("avatar")
+    if not upload or not upload.filename:
+        return jsonify(error="photo_type"), 400
+    try:
+        return jsonify(auth_service.set_avatar(current_user()["id"], upload.read()))
+    except PhotoError as e:
+        return jsonify(error=e.code), 400
+
+
+@bp.delete("/avatar")
+@login_required
+def delete_avatar():
+    return jsonify(auth_service.remove_avatar(current_user()["id"]))
 
 
 @bp.post("/delete")

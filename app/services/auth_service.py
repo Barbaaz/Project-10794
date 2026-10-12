@@ -18,7 +18,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app import config
 from app.models import NOW, CollectionItem, Conversation, Follow, Listing, Message, PsnSkip, SteamSkip, User, fields
 from app.services import mail_service
-from app.services.photo_storage import storage
+from app.services.photo_storage import process_avatar, storage
 from db import session
 
 log = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ _failures_lock = threading.Lock()   # the server answers several requests at onc
 
 # What a user sees about their own account (never the password hash). Other people see less:
 # never the email (see the marketplace's seller info)
-OWN_FIELDS = ("id", "username", "display_name", "email", "location", "role", "created_at")
+OWN_FIELDS = ("id", "username", "display_name", "email", "location", "avatar", "role", "created_at")
 
 
 class AccountError(Exception):
@@ -101,6 +101,28 @@ def update_profile(user_id, changes):
             if len(location) > MAX_LOCATION:
                 raise AccountError("location_long")
             user.location = location or None
+    return get_user(user_id)
+
+
+def set_avatar(user_id, data):
+    """The profile picture from an upload (photo_storage.process_avatar); the old one's file goes."""
+    picture = process_avatar(data)
+    key = storage.save(f"avatars/{user_id}", picture)
+    with session() as s:
+        user = s.get(User, user_id)
+        old, user.avatar_key = user.avatar_key, key
+    if old:
+        storage.delete(old)
+    return get_user(user_id)
+
+
+def remove_avatar(user_id):
+    """No profile picture (the user's choice, or a moderator's: moderation_service)."""
+    with session() as s:
+        user = s.get(User, user_id)
+        old, user.avatar_key = user.avatar_key, None
+    if old:
+        storage.delete(old)
     return get_user(user_id)
 
 
@@ -196,6 +218,9 @@ def delete_account(user_id, password, ip="?"):
         logins = {(user.username or "").lower(), user.email}
         user.username = user.password_hash = user.location = user.steam_id = None
         user.psn_account_id = user.psn_online_id = None
+        if user.avatar_key:
+            photo_keys.append(user.avatar_key)
+            user.avatar_key = None
         user.email = f"deleted-{user.id}@deleted.invalid"         # unique and never a real address
         user.display_name = ""
         user.is_active = user.collection_public = user.wish_alerts = False

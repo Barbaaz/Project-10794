@@ -16,6 +16,7 @@ from app.models import (
     fields,
 )
 from app.services.listing_service import in_deal
+from app.services.photo_storage import storage
 from db import session
 
 MAX_REPORTS_PER_DAY = 20
@@ -27,7 +28,7 @@ ACTIONS = {
     "hide_listing": "listing", "restore_listing": "listing",
     "hide_rating": "rating", "restore_rating": "rating",
     "hide_review": "review", "restore_review": "review",
-    "block_user": "user", "unblock_user": "user",
+    "block_user": "user", "unblock_user": "user", "remove_avatar": "user",
     "dismiss": None,
 }
 
@@ -109,7 +110,7 @@ def _summary(s, kind, target_id):
                             title=l.game.title, platform=l.game.platform.name, seller=l.seller.username)
     if kind == "user":
         u = s.get(User, target_id)
-        return u and fields(u, "id", "username", "display_name", "role", "is_active", "created_at")
+        return u and fields(u, "id", "username", "display_name", "avatar", "role", "is_active", "created_at")
     if kind == "review":
         r = s.get(GameReview, target_id)
         return r and fields(r, "id", "game_id", "score", "title", "body", "hidden", writer=r.user.username,
@@ -129,24 +130,27 @@ def act(moderator_id, action, target_id, note=None):
 
     with session() as s:
         moderator = s.get(User, moderator_id)
-        kind = ACTIONS[action]
+        kind, gone = ACTIONS[action], None
         if action == "dismiss":
             report = s.get(Report, target_id)            # dismiss: the target is a report
             if not report or report.status != "open":
                 raise ModerationError("not_found", 404)
             kind, target_id = report.kind, report.target_id
         else:
-            _apply(s, moderator, action, target_id)
+            gone = _apply(s, moderator, action, target_id)
 
         status = "dismissed" if action == "dismiss" else "resolved"
         for report in s.scalars(select(Report).where(Report.kind == kind, Report.target_id == target_id,
                                                      Report.status == "open")):
             report.status, report.resolved_by, report.resolved_at, report.resolution = status, moderator_id, NOW, note
         s.add(ModerationLog(moderator_id=moderator_id, action=action, kind=kind, target_id=target_id, note=note))
+    if gone:
+        storage.delete(gone)
     return {"ok": True}
 
 
 def _apply(s, moderator, action, target_id):
+    """Do it; returns the key of a file to delete once saved (a removed profile picture), or None."""
     if action in ("hide_listing", "restore_listing"):
         listing = s.get(Listing, target_id)
         if not listing:
@@ -174,7 +178,11 @@ def _apply(s, moderator, action, target_id):
         # admins can't be blocked here; only an admin blocks a moderator; nobody blocks themselves
         if user.id == moderator.id or user.role == "admin" or (user.role == "moderator" and moderator.role != "admin"):
             raise ModerationError("not_allowed", 403)
-        user.is_active = action == "unblock_user"
+        if action == "remove_avatar":         # a picture that breaks the rules: its file goes after the commit
+            gone, user.avatar_key = user.avatar_key, None
+            return gone
+        else:
+            user.is_active = action == "unblock_user"
 
 
 def problem_purchases():

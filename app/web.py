@@ -159,13 +159,14 @@ def admin_page():
     return render_template("admin.html")
 
 
-# The only public uploads: listing photos, as LocalPhotoStorage names them (listings/<id>/<uuid hex>.jpg)
-PUBLIC_MEDIA = re.compile(r"listings/\d+/[0-9a-f]{32}\.jpg")
+# The only public uploads: listing photos and profile pictures, as LocalPhotoStorage names them
+# (listings/<id>/<uuid hex>.jpg, avatars/<user id>/<uuid hex>.jpg)
+PUBLIC_MEDIA = re.compile(r"(?:listings|avatars)/\d+/[0-9a-f]{32}\.jpg")
 
 
 @app.route("/media/<path:key>")
 def media(key):
-    """Listing photos kept on this computer (app/services/photo_storage.py). Only keys of exactly that
+    """Listing photos and profile pictures kept on this computer (app/services/photo_storage.py). Only keys of exactly that
     shape: the photos sent in conversations (chats/…) go only through /api/conversations/<id>/photos/,
     and "./chats/…", "listings/../chats/…" or "Chats/…" (Windows ignores case) must not reach them."""
     if not PUBLIC_MEDIA.fullmatch(key):

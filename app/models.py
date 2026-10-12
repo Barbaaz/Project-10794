@@ -173,11 +173,17 @@ class User(Base):
     psn_account_id: Mapped[str | None] = mapped_column(String(20))      # the last PSN import's player (psn_service)
     psn_online_id: Mapped[str | None] = mapped_column(Unicode(16))
     psn_imported_at = mapped_column(DateTime)
+    avatar_key: Mapped[str | None] = mapped_column(String(80))      # the profile picture (photo_storage)
     # the profile's showcase sections, in order, comma-separated (collection_service.SHOWCASE; None: all)
     profile_sections: Mapped[str | None] = mapped_column(String(100))
     last_login_at = mapped_column(DateTime)
     created_at = created_at()
     deleted_at = mapped_column(DateTime)      # the user deleted their account: anonymised (auth_service.delete_account)
+
+    @property
+    def avatar(self):
+        """The profile picture's address, or None."""
+        return f"/media/{self.avatar_key}" if self.avatar_key else None
 
     @property
     def is_moderator(self):

@@ -1,5 +1,5 @@
 // The admin page (templates/admin.html). A file, not inline: the site's CSP only runs scripts from files.
-const ACTIONS_BY_KIND = { listing: ["hide_listing", "restore_listing"], user: ["block_user", "unblock_user"],
+const ACTIONS_BY_KIND = { listing: ["hide_listing", "restore_listing"], user: ["block_user", "unblock_user", "remove_avatar"],
                           rating: ["hide_rating", "restore_rating"], review: ["hide_review", "restore_review"] };
 
 function showMessage(ok, text) {
@@ -30,7 +30,7 @@ function targetSummary(kind, target) {
     }
     if (kind === "user") {
         const blocked = target.is_active ? "" : ` <span class="badge text-bg-danger">${esc(t("mod_blocked"))}</span>`;
-        return `<div>${userLink(target.username)} ${target.display_name && target.display_name !== target.username ?`(${esc(target.display_name)})` : ""}
+        return `<div>${target.avatar ? avatarImage(target.avatar, 48) : ""} ${userLink(target.username)} ${target.display_name && target.display_name !== target.username ?`(${esc(target.display_name)})` : ""}
                     <span class="badge text-bg-secondary">${esc(t(`role_${target.role}`))}</span>${blocked}</div>
                 <div class="small text-body-secondary">${esc(t("member_since"))} ${new Date(target.created_at).toLocaleDateString(LOCALE)}</div>`;
     }

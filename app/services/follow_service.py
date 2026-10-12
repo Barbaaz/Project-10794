@@ -62,13 +62,13 @@ def counts(username, viewer_id=None):
 
 
 def following(user_id):
-    """[{username, display_name, collection_public}] the user follows, by name (blocked / deleted ones left out)."""
+    """[{username, display_name, avatar, collection_public}] the user follows, by name (blocked / deleted ones left out)."""
     with session() as s:
-        rows = s.execute(select(User.username, User.display_name, User.collection_public)
-                         .join(Follow, Follow.followed_id == User.id)
-                         .where(Follow.follower_id == user_id, User.is_active)
-                         .order_by(func.lower(User.username), User.id)).all()
-    return [{"username": u, "display_name": d, "collection_public": p} for u, d, p in rows]
+        users = s.scalars(select(User).join(Follow, Follow.followed_id == User.id)
+                          .where(Follow.follower_id == user_id, User.is_active)
+                          .order_by(func.lower(User.username), User.id)).all()
+        return [{"username": u.username, "display_name": u.display_name, "avatar": u.avatar,
+                 "collection_public": u.collection_public} for u in users]
 
 
 def _side(user_id):

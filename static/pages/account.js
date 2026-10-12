@@ -60,7 +60,33 @@ const deleteConfirm = document.getElementById("delete-confirm");
 deleteConfirm.onchange = () =>
     document.querySelector("#delete-form button[type=submit]").disabled = !deleteConfirm.checked;
 
+// The profile picture: uploaded as soon as it's chosen; the server makes it a square without metadata
+function showAvatar(user) {
+    document.getElementById("avatar-preview").innerHTML = avatarImage(user.avatar, 72);
+    document.getElementById("avatar-remove").classList.toggle("d-none", !user.avatar);
+}
+function avatarDone(ok, data) {
+    const message = document.getElementById("avatar-message");
+    message.className = `small mb-2 ${ok ? "text-success" : "text-danger"}`;
+    message.textContent = ok ? t("avatar_saved") : t(`error_${data?.error || "unknown"}`);
+    if (ok) { showAvatar(data); currentUser = data; renderAccountArea(); }
+}
+document.getElementById("avatar-file").onchange = async event => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append("avatar", file);
+    const response = await fetch("/api/auth/avatar", { method: "POST", body: form, headers: { "X-Requested-With": "fetch" } });
+    avatarDone(response.ok, await response.json().catch(() => null));
+    event.target.value = "";
+};
+document.getElementById("avatar-remove").onclick = async () => {
+    const { ok, data } = await api("/api/auth/avatar", { method: "DELETE" });
+    avatarDone(ok, data);
+};
+
 function showAccount(user) {
+    showAvatar(user);
     const facts = [
         [t("username"), user.username],
         [t("display_name"), user.display_name],

@@ -18,7 +18,7 @@ def test_follow_and_unfollow(market):
     assert client.post("/api/users/rita/follow", headers=HEADERS).get_json() == {"following": True}
     client.post("/api/users/RITA/follow", headers=HEADERS)            # twice, any case: once
     assert client.get("/api/users/rita/follows").get_json() == {"followers": 1, "following": 0, "followed": True}
-    assert client.get("/api/following").get_json() == [{"username": "rita", "display_name": "rita",
+    assert client.get("/api/following").get_json() == [{"username": "rita", "display_name": "rita", "avatar": None,
                                                          "collection_public": False}]
     answer = client.post("/api/users/tiago/follow", headers=HEADERS)
     assert (answer.status_code, answer.get_json()["error"]) == (400, "follow_self")

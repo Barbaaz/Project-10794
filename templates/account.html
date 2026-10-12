@@ -111,6 +111,18 @@
                  his profile?"); the profile's own page has the showcase, /collection the public switch -->
             <form id="profile-form" class="border-top mt-4 pt-3" style="max-width: 420px;" novalidate>
                 <h2 class="h6" data-i18n="edit_profile"></h2>
+                <!-- the profile picture: sent as soon as it's chosen (account.js), made a square there -->
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <div id="avatar-preview"></div>
+                    <div class="d-flex flex-column gap-1">
+                        <label class="btn btn-sm btn-secondary mb-0">
+                            <span data-i18n="avatar_choose"></span>
+                            <input id="avatar-file" type="file" accept="image/jpeg,image/png,image/webp" class="d-none">
+                        </label>
+                        <button type="button" id="avatar-remove" class="btn btn-sm btn-link text-danger p-0 d-none" data-i18n="avatar_remove"></button>
+                    </div>
+                </div>
+                <div id="avatar-message" class="small mb-2" role="status"></div>
                 <div class="mb-3">
                     <label class="form-label" for="profile-display-name" data-i18n="display_name"></label>
                     <input id="profile-display-name" name="display_name" class="form-control" autocomplete="name" maxlength="100"

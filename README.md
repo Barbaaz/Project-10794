@@ -140,6 +140,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `POST /api/ratings/<id>/reply` `{reply}` | The rated user answers a rating |
 | `GET /api/users/<username>` | Public profile: display name, location, average rating, ratings received, listings, game reviews (never the email) |
 | `PATCH /api/auth/profile` `{display_name?, location?}` | Edit the profile ("Editar perfil" on /account; empty name = the username) |
+| `POST /api/auth/avatar` (multipart `avatar`) · `DELETE /api/auth/avatar` | The profile picture: JPEG / PNG / WebP, made a 256 px square without metadata, served at `/media/avatars/…`; the old file is deleted; moderators can remove one (`remove_avatar`) |
 | `GET /api/users/<username>/follows` · `POST`/`DELETE /api/users/<username>/follow` · `GET /api/following` | Following (one way, quiet): a profile's follower / following counts and whether the visitor follows them · follow / unfollow · who the user follows (only they see it) |
 | `GET /api/users/<username>/compare` | The user's owned games beside another user's (theirs public; wishlists never): `{me, them: {username, summary}, both, only_me, only_them}`, one game across platforms and copies, with hours, achievements / trophies, platinum. Page: `/compare/<username>` |
 | `GET /api/collection` · `GET /api/collection/editions` | The user's collection and wishlist with current prices and statistics (per platform / status, hours, worth new / used) · which editions they have (for the game page's Tenho / Quero) |

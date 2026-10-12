@@ -8,7 +8,7 @@ from helpers import HEADERS
 
 @pytest.fixture
 def client(web_client, test_db):
-    for table in ("moderation_log", "reports", "user_ratings", "messages", "conversations", "listing_photos", "user_listings", "collection_items", "users"):
+    for table in ("moderation_log", "reports", "user_ratings", "messages", "conversations", "listing_photos", "user_listings", "collection_items", "follows", "users"):
         test_db.conn.cursor().execute(f"DELETE FROM {table}")
     auth_service._failures.clear()
     return web_client
@@ -261,3 +261,40 @@ def test_editing_the_profile(market):
     assert client.patch("/api/auth/profile", json={"location": "Faro"}).status_code in (400, 403)   # no X-Requested-With
     client.post("/api/auth/logout", headers=HEADERS)
     assert edit(location="Faro").status_code == 401
+
+
+def test_a_profile_picture(market):
+    """User, 2026-10-12: a profile picture, made a square without metadata; replaced, removed, and gone with
+    the account; a moderator can remove it."""
+    import io
+    from PIL import Image
+    from helpers import HEADERS, jpeg, log_in, sign_up
+    from app.services import moderation_service
+    client = market["client"]
+    sign_up(client, "pictured")
+    upload = lambda data: client.post("/api/auth/avatar", data={"avatar": (io.BytesIO(data), "me.jpg")},
+                                      headers=HEADERS, content_type="multipart/form-data")
+    first = upload(jpeg(1200, 800, gps=True)).get_json()["avatar"]
+    picture = client.get(first)
+    image = Image.open(io.BytesIO(picture.data))
+    picture.close()                                         # the file is free to go (Windows)
+    assert (picture.status_code, image.size, image.getexif().get(0x8825)) == (200, (256, 256), None)   # no GPS
+    assert client.get("/api/users/pictured").get_json()["avatar"] == first
+    second = upload(jpeg()).get_json()["avatar"]
+    assert second != first and client.get(first).status_code == 404               # the old file goes
+    assert upload(b"not a picture").get_json()["error"] == "photo_type"
+    assert client.delete("/api/auth/avatar", headers=HEADERS).get_json()["avatar"] is None
+    assert client.get(second).status_code == 404
+
+    third = upload(jpeg()).get_json()["avatar"]                                     # one that breaks the rules
+    user_id = client.get("/api/auth/me").get_json()["id"]
+    sign_up(client, "mod_pic")
+    market["db"].execute("UPDATE users SET role = 'moderator' WHERE username = 'mod_pic'")
+    moderator_id = client.get("/api/auth/me").get_json()["id"]
+    moderation_service.act(moderator_id, "remove_avatar", user_id)
+    assert client.get("/api/users/pictured").get_json()["avatar"] is None and client.get(third).status_code == 404
+
+    log_in(client, "pictured")
+    fourth = upload(jpeg()).get_json()["avatar"]
+    client.post("/api/auth/delete", json={"password": "segredo123"}, headers=HEADERS)
+    assert client.get(fourth).status_code == 404                                     # gone with the account

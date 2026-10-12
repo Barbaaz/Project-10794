@@ -149,7 +149,7 @@ def profile(username):
         user = s.scalars(select(User).where(User.named(username), User.is_active)).first()
         if not user:
             return None
-        result = fields(user, "id", "username", "display_name", "location", "created_at")
+        result = fields(user, "id", "username", "display_name", "location", "avatar", "created_at")
         ratings = s.scalars(select(Rating).where(Rating.rated_id == user.id, ~Rating.hidden)
                             .order_by(Rating.created_at.desc())).all()
         result["ratings"] = [
