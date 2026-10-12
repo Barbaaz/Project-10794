@@ -84,21 +84,29 @@ function filtersToggle(button, sidebar, selected) {
 
 // "Terminado" and "Platina" over the cover's top corners (user, 2026-10-12); outside the cover's link,
 // which screen readers skip, so they're read
-function coverBadges(item) {
-    const finished = item.status === "finished"
-        ? `<span class="badge text-bg-success">✓ ${esc(t("status_play_finished"))}</span>` : "<span></span>";
-    const platinum = item.platinum ? `<span class="badge cover-platinum">🏆 ${esc(t("collection_platinum"))}</span>` : "";
-    return item.status === "finished" || item.platinum ? `<div class="cover-badges">${finished}${platinum}</div>` : "";
+// Each play status's look, the same on the cards and in the edit window (user, 2026-10-12: every status a
+// badge); "owned" (no status chosen) has none
+const STATUS_LOOK = {
+    finished: { icon: "✓", css: "status-finished" }, playing: { icon: "▶", css: "status-playing" },
+    backlog: { icon: "⏳", css: "status-backlog" }, paused: { icon: "⏸", css: "status-paused" },
+    dropped: { icon: "✕", css: "status-dropped" }, owned: { icon: "", css: "status-owned" },
+};
+
+function statusBadge(status) {
+    const look = STATUS_LOOK[status];
+    return look && status !== "owned" ? `<span class="badge ${look.css}">${look.icon} ${esc(t(`status_play_${status}`))}</span>` : "";
 }
 
-// A card's facts in fixed rows, so the cards' rows line up: status (but finished, on the cover) and format;
-// hours, trophies, score
+function coverBadges(item) {
+    const status = statusBadge(item.status);
+    const platinum = item.platinum ? `<span class="badge cover-platinum">🏆 ${esc(t("collection_platinum"))}</span>` : "";
+    return status || platinum ? `<div class="cover-badges">${status || "<span></span>"}${platinum}</div>` : "";
+}
+
+// A card's facts in fixed rows, so the cards' rows line up: the format; hours, trophies, score (the status
+// and the platinum are on the cover)
 function factRows(item) {
-    const first = [
-        item.status && !["owned", "finished"].includes(item.status)
-            ? `<span class="badge text-bg-secondary">${esc(t(`status_play_${item.status}`))}</span>` : "",
-        `<span>${esc(t(`format_${item.format || "physical"}`))}</span>`,
-    ].join("");
+    const first = `<span>${esc(t(`format_${item.format || "physical"}`))}</span>`;
     const second = [
         item.hours ? `<span>⏱ ${fmtNumber(item.hours)} h</span>` : "",
         item.achievements_total ? `<span>🏆 ${item.achievements ?? 0}/${item.achievements_total}</span>` : "",

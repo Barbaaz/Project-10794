@@ -25,6 +25,19 @@
             .item-dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
         }
         .stat { min-width: 7.5rem; flex: 1 1 7.5rem; max-width: 11rem; }
+        /* the edit window (collection.js ownedControls): sections of buttons */
+        .editor-section { margin-top: 1rem; }
+        .editor-title { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
+                        color: var(--bs-secondary-color); margin-bottom: .35rem; }
+        .choice-group { display: flex; flex-wrap: wrap; gap: .35rem; }
+        .choice { border: 1px solid var(--bs-border-color); border-radius: 999px; padding: .25rem .7rem; font-size: .875rem;
+                  min-width: 2.25rem; }
+        :where(.choice) { background: var(--bs-body-bg); color: var(--bs-body-color); }   /* a pressed one's colour wins */
+        .choice:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--bs-secondary-bg); }
+        .choice[aria-pressed="true"] { border-color: transparent; font-weight: 600; }
+        .choice.choice-on { background: var(--bs-emphasis-color); color: var(--bs-body-bg); }
+        .choice:disabled { opacity: .5; }
+        .choice:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
     </style>
 </head>
 <body class="bg-body-tertiary">
