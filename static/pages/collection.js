@@ -43,7 +43,8 @@ function priceLine(item) {
         parts.push(`<span title="${esc(t("collection_best_now"))}"><strong>${eur.format(item.best_price)}</strong> · ${esc(item.best_store)}</span>`);
     } else if (item.steam_app_id) {
         // no store here sells it, but it's on Steam (a PC game; user, 2026-10-11)
-        parts.push(`<a href="https://store.steampowered.com/app/${Number(item.steam_app_id)}/"
+        // a button (user, 2026-10-12), without padding top and bottom: it keeps to the card's one line
+        parts.push(`<a class="btn btn-sm btn-secondary py-0 px-2" href="https://store.steampowered.com/app/${Number(item.steam_app_id)}/"
                        target="_blank" rel="noopener">${t("collection_on_steam")}</a>`);
     } else if (item.kind === "wishlist" && !item.used) {
         // nobody sells it: "looking for", with an e-mail when a store or a user does (wish_alert_service)
