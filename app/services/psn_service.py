@@ -17,6 +17,7 @@ import re
 import sys
 import threading
 import time
+import unicodedata
 from datetime import datetime, timezone
 from decimal import Decimal
 from urllib.parse import parse_qs, urlparse
@@ -52,11 +53,17 @@ MAX_GAMES = 5000
 PAGE = 800                       # trophy lists per PSN request
 PLAYED_PAGE, MAX_PLAYED_PAGES = 200, 10
 IGDB_NAMES = 100                 # names per IGDB request
+MAX_SEARCHES = 200               # IGDB searches for the names it doesn't have as they are (one request each)
 
 ONLINE_ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,15}")
 # a trophy list's name has marks and words a game's name doesn't: "Uncharted™: Drake's Fortune Trophies",
 # "Gran Turismo® 7", "Crash Bandicoot (PS4)"
 NOISE = re.compile(r"[™®©]|\s+troph(?:y set|ies)\s*$|\s*[(\[]?\b(?:PS[345]|PS ?Vita)\b[)\]]?\s*$", re.IGNORECASE)
+
+QUOTES = str.maketrans("‘’“”", "''\"\"")
+# "Control Ultimate Edition", "God of War III Remastered", "Darksiders Warmastered Edition": IGDB's game is "Control"…
+EDITION_WORDS = {"the", "edition", "remastered", "remaster", "definitive", "special", "complete", "ultimate",
+                 "deluxe", "goty", "hd", "deathinitive", "warmastered", "trophy", "trophies"}
 
 _last = {}                       # user id → when they last imported
 _last_lock = threading.Lock()
@@ -205,8 +212,15 @@ def play_minutes(account_id):
 
 
 def clean(name):
-    """A trophy list's name as the game's ("Uncharted™: Drake's Fortune Trophies" → "Uncharted: Drake's Fortune")."""
-    return NOISE.sub("", NOISE.sub("", name)).strip()
+    """A trophy list's name as the game's ("Uncharted™: Drake's Fortune Trophies" → "Uncharted: Drake's Fortune",
+    "ASTRO’s PLAYROOM" → "ASTRO's PLAYROOM", "DARK SOULS Ⅱ" → "DARK SOULS II")."""
+    name = NOISE.sub("", NOISE.sub("", name.translate(QUOTES)))
+    return unicodedata.normalize("NFKC", name).strip()           # after the marks: NFKC makes "™" "TM"
+
+
+def words(name):
+    """A name's words, but the ones editions add: "Devil May Cry 4 Special Edition" = "Devil May Cry 4"."""
+    return set(normalize_name(name).split()) - EDITION_WORDS
 
 
 def key_of(name):
@@ -224,23 +238,36 @@ def saved_profile(user_id):
 
 
 def igdb_games(lists):
-    """{trophy list id: (IGDB id, our platform code)} for lists named as an IGDB game on one of their consoles."""
-    wanted = {}                          # name key → the lists
-    for l in lists:
-        wanted.setdefault(key_of(l["name"]), []).append(l)
-    names = list(dict.fromkeys(clean(l["name"]).replace('"', " ").replace("\\", " ").strip() for l in lists))
+    """
+    {trophy list id: (IGDB id, our platform code)} for lists named as an IGDB game on one of their
+    consoles: first by the name as it is (100 a request), then IGDB's search for the others, taken
+    only when the words are the same but for editions' ("Killzone Shadow Fall" = "Killzone: Shadow
+    Fall", "Control Ultimate Edition" = "Control"; "Overcooked" is not "Overcooked! 2").
+    """
     platforms = ",".join(str(IGDB_PLATFORMS[p]) for p in PLATFORMS.values())
+    where = (f"platforms = ({platforms}) & game_type = ({','.join(map(str, GAME_TYPES))}) & version_parent = null")
     found = {}
+
+    def take(games, same):
+        for g in games:
+            for l in lists:
+                code = next((p for p in l["platforms"] if IGDB_PLATFORMS[p] in (g.get("platforms") or [])), None)
+                if code and l["id"] not in found and same(l, g.get("name") or ""):
+                    found[l["id"]] = (g["id"], code)
+
+    names = list(dict.fromkeys(clean(l["name"]).replace('"', " ").replace("\\", " ").strip() for l in lists))
     for start in range(0, len(names), IGDB_NAMES):
         either = " | ".join(f'name ~ "{n}"' for n in names[start:start + IGDB_NAMES] if n)
-        if not either:
-            continue
-        for g in query(f"fields name,platforms; where ({either}) & platforms = ({platforms}) "
-                       f"& game_type = ({','.join(map(str, GAME_TYPES))}) & version_parent = null; limit 500;"):
-            for l in wanted.get(normalize_name(g.get("name") or ""), []):
-                code = next((p for p in l["platforms"] if IGDB_PLATFORMS[p] in (g.get("platforms") or [])), None)
-                if code and l["id"] not in found:
-                    found[l["id"]] = (g["id"], code)
+        if either:
+            take(query(f"fields name,platforms; where ({either}) & {where}; limit 500;"),
+                 lambda l, name: key_of(l["name"]) == normalize_name(name))
+    left = list(dict.fromkeys(clean(l["name"]).replace('"', " ").replace("\\", " ").strip()
+                              for l in lists if l["id"] not in found))
+    for name in left[:MAX_SEARCHES]:
+        if words(name):
+            take(query(f'search "{name}"; fields name,platforms; where {where}; limit 10;'),
+                 lambda l, other: clean(l["name"]).replace('"', " ").replace("\\", " ").strip() == name
+                 and words(name) == words(other))
     return found
 
 
@@ -313,7 +340,7 @@ def import_games(user_id, name=None):
     added = updated = 0
     for edition_id, l in targets.items():
         played = sum(minutes.get((p, key_of(l["name"])), 0) for p in l["platforms"])
-        hours = min((Decimal(played) / 60).quantize(Decimal("0.1")), collection_service.MAX_HOURS) if played else None
+        hours = min((Decimal(played) / 60).quantize(Decimal("0.1")), collection_service.MAX_HOURS) or None   # a few minutes: none
         trophies = {"achievements": l["earned"], "achievements_total": l["total"] or None, "platinum": l["platinum"]}
         item_id = by_list.get(l["id"]) or by_edition.get(edition_id)
         if item_id is None:

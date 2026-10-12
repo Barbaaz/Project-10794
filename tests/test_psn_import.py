@@ -181,3 +181,19 @@ def test_trophy_list_names_become_game_names():
     assert psn_service.clean("Gran Turismo® 7") == "Gran Turismo 7"
     assert psn_service.clean("Crash Bandicoot (PS4)") == "Crash Bandicoot"
     assert psn_service.online_id("https://psnprofiles.com/Ana_PS/") == "Ana_PS"
+    assert psn_service.clean("ASTRO’s PLAYROOM") == "ASTRO's PLAYROOM"
+    assert psn_service.clean("DARK SOULS™ Ⅱ") == "DARK SOULS II"        # not "DARK SOULSTM II"
+    assert psn_service.words("Devil May Cry 4 Special Edition") == psn_service.words("Devil May Cry 4: Special Edition")
+
+
+def test_igdb_search_takes_only_the_same_words(monkeypatch):
+    """Names IGDB doesn't have as they are: its search, when the words are the same but for editions'."""
+    games = {"Killzone": [{"id": 1, "name": "Killzone: Shadow Fall", "platforms": [48]}],
+             "Overcooked": [{"id": 2, "name": "Overcooked! 2", "platforms": [48]}],
+             "Control": [{"id": 3, "name": "Control", "platforms": [167]}]}
+    monkeypatch.setattr(psn_service, "query", lambda body, endpoint="games": [] if body.startswith("fields") else
+                        next((g for k, g in games.items() if f'search "{k}' in body), []))
+    lists = [{"id": "A", "name": "Killzone Shadow Fall", "platforms": ["PS4"]},
+             {"id": "B", "name": "Overcooked", "platforms": ["PS4"]},
+             {"id": "C", "name": "Control Ultimate Edition", "platforms": ["PS5"]}]
+    assert psn_service.igdb_games(lists) == {"A": (1, "PS4"), "C": (3, "PS5")}
