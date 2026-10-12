@@ -122,7 +122,7 @@ async function renderAccountArea() {
                     aria-controls="account-menu" title="${esc(t("account_menu"))}"><span class="icon">${currentUser.avatar ? avatarImage(currentUser.avatar, 22) : "👤"}</span><span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
             <div class="dropdown-menu shadow" id="account-menu" role="menu">
                 <span class="dropdown-header">@${esc(name)}</span>
-                <a class="dropdown-item" role="menuitem" href="/account">${t("my_account")}</a>
+                <a class="dropdown-item" role="menuitem" href="/account">⚙️ ${t("settings_title")}</a>
                 <a class="dropdown-item" role="menuitem" href="/user/${encodeURIComponent(currentUser.username || "")}">${t("my_profile")}</a>
                 ${staff ? `<a class="dropdown-item" role="menuitem" href="/admin">🛡️ ${t("mod_title")}</a>` : ""}
                 <div class="d-sm-none">

@@ -14,12 +14,23 @@
     <script src="/static/common.js"></script>
     <script src="/static/i18n.js"></script>
     <script src="/static/market.js"></script>
+    <style>
+        /* the settings (account.js): sections under one another, a menu beside them from large screens up */
+        .settings-section { scroll-margin-top: 1rem; }
+        .settings-nav { position: sticky; top: 1rem; }
+        .settings-nav .list-group-item.active { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color);
+                                                border-color: var(--bs-border-color); font-weight: 600; }
+        .setting-line { display: flex; align-items: flex-start; gap: .75rem; }
+        .setting-line .form-switch .form-check-input { width: 2.5em; height: 1.35em; cursor: pointer; }
+        .connection { display: flex; align-items: center; gap: .75rem; padding: .6rem .75rem; border: 1px solid var(--bs-border-color);
+                      border-radius: .5rem; }
+    </style>
 </head>
 <body class="bg-body-tertiary">
 
 {% include "_header.html" %}
 
-<div class="container pb-4" style="max-width: 900px;">
+<div class="container pb-4" style="max-width: 1100px;">
 
     <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
 
@@ -101,103 +112,170 @@
     </section>
 
     <!-- Logged in: the account (listings, messages and ratings come here next) -->
-    <section id="logged-in" class="card shadow-sm d-none">
-        <div class="card-body">
-            <h1 class="h4 mb-3" data-i18n="my_account"></h1>
-            <dl id="account-facts" class="row mb-3"></dl>
-            <button type="button" id="logout" class="btn btn-secondary" data-i18n="log_out"></button>
-
-            <!-- What the profile shows besides the username (user, 2026-10-12: "how is a user supposed to edit
-                 his profile?"); the profile's own page has the showcase, /collection the public switch -->
-            <form id="profile-form" class="border-top mt-4 pt-3" style="max-width: 420px;" novalidate>
-                <h2 class="h6" data-i18n="edit_profile"></h2>
-                <!-- the profile picture: sent as soon as it's chosen (account.js), made a square there -->
-                <div class="d-flex align-items-center gap-3 mb-3">
-                    <div id="avatar-preview"></div>
-                    <div class="d-flex flex-column gap-1">
-                        <label class="btn btn-sm btn-secondary mb-0">
-                            <span data-i18n="avatar_choose"></span>
-                            <input id="avatar-file" type="file" accept="image/jpeg,image/png,image/webp" class="d-none">
-                        </label>
-                        <button type="button" id="avatar-remove" class="btn btn-sm btn-link text-danger p-0 d-none" data-i18n="avatar_remove"></button>
+    <!-- Logged in: the settings (user, 2026-10-12: "an account settings menu"), one section each: the profile,
+         the account, the collection's privacy, the e-mails, Steam / PSN, the listings, the data. A menu on the
+         left from large screens up (account.js marks the section in view); on a phone, one after another -->
+    <section id="logged-in" class="d-none">
+        <h1 class="h3 mb-3" data-i18n="settings_title"></h1>
+        <div class="row g-4">
+            <nav class="col-lg-3 d-none d-lg-block" data-i18n-aria-label="settings_title">
+                <div class="list-group settings-nav">
+                    <a class="list-group-item list-group-item-action" href="#profile" data-i18n="settings_profile"></a>
+                    <a class="list-group-item list-group-item-action" href="#account" data-i18n="settings_account"></a>
+                    <a class="list-group-item list-group-item-action" href="#privacy" data-i18n="settings_privacy"></a>
+                    <a class="list-group-item list-group-item-action" href="#notifications" data-i18n="settings_notifications"></a>
+                    <a class="list-group-item list-group-item-action" href="#connections" data-i18n="settings_connections"></a>
+                    <a class="list-group-item list-group-item-action" href="#my-listings" data-i18n="my_listings"></a>
+                    <a class="list-group-item list-group-item-action" href="#data" data-i18n="settings_data"></a>
+                </div>
+            </nav>
+            <div class="col-lg-9 d-flex flex-column gap-3">
+            <section id="profile" class="card shadow-sm settings-section">
+                <div class="card-body">
+                    <h2 class="h5 mb-3" data-i18n="settings_profile"></h2>
+                    <!-- the profile picture: sent as soon as it's chosen (account.js), made a square there -->
+                    <form id="profile-form" style="max-width: 460px;" novalidate>
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div id="avatar-preview"></div>
+                            <div class="d-flex flex-column gap-1">
+                                <label class="btn btn-sm btn-secondary mb-0">
+                                    <span data-i18n="avatar_choose"></span>
+                                    <input id="avatar-file" type="file" accept="image/jpeg,image/png,image/webp" class="d-none">
+                                </label>
+                                <button type="button" id="avatar-remove" class="btn btn-sm btn-link text-danger p-0 d-none" data-i18n="avatar_remove"></button>
+                            </div>
+                        </div>
+                        <div id="avatar-message" class="small mb-2" role="status"></div>
+                        <div class="mb-3">
+                            <label class="form-label" for="profile-display-name" data-i18n="display_name"></label>
+                            <input id="profile-display-name" name="display_name" class="form-control" autocomplete="name" maxlength="100"
+                                   aria-describedby="profile-display-help">
+                            <div id="profile-display-help" class="form-text" data-i18n="display_name_help"></div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="profile-location" data-i18n="profile_location"></label>
+                            <input id="profile-location" name="location" class="form-control" autocomplete="address-level2" maxlength="100"
+                                   data-i18n-placeholder="profile_location_placeholder" aria-describedby="profile-location-help">
+                            <div id="profile-location-help" class="form-text" data-i18n="profile_location_help"></div>
+                        </div>
+                        <div class="alert alert-danger d-none py-2" role="alert"></div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <button type="submit" class="btn btn-primary" data-i18n="profile_save"></button>
+                            <a id="profile-view" class="btn btn-link" data-i18n="profile_view_mine"></a>
+                        </div>
+                        <p class="small text-body-secondary mt-2 mb-0" data-i18n="settings_showcase_hint"></p>
+                    </form>
+                </div>
+            </section>
+            <section id="account" class="card shadow-sm settings-section">
+                <div class="card-body">
+                    <h2 class="h5 mb-3" data-i18n="settings_account"></h2>
+                    <dl id="account-facts" class="row mb-3"></dl>
+                    <button type="button" id="logout" class="btn btn-secondary" data-i18n="log_out"></button>
+                    <!-- A new password: this session stays, the others (other devices) are logged out -->
+                    <form id="password-form" class="border-top mt-4 pt-3" style="max-width: 460px;" novalidate>
+                        <h3 class="h6" data-i18n="change_password"></h3>
+                        <div class="mb-3">
+                            <label class="form-label" for="current-password" data-i18n="current_password"></label>
+                            <input id="current-password" name="current" type="password" class="form-control"
+                                   autocomplete="current-password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="new-password" data-i18n="new_password"></label>
+                            <input id="new-password" name="password" type="password" class="form-control" autocomplete="new-password"
+                                   required minlength="8" maxlength="200" aria-describedby="new-password-help">
+                            <div id="new-password-help" class="form-text" data-i18n="password_help"></div>
+                        </div>
+                        <div class="alert alert-danger d-none py-2" role="alert"></div>
+                        <button type="submit" class="btn btn-primary" data-i18n="reset_save"></button>
+                    </form>
+                </div>
+            </section>
+            <section id="privacy" class="card shadow-sm settings-section">
+                <div class="card-body">
+                    <h2 class="h5 mb-3" data-i18n="settings_privacy"></h2>
+                    <div class="setting-line">
+                        <div class="flex-grow-1">
+                            <label class="fw-semibold d-block" for="settings-public" data-i18n="settings_public"></label>
+                            <div id="settings-public-text" class="small text-body-secondary"></div>
+                        </div>
+                        <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch"
+                             id="settings-public" aria-describedby="settings-public-text"></div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-3 small mt-2">
+                        <a href="/collection" data-i18n="collection_title"></a>
+                        <a id="settings-collection-page" class="d-none" data-i18n="collection_public_see"></a>
+                        <a id="settings-showcase" data-i18n="settings_showcase"></a>
                     </div>
                 </div>
-                <div id="avatar-message" class="small mb-2" role="status"></div>
-                <div class="mb-3">
-                    <label class="form-label" for="profile-display-name" data-i18n="display_name"></label>
-                    <input id="profile-display-name" name="display_name" class="form-control" autocomplete="name" maxlength="100"
-                           aria-describedby="profile-display-help">
-                    <div id="profile-display-help" class="form-text" data-i18n="display_name_help"></div>
+            </section>
+            <section id="notifications" class="card shadow-sm settings-section">
+                <div class="card-body">
+                    <h2 class="h5 mb-3" data-i18n="settings_notifications"></h2>
+                    <div class="setting-line">
+                        <div class="flex-grow-1">
+                            <label class="fw-semibold d-block" for="settings-alerts" data-i18n="collection_alerts_title"></label>
+                            <div id="settings-alerts-text" class="small text-body-secondary" data-i18n="collection_wish_alerts_hint"></div>
+                        </div>
+                        <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch"
+                             id="settings-alerts" aria-describedby="settings-alerts-text"></div>
+                    </div>
+                    <div class="setting-line mt-3">
+                        <label class="flex-grow-1 fw-semibold" for="settings-lang" data-i18n="settings_email_lang"></label>
+                        <select id="settings-lang" class="form-select form-select-sm w-auto">
+                            <option value="pt">Português</option><option value="en">English</option>
+                        </select>
+                    </div>
+                    <div id="settings-message" class="small mt-2" role="status"></div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label" for="profile-location" data-i18n="profile_location"></label>
-                    <input id="profile-location" name="location" class="form-control" autocomplete="address-level2" maxlength="100"
-                           data-i18n-placeholder="profile_location_placeholder" aria-describedby="profile-location-help">
-                    <div id="profile-location-help" class="form-text" data-i18n="profile_location_help"></div>
+            </section>
+            <section id="connections" class="card shadow-sm settings-section">
+                <div class="card-body">
+                    <h2 class="h5 mb-3" data-i18n="settings_connections"></h2>
+                    <p class="small text-body-secondary" data-i18n="settings_connections_help"></p>
+                    <div id="settings-connections" class="d-flex flex-column gap-2"></div>
                 </div>
-                <div class="alert alert-danger d-none py-2" role="alert"></div>
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <button type="submit" class="btn btn-primary" data-i18n="profile_save"></button>
-                    <a id="profile-view" class="btn btn-link" data-i18n="profile_view_mine"></a>
+            </section>
+            <section id="my-listings" class="card shadow-sm settings-section">
+                <div class="card-body">
+                    <h2 class="h5 mb-3" data-i18n="my_listings"></h2>
+                    <div class="d-flex justify-content-end mb-2">
+                        <a href="/sell" class="btn btn-sm btn-success" data-i18n="market_sell"></a>
+                    </div>
+                    <div id="my-listings-grid" class="row row-cols-2 row-cols-sm-3 g-2"></div>
+                    <p id="my-listings-empty" class="small text-body-secondary d-none mb-0" data-i18n="my_listings_empty"></p>
                 </div>
-                <p class="small text-body-secondary mt-2 mb-0" data-i18n="profile_edit_more"></p>
-            </form>
-
-            <!-- A new password: this session stays, the others (other devices) are logged out -->
-            <form id="password-form" class="border-top mt-4 pt-3" style="max-width: 420px;" novalidate>
-                <h2 class="h6" data-i18n="change_password"></h2>
-                <div class="mb-3">
-                    <label class="form-label" for="current-password" data-i18n="current_password"></label>
-                    <input id="current-password" name="current" type="password" class="form-control"
-                           autocomplete="current-password" required>
+            </section>
+            <section id="data" class="card shadow-sm settings-section">
+                <div class="card-body">
+                    <h2 class="h5 mb-3" data-i18n="settings_data"></h2>
+                    <!-- The user's own data as a file (GDPR; export_service) -->
+                    <h3 class="h6" data-i18n="export_data"></h3>
+                    <p class="small" data-i18n="export_data_help"></p>
+                    <a href="/api/auth/export" class="btn btn-secondary" download data-i18n="export_data_button"></a>
+                    <!-- Deleting the account: anonymised (auth_service.delete_account) -->
+                    <details class="border-top mt-4 pt-3" style="max-width: 460px;">
+                        <summary class="h6 text-danger" data-i18n="delete_account"></summary>
+                        <form id="delete-form" class="mt-2" novalidate>
+                            <p class="small" data-i18n="delete_account_gone"></p>
+                            <p class="small" data-i18n="delete_account_kept"></p>
+                            <div class="mb-3">
+                                <label class="form-label" for="delete-password" data-i18n="current_password"></label>
+                                <input id="delete-password" name="password" type="password" class="form-control"
+                                       autocomplete="current-password" required>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input id="delete-confirm" type="checkbox" class="form-check-input">
+                                <label class="form-check-label" for="delete-confirm" data-i18n="delete_account_confirm"></label>
+                            </div>
+                            <div class="alert alert-danger d-none py-2" role="alert"></div>
+                            <button type="submit" class="btn btn-danger" data-i18n="delete_account" disabled></button>
+                        </form>
+                    </details>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label" for="new-password" data-i18n="new_password"></label>
-                    <input id="new-password" name="password" type="password" class="form-control" autocomplete="new-password"
-                           required minlength="8" maxlength="200" aria-describedby="new-password-help">
-                    <div id="new-password-help" class="form-text" data-i18n="password_help"></div>
-                </div>
-                <div class="alert alert-danger d-none py-2" role="alert"></div>
-                <button type="submit" class="btn btn-primary" data-i18n="reset_save"></button>
-            </form>
-
-            <!-- The user's own data as a file (GDPR; export_service) -->
-            <div class="border-top mt-4 pt-3" style="max-width: 420px;">
-                <h2 class="h6" data-i18n="export_data"></h2>
-                <p class="small" data-i18n="export_data_help"></p>
-                <a href="/api/auth/export" class="btn btn-secondary" download data-i18n="export_data_button"></a>
+            </section>
             </div>
-
-            <!-- Deleting the account: anonymised (auth_service.delete_account) -->
-            <details class="border-top mt-4 pt-3" style="max-width: 420px;">
-                <summary class="h6" data-i18n="delete_account"></summary>
-                <form id="delete-form" class="mt-2" novalidate>
-                    <p class="small" data-i18n="delete_account_gone"></p>
-                    <p class="small" data-i18n="delete_account_kept"></p>
-                    <div class="mb-3">
-                        <label class="form-label" for="delete-password" data-i18n="current_password"></label>
-                        <input id="delete-password" name="password" type="password" class="form-control"
-                               autocomplete="current-password" required>
-                    </div>
-                    <div class="form-check mb-3">
-                        <input id="delete-confirm" type="checkbox" class="form-check-input">
-                        <label class="form-check-label" for="delete-confirm" data-i18n="delete_account_confirm"></label>
-                    </div>
-                    <div class="alert alert-danger d-none py-2" role="alert"></div>
-                    <button type="submit" class="btn btn-danger" data-i18n="delete_account" disabled></button>
-                </form>
-            </details>
         </div>
-    </section>
-
-    <!-- The games this user sells -->
-    <section id="my-listings" class="mt-4 d-none">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-            <h2 class="h5 mb-0" data-i18n="my_listings"></h2>
-            <a href="/sell" class="btn btn-sm btn-success" data-i18n="market_sell"></a>
-        </div>
-        <div id="my-listings-grid" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 g-2"></div>
-        <p id="my-listings-empty" class="small text-body-secondary d-none" data-i18n="my_listings_empty"></p>
     </section>
 </div>
 

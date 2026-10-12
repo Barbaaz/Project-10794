@@ -273,6 +273,13 @@ def remove(user_id, item_id):
     return {"ok": True, "steam_skipped": bool(app_id), "psn_skipped": bool(psn_id)}
 
 
+def settings(user_id):
+    """{public, wish_alerts, lang}: the collection's and the e-mails' settings, for the settings page."""
+    with session() as s:
+        user = s.get(User, user_id)
+        return {"public": user.collection_public, "wish_alerts": user.wish_alerts, "lang": user.lang}
+
+
 def set_settings(user_id, changes):
     """{public?, wish_alerts?, lang?}: show the collection on the profile; wishlist e-mails, in this language."""
     from app.services.auth_service import LANGS
@@ -284,7 +291,7 @@ def set_settings(user_id, changes):
             user.wish_alerts = bool(changes["wish_alerts"])
         if changes.get("lang") in LANGS:
             user.lang = changes["lang"]
-        return {"public": user.collection_public, "wish_alerts": user.wish_alerts}
+        return {"public": user.collection_public, "wish_alerts": user.wish_alerts, "lang": user.lang}
 
 
 def public_collection(username):

@@ -115,6 +115,13 @@ def remove(item_id):
     return jsonify(collection_service.remove(current_user()["id"], item_id))
 
 
+@bp.get("/collection/settings")
+@login_required
+def get_settings():
+    """{public, wish_alerts, lang}: for the settings page (/account), without loading the collection"""
+    return jsonify(collection_service.settings(current_user()["id"]))
+
+
 @bp.put("/collection/settings")
 @login_required
 def settings():

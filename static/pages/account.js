@@ -112,7 +112,8 @@ async function load() {
     form.display_name.value = user.display_name || "";
     form.location.value = user.location || "";
     document.getElementById("profile-view").href = `/user/${encodeURIComponent(user.username)}`;
-    if (location.hash === "#profile") form.scrollIntoView();
+    if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+    loadSettings(user);
     document.getElementById("logout").onclick = async () => {
         await api("/api/auth/logout");
         location.assign("/");
@@ -122,7 +123,67 @@ async function load() {
     const mine = await fetch("/api/listings/mine").then(r => r.json()).catch(() => []);
     document.getElementById("my-listings-grid").innerHTML = mine.map(l => listingCard(l, { showSeller: false })).join("");
     document.getElementById("my-listings-empty").classList.toggle("d-none", mine.length > 0);
-    document.getElementById("my-listings").classList.remove("d-none");
+}
+
+// The collection's privacy, the e-mails and the Steam / PSN accounts (collection_service.settings,
+// steam_service / psn_service.saved_profile); each switch saved as it changes
+async function loadSettings(user) {
+    const settings = await fetch("/api/collection/settings").then(r => r.ok ? r.json() : null).catch(() => null);
+    if (!settings) return;
+    const message = document.getElementById("settings-message");
+    const page = document.getElementById("settings-collection-page");
+    page.href = `/user/${encodeURIComponent(user.username)}/collection`;
+    document.getElementById("settings-showcase").href = `/user/${encodeURIComponent(user.username)}`;
+    const showPublic = open => {
+        document.getElementById("settings-public").checked = open;
+        document.getElementById("settings-public-text").textContent = t(open ? "collection_public_on_text" : "collection_public_off_text");
+        page.classList.toggle("d-none", !open);
+    };
+    showPublic(settings.public);
+    document.getElementById("settings-alerts").checked = settings.wish_alerts;
+    document.getElementById("settings-lang").value = settings.lang;
+    const save = async (changes, undo) => {
+        const { ok, data } = await api("/api/collection/settings", { method: "PUT", body: changes });
+        message.className = `small mt-2 ${ok ? "text-success" : "text-danger"}`;
+        message.textContent = ok ? t("collection_saved") : t(`error_${data?.error || "unknown"}`);
+        if (!ok) undo();
+        return ok;
+    };
+    document.getElementById("settings-public").onchange = async e => {
+        if (await save({ public: e.target.checked }, () => e.target.checked = !e.target.checked)) showPublic(e.target.checked);
+    };
+    document.getElementById("settings-alerts").onchange = e => save({ wish_alerts: e.target.checked }, () => e.target.checked = !e.target.checked);
+    document.getElementById("settings-lang").onchange = e => save({ lang: e.target.value }, () => e.target.value = settings.lang);
+
+    const [steam, psn] = await Promise.all(["steam", "psn"].map(key =>
+        fetch(`/api/collection/${key}`).then(r => r.ok ? r.json() : {}).catch(() => ({}))));
+    const when = at => at ? new Date(at).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) : "";
+    const row = (icon, name, profile, who) => `
+        <div class="connection">
+            <span aria-hidden="true">${icon}</span>
+            <div class="flex-grow-1 min-w-0"><div class="fw-semibold small">${esc(name)}</div>
+                <div class="small text-body-secondary text-truncate">${profile
+                    ? esc(`${who} · ${t("steam_last_import", { date: when(profile.imported_at) })}`)
+                    : esc(t("settings_not_connected"))}</div></div>
+            <a href="/collection" class="btn btn-sm btn-secondary">${esc(t(profile ? "settings_refresh" : "settings_import"))}</a>
+        </div>`;
+    document.getElementById("settings-connections").innerHTML =
+        row("🎮", "Steam", steam.profile, steam.profile?.steam_id) + row("🎮", "PlayStation Network", psn.profile, psn.profile?.online_id);
+}
+
+// The section in view is the one marked in the menu
+const sections = [...document.querySelectorAll(".settings-section")];
+const menuLinks = [...document.querySelectorAll(".settings-nav a")];
+if ("IntersectionObserver" in window) {
+    const seen = new IntersectionObserver(entries => entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        menuLinks.forEach(a => {
+            const on = a.getAttribute("href") === `#${entry.target.id}`;
+            a.classList.toggle("active", on);
+            on ? a.setAttribute("aria-current", "true") : a.removeAttribute("aria-current");
+        });
+    }), { rootMargin: "-20% 0px -70% 0px" });
+    sections.forEach(section => seen.observe(section));
 }
 
 applyI18n();
