@@ -35,41 +35,37 @@ function renderStats() {
     document.querySelector('[data-kind="wishlist"]').textContent = `${t("collection_tab_wishlist")} (${s.wishlist})`;
 }
 
-// What it costs now: best store price (with a sale / historical low badge) and the cheapest used copy
+// What it costs now, one fact per line so the cards line up: best store price and store, else "Ver na
+// Steam", "À procura" or no price; the cheapest used copy; a wish's badges (on sale, lowest, cheaper)
 function priceLine(item) {
     const parts = [];
     if (item.best_price !== null) {
-        parts.push(`${t("collection_best_now")} <strong>${eur.format(item.best_price)}</strong> · ${esc(item.best_store)}
-            ${item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}</span>` : ""}
-            ${item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : ""}
-            ${item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : ""}`);
+        parts.push(`<span title="${esc(t("collection_best_now"))}"><strong>${eur.format(item.best_price)}</strong> · ${esc(item.best_store)}</span>`);
     } else if (item.steam_app_id) {
         // no store here sells it, but it's on Steam (a PC game; user, 2026-10-11)
-        parts.push(`<a class="btn btn-sm btn-secondary" href="https://store.steampowered.com/app/${Number(item.steam_app_id)}/"
+        parts.push(`<a href="https://store.steampowered.com/app/${Number(item.steam_app_id)}/"
                        target="_blank" rel="noopener">${t("collection_on_steam")}</a>`);
     } else if (item.kind === "wishlist" && !item.used) {
         // nobody sells it: "looking for", with an e-mail when a store or a user does (wish_alert_service)
-        parts.push(`<span class="badge text-bg-info">${t("collection_looking_for")}</span>
-            <span class="text-body-secondary">${t("collection_looking_for_help")}</span>`);
+        parts.push(`<span class="badge text-bg-info" title="${esc(t("collection_looking_for_help"))}">${t("collection_looking_for")}</span>`);
     } else {
         parts.push(`<span class="text-body-secondary">${t("collection_no_store_price")}</span>`);
     }
-    if (item.used) parts.push(`<a href="/listing/${item.used.listing_id}">${esc(t("used_from", { price: eur.format(item.used.price) }))}</a>`);
-    return parts.join(" · ");
+    const used = item.used ? `<a href="/listing/${item.used.listing_id}">${esc(t("used_from", { price: eur.format(item.used.price) }))}</a>` : "";
+    const lines = `<div class="item-line small">${parts.join("")}</div><div class="item-line small">${used}</div>`;
+    if (item.kind !== "wishlist") return lines;
+    const badges = [
+        item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}</span>` : "",
+        item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : "",
+        item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : "",
+    ].join("");
+    return lines + `<div class="item-facts small">${badges}</div>`;
 }
 
-// What the user wrote about an owned game, in one line (the editor stays closed until "Editar")
+// What the user wrote about an owned game, in fixed rows (collection_grid.js factRows); the notes are in the
+// editor ("Editar")
 function ownedFacts(item) {
-    const facts = [
-        item.status && item.status !== "owned" ? `<span class="badge text-bg-secondary">${esc(t(`status_play_${item.status}`))}</span>` : "",
-        esc(t(`format_${item.format || "physical"}`)),
-        item.score ? `★ ${item.score}/10` : "",
-        item.hours ? `${fmtNumber(item.hours)} h` : "",
-        item.achievements_total ? `🏆 ${item.achievements ?? 0}/${item.achievements_total}` : (item.achievements ? `🏆 ${item.achievements}` : ""),
-        item.platinum ? `<span class="badge text-bg-info">${esc(t("collection_platinum"))}</span>` : "",
-        item.notes ? `<span class="fst-italic text-truncate" style="max-width: 16rem;">“${esc(item.notes)}”</span>` : "",
-    ];
-    return facts.filter(Boolean).map(f => f.startsWith("<") ? f : `<span>${f}</span>`).join("");
+    return factRows(item);
 }
 
 function field(label, control, cols = "col-6 col-md-4") {
@@ -116,10 +112,10 @@ function itemRow(item) {
             <a href="/game/${item.game_id}" class="item-cover-link" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
             <div class="card-body p-2 d-flex flex-column min-w-0">
                     <a href="/game/${item.game_id}" class="item-title fw-semibold small link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
-                    <div class="small text-body-secondary">${esc(item.platform_name || "")}</div>
-                    <div class="small mt-1">${priceLine(item)}</div>
-                    ${owned ? `<div class="item-facts small mt-1" data-facts>${ownedFacts(item)}</div>` : ""}
-                    <div class="d-flex flex-wrap gap-1 mt-auto pt-2">
+                    <div class="item-line small text-body-secondary">${esc(item.platform_name || "")}</div>
+                    <div class="mt-1">${priceLine(item)}</div>
+                    ${owned ? `<div class="mt-1" data-facts>${ownedFacts(item)}</div>` : ""}
+                    <div class="item-actions mt-auto pt-2">
                         ${owned ? `<button type="button" class="btn btn-sm btn-secondary" data-action="edit" aria-haspopup="dialog">${t("collection_edit")}</button>` : ""}
                         ${owned
                             // only physical copies can be sold (a digital game can't be handed over)
@@ -133,18 +129,13 @@ function itemRow(item) {
         </div>`;
 }
 
-// One button per platform in the list (with how many), "Todas" first; the chosen one filters the grid
-let platform = "";
-function platformChips(items) {
-    const counts = {};
-    items.forEach(i => counts[i.platform_name || "?"] = (counts[i.platform_name || "?"] || 0) + 1);
-    const names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b, LOCALE));
-    if (platform && !counts[platform]) platform = "";
-    const box = document.getElementById("filter-platforms");
-    box.classList.toggle("d-none", names.length < 2);
-    box.innerHTML = [["", t("collection_all_platforms"), items.length], ...names.map(n => [n, n, counts[n]])].map(([value, label, n]) =>
-        `<button type="button" class="chip-btn" data-platform="${esc(value)}" aria-pressed="${platform === value}">${esc(label)} <span class="opacity-75">${n}</span></button>`).join("");
-    box.querySelectorAll("[data-platform]").forEach(b => b.onclick = () => { platform = b.dataset.platform; renderItems(); });
+// The sidebar's ticked boxes, one set per tab (collection_grid.js)
+const chosen = { owned: {}, wishlist: {} };
+function filterGroups(items) {
+    if (kind === "owned") return ownedFilterGroups(items);
+    return [platformGroup(items),
+            { key: "show", title: t("collection_wish_filter"), options: Object.keys(WISH_FILTERS).filter(Boolean)
+                  .map(f => ({ value: f, label: t(`wish_filter_${f}`) })), test: (i, v) => WISH_FILTERS[v](i) }];
 }
 
 // The order and, on the wishlist, which wishes (user, 2026-10-11: "sort my wishlist and maybe filter it")
@@ -189,19 +180,15 @@ function renderItems() {
     document.getElementById("open-add").textContent = addTitle;
     document.getElementById("open-steam").classList.toggle("d-none", kind !== "owned");
     document.getElementById("open-psn").classList.toggle("d-none", kind !== "owned");
-    const status = document.getElementById("filter-status");
-    status.classList.toggle("d-none", kind !== "owned");
-    const wish = document.getElementById("filter-wish");
-    wish.classList.toggle("d-none", kind !== "wishlist");
     sortOptions();
     const words = document.getElementById("filter-text").value.toLowerCase().split(/\s+/).filter(Boolean);
     const listed = data.items.filter(i => i.kind === kind
-        && (kind !== "owned" || !status.value || i.status === status.value)
-        && (kind !== "wishlist" || WISH_FILTERS[wish.value](i))
         && words.every(w => `${i.name || ""} ${i.name_en || ""}`.toLowerCase().includes(w)));
-    platformChips(listed);
-    const items = listed.filter(i => !platform || (i.platform_name || "?") === platform)
-        .sort((a, b) => ORDER[sortBy[kind]](a, b) || byName(a, b));
+    const groups = filterGroups(listed);
+    const sidebar = document.getElementById("filters");
+    renderFilters(sidebar, listed, groups, chosen[kind], renderItems);
+    filtersToggle(document.getElementById("filters-toggle"), sidebar, chosen[kind]);
+    const items = filterItems(listed, groups, chosen[kind]).sort((a, b) => ORDER[sortBy[kind]](a, b) || byName(a, b));
     const list = document.getElementById("items");
     list.innerHTML = items.map(itemRow).join("");
     const empty = document.getElementById("empty");
@@ -499,12 +486,6 @@ async function start() {
     await renderAccountArea();
     if (!currentUser && fromLink) return document.getElementById("loading").classList.add("d-none");
     if (!currentUser) return location.replace(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
-    document.getElementById("filter-status").innerHTML = `<option value="">${t("collection_all_statuses")}</option>`
-        + STATUSES.map(x => `<option value="${x}">${t(`status_play_${x}`)}</option>`).join("");
-    document.getElementById("filter-status").onchange = renderItems;
-    document.getElementById("filter-wish").innerHTML = Object.keys(WISH_FILTERS).map(f =>
-        `<option value="${f}">${t(`wish_filter_${f || "all"}`)}</option>`).join("");
-    document.getElementById("filter-wish").onchange = renderItems;
     document.getElementById("sort").onchange = event => { sortBy[kind] = event.target.value; renderItems(); };
     document.getElementById("filter-text").oninput = renderItems;
     document.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => {

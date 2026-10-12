@@ -14,6 +14,7 @@
     <script src="/static/common.js"></script>
     <script src="/static/i18n.js"></script>
     <script src="/static/market.js"></script>
+    <script src="/static/collection_grid.js"></script>
     <style>
         /* the collection as a grid of covers (common.css .item-*); "Editar" opens a window over it */
         .item-dialog { width: min(560px, calc(100vw - 2rem)); border: 1px solid var(--bs-border-color); border-radius: .75rem;
@@ -30,7 +31,7 @@
 
 {% include "_header.html" %}
 
-<div class="container pb-4" style="max-width: 1000px;">
+<div class="container pb-4" style="max-width: 1320px;">
 
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <h1 class="h3 mb-0" data-i18n="collection_title"></h1>
@@ -70,18 +71,24 @@
                 <button type="button" id="open-add" class="btn btn-sm btn-primary" aria-haspopup="dialog"></button>
             </div>
         </div>
+        <!-- the name and the order above the grid; the checkbox filters in a sidebar (collection_grid.js;
+             user, 2026-10-12), opened by "Filtros" below large screens -->
         <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+            <button type="button" id="filters-toggle" class="btn btn-sm btn-secondary d-lg-none" aria-expanded="false"
+                    aria-controls="filters"></button>
             <input id="filter-text" type="search" class="form-control form-control-sm w-auto"
                    data-i18n-placeholder="collection_filter" data-i18n-aria-label="collection_filter">
-            <select id="filter-status" class="form-select form-select-sm w-auto" data-i18n-aria-label="collection_status"></select>
-            <!-- the wishlist: what to show (deals, on sale, used, looking for); both lists: the order -->
-            <select id="filter-wish" class="form-select form-select-sm w-auto" data-i18n-aria-label="collection_wish_filter"></select>
             <select id="sort" class="form-select form-select-sm w-auto" data-i18n-aria-label="collection_sort"></select>
         </div>
-        <!-- one button per console / platform in this list (collection.js platformChips) -->
-        <div id="filter-platforms" class="d-flex flex-wrap gap-2 mb-3" role="group" data-i18n-aria-label="collection_platforms"></div>
-        <div id="items" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3"></div>
-        <p id="empty" class="text-body-secondary d-none"></p>
+        <div class="row g-3">
+            <aside class="col-lg-3 col-xl-2">
+                <div id="filters" class="filter-sidebar" role="group" data-i18n-aria-label="filters"></div>
+            </aside>
+            <div class="col-lg-9 col-xl-10">
+                <div id="items" class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3"></div>
+                <p id="empty" class="text-body-secondary d-none"></p>
+            </div>
+        </div>
     </div>
 </div>
 
