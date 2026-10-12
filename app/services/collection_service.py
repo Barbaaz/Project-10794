@@ -73,6 +73,9 @@ def with_prices(rows):
                  platform_name=g.get("platform_name"), image=g.get("image"),
                  best_price=best["price"] if best else None, best_store=best["store_name"] if best else None,
                  on_sale=any(o["is_discount"] for o in offers),
+                 # the best real discount now (below the 30 days' lowest) and its price, to sort a wishlist by
+                 discount=max((o.get("discount_percent") or 0 for o in offers if o["is_discount"]), default=None) or None,
+                 sale_price=min((o["price"] for o in offers if o["is_discount"]), default=None),
                  at_historical_low=g.get("at_historical_low", False), used=g.get("used"))
         wished = r.get("wish_price")
         r["price_drop"] = round(wished - r["best_price"], 2) if wished and best and best["price"] < wished else None

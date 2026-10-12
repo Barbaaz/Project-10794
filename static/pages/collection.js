@@ -56,7 +56,7 @@ function priceLine(item) {
     const lines = `<div class="item-line small">${parts.join("")}</div><div class="item-line small">${used}</div>`;
     if (item.kind !== "wishlist") return lines;
     const badges = [
-        item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}</span>` : "",
+        item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}${item.discount ? ` −${Math.round(item.discount)}%` : ""}</span>` : "",
         item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : "",
         item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : "",
     ].join("");
@@ -140,7 +140,9 @@ function filterGroups(items) {
 }
 
 // The order and, on the wishlist, which wishes (user, 2026-10-11: "sort my wishlist and maybe filter it")
-const SORTS = { owned: ["name", "added", "value", "hours"], wishlist: ["name", "added", "price_asc", "price_desc", "drop"] };
+// the wishlist also by the discount and the sale price (user, 2026-10-12)
+const SORTS = { owned: ["name", "added", "value", "hours"],
+                wishlist: ["name", "added", "price_asc", "price_desc", "discount", "sale_price", "drop"] };
 const WISH_FILTERS = {
     "": () => true,
     deals: i => i.good_deal,                                     // on sale, at its lowest, or cheaper than when wished
@@ -164,6 +166,8 @@ const ORDER = {
     price_asc: (a, b) => last(a, b, price, false),
     price_desc: (a, b) => last(a, b, price, true),
     drop: (a, b) => last(a, b, i => i.price_drop ?? null, true),
+    discount: (a, b) => last(a, b, i => i.discount ?? null, true),          // not on sale: at the end
+    sale_price: (a, b) => last(a, b, i => i.sale_price ?? null, false),
 };
 
 function sortOptions() {

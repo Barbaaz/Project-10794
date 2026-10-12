@@ -239,3 +239,24 @@ def test_a_game_on_a_disc_and_as_a_download(market):
 
     wish = add(client, market["other_edition"], "wishlist").get_json()["id"]
     assert add(client, market["other_edition"], "wishlist").get_json()["id"] == wish
+
+
+def test_a_wish_on_sale_has_its_discount(market, monkeypatch):
+    """User, 2026-10-12: the wishlist sorts by the discount and the sale price; only real discounts count."""
+    import app.services.game_service as games
+    real = games.editions_with_offers
+
+    def with_stores(ids):
+        groups = real(ids)
+        for g in groups:
+            g["offers"] = [
+                {"price": 39.99, "in_stock": True, "condition": "new", "store_name": "A", "is_discount": True, "discount_percent": 33.3},
+                {"price": 35.00, "in_stock": True, "condition": "new", "store_name": "B", "is_discount": False, "discount_percent": 40},
+                {"price": 20.00, "in_stock": False, "condition": "new", "store_name": "C", "is_discount": True, "discount_percent": 66}]
+        return groups
+    monkeypatch.setattr(games, "editions_with_offers", with_stores)
+    client = market["client"]
+    sign_up(client, "sale_sorter")
+    add(client, market["edition"], kind="wishlist")
+    item = mine(client)["items"][0]
+    assert (item["on_sale"], item["discount"], item["sale_price"], item["best_price"]) == (True, 33.3, 39.99, 35.0)
