@@ -13,7 +13,7 @@ async function load() {
     if (!response.ok) return document.getElementById("error").classList.remove("d-none");
     const user = await response.json();
     USER_ID = user.id;
-    document.title = `@${user.username} · Game Price Tracker`;
+    document.title = `@${user.username} · SaveGame`;
     document.getElementById("name").textContent =
         user.display_name !== user.username ? `${user.display_name} (@${user.username})` : `@${user.username}`;
     document.getElementById("since").textContent =

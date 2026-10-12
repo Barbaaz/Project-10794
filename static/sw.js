@@ -13,7 +13,8 @@
 // v2: CDN files with integrity hashes (v1 may hold opaque copies they can't use)
 // v3: page scripts in files (static/pages/); saved pages from before had them inline
 // v4: the new look (2026-10-10) and its font
-const VERSION = "v4";
+// v5: the site's name, SaveGame (2026-10-12): the saved offline page had the old one
+const VERSION = "v5";
 const CACHE = `site-${VERSION}`;
 const SLOW_MS = 6000;      // past this, a saved copy is shown while the network keeps trying
 const CDN = "https://cdn.jsdelivr.net";       // Bootstrap, Chart.js: fixed versions in their URLs

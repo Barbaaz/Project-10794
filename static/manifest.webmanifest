@@ -1,6 +1,6 @@
 {
-  "name": "Game Price Tracker",
-  "short_name": "Preços de jogos",
+  "name": "SaveGame",
+  "short_name": "SaveGame",
   "description": "Preços de videojogos nas lojas portuguesas, e jogos usados à venda entre utilizadores.",
   "lang": "pt-PT",
   "start_url": "/",

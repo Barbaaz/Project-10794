@@ -17,7 +17,7 @@ async function load() {
 }
 
 function render() {
-    document.title = `${listing.title} · ${eur.format(listing.price)} · Game Price Tracker`;
+    document.title = `${listing.title} · ${eur.format(listing.price)} · SaveGame`;
     const edition = listing.edition && listing.edition !== "Standard" ? ` — ${listing.edition}` : "";
     document.getElementById("title").textContent = listing.title + edition;
     document.getElementById("subtitle").textContent = listing.platform_name;
