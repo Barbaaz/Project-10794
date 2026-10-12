@@ -146,7 +146,7 @@ function showShowcase(sections) {
             <h2 class="h5">${esc(t(`showcase_${s.section}`))}</h2>
             <div class="row row-cols-3 row-cols-sm-5 g-2">${s.items.map((g, i) => `
                 <div class="col"><a href="/game/${g.game_id}" class="d-block text-decoration-none text-body small">
-                    ${g.image ? `<img src="${esc(g.image)}" alt="" class="w-100 rounded mb-1 object-fit-cover" style="aspect-ratio: 3 / 4;">`
+                    ${g.image ? `<img src="${esc(g.image)}" alt="" class="w-100 rounded mb-1 object-fit-cover ${coverClass(g.image)}" style="aspect-ratio: 3 / 4;">`
                               : `<div class="w-100 rounded mb-1 bg-body-secondary" style="aspect-ratio: 3 / 4;"></div>`}
                     <div class="text-truncate fw-semibold">${esc(localName(g) || "")}</div>
                     <div class="text-body-secondary text-truncate">${esc(caption(s.section, g, i))} · ${esc(g.platform_name || "")}</div>

@@ -177,7 +177,7 @@ function itemRow(item) {
         <div class="col">
           <div class="card h-100 item-card overflow-hidden ${item.good_deal ? "border-success border-2" : ""}" data-id="${item.id}">
             <div class="position-relative">
-                <a href="/game/${item.game_id}" class="item-cover-link" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
+                <a href="/game/${item.game_id}" class="item-cover-link" tabindex="-1" aria-hidden="true"><img class="item-cover ${coverClass(item.image)}" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
                 ${coverBadges(item)}
             </div>
             <div class="card-body p-2 d-flex flex-column min-w-0">
@@ -303,7 +303,7 @@ function openEditor(id) {
     const body = document.getElementById("item-dialog-body");
     body.innerHTML = `
         <div class="d-flex gap-3 align-items-start">
-            <img class="dialog-cover" src="${esc(item.image || "")}" alt="">
+            <img class="dialog-cover ${coverClass(item.image)}" src="${esc(item.image || "")}" alt="">
             <div class="flex-grow-1 min-w-0">
                 <h2 id="item-dialog-title" class="h5 mb-0">${esc(localName(item) || "")}</h2>
                 <div class="small text-body-secondary">${esc(item.platform_name || "")}</div>

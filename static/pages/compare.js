@@ -21,7 +21,7 @@ function row(game, mine, theirs) {
             <div>${g ? facts(g) : "—"}</div></div>`;
     return `
         <div class="card"><div class="card-body p-2 d-flex gap-2">
-            ${game.image ? `<img src="${esc(game.image)}" alt="" class="rounded object-fit-cover flex-shrink-0" style="width: 56px; aspect-ratio: 3 / 4;">`
+            ${game.image ? `<img src="${esc(game.image)}" alt="" class="rounded object-fit-cover flex-shrink-0 ${coverClass(game.image)}" style="width: 56px; aspect-ratio: 3 / 4;">`
                          : `<div class="rounded bg-body-secondary flex-shrink-0" style="width: 56px; aspect-ratio: 3 / 4;"></div>`}
             <div class="flex-grow-1 min-w-0">
                 <a href="/game/${game.game_id}" class="fw-semibold small link-body-emphasis text-decoration-none">${esc(localName(game) || "")}</a>

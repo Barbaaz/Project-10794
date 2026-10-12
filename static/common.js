@@ -32,6 +32,12 @@ function esc(text) {
 }
 
 // "@name"; "utilizador removido" for an account deleted since (no username or page any more)
+// A card's picture: IGDB's flat cover fills the 3:4 frame; a store's photo (a special edition's box, a
+// game IGDB lacks) is shown whole on white, never cut (user, 2026-10-12: "normalize the images")
+function coverClass(url) {
+    return url && !url.includes("images.igdb.com") ? "store-photo" : "";
+}
+
 // A user's picture (their profile picture, else 👤), `size` px round
 function avatarImage(url, size = 32) {
     return url ? `<img src="${esc(url)}" alt="" class="avatar" width="${size}" height="${size}">`

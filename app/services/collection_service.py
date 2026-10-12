@@ -70,7 +70,9 @@ def with_prices(rows):
         offers = [o for o in g.get("offers", []) if o["in_stock"] and o["condition"] == "new"]
         best = min(offers, key=lambda o: o["price"]) if offers else None
         r.update(name=g.get("name"), name_en=g.get("name_en"), platform=g.get("console"),
-                 platform_name=g.get("platform_name"), image=g.get("image"),
+                 # IGDB's flat cover, as the front page's cards (user, 2026-10-12: the same kind of picture on
+                 # every card); a store's photo when there's none (a special edition's box, a game IGDB lacks)
+                 platform_name=g.get("platform_name"), image=g.get("cover") or g.get("image"),
                  best_price=best["price"] if best else None, best_store=best["store_name"] if best else None,
                  on_sale=any(o["is_discount"] for o in offers),
                  # the best real discount now (below the 30 days' lowest) and its price, to sort a wishlist by

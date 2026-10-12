@@ -12,7 +12,7 @@ function card(i) {
     return `
         <div class="col"><div class="card h-100 overflow-hidden">
             <div class="position-relative">
-                <a href="/game/${i.game_id}" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(i.image || "")}" alt="" loading="lazy"></a>
+                <a href="/game/${i.game_id}" tabindex="-1" aria-hidden="true"><img class="item-cover ${coverClass(i.image)}" src="${esc(i.image || "")}" alt="" loading="lazy"></a>
                 ${coverBadges(i)}
             </div>
             <div class="card-body p-2 min-w-0">
