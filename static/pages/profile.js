@@ -51,6 +51,40 @@ async function load() {
     showGameReviews(user.game_reviews);
     document.getElementById("profile").classList.remove("d-none");
     loadCollection();
+    loadFollows(mine);
+}
+
+// Following (follow_service): the counts, follow / unfollow, and on the user's own profile who they follow
+async function loadFollows(mine) {
+    const counts = await fetch(`/api/users/${encodeURIComponent(USERNAME)}/follows`).then(r => r.ok ? r.json() : null);
+    if (!counts) return;
+    document.getElementById("follow-counts").textContent =
+        t("follow_counts", { followers: counts.followers, following: counts.following });
+    const button = document.getElementById("follow-button");
+    button.classList.toggle("d-none", mine);
+    button.textContent = t(counts.followed ? "unfollow" : "follow");
+    button.classList.toggle("btn-primary", !counts.followed);
+    button.classList.toggle("btn-secondary", counts.followed);
+    button.setAttribute("aria-pressed", counts.followed);
+    button.onclick = async () => {
+        if (!currentUser) return location.assign(`/account?next=${encodeURIComponent(location.pathname)}`);
+        const { ok } = await api(`/api/users/${encodeURIComponent(USERNAME)}/follow`,
+                                 { method: counts.followed ? "DELETE" : "POST" });
+        if (ok) loadFollows(mine);
+    };
+    if (mine) loadFollowing();
+}
+
+async function loadFollowing() {
+    const people = await fetch("/api/following").then(r => r.ok ? r.json() : []);
+    document.getElementById("following-list").innerHTML = people.map(p => `
+        <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+            <a href="/user/${encodeURIComponent(p.username)}" class="me-auto">${esc(userLabel(p.username))}</a>
+            ${p.collection_public ? `<a href="/compare/${encodeURIComponent(p.username)}" class="btn btn-sm btn-secondary">${t("compare_collections")}</a>`
+                                  : `<span class="small text-body-secondary">${t("compare_private")}</span>`}
+        </div>`).join("");
+    document.getElementById("following-none").classList.toggle("d-none", people.length > 0);
+    document.getElementById("following").classList.remove("d-none");
 }
 
 // Long texts are cut here; the whole review is on the game's page
@@ -77,6 +111,11 @@ async function loadCollection() {
     const response = await fetch(`/api/users/${encodeURIComponent(USERNAME)}/collection`);
     if (currentUser && currentUser.id === USER_ID) loadShowcaseEditor(response.ok);
     if (!response.ok) return;
+    if (currentUser && currentUser.id !== USER_ID) {        // public: the visitor can compare theirs with it
+        const link = document.getElementById("compare-link");
+        link.href = `/compare/${encodeURIComponent(USERNAME)}`;
+        link.classList.remove("d-none");
+    }
     const { items, stats, showcase } = await response.json();
     showShowcase(showcase);
     document.getElementById("collection-summary").textContent =

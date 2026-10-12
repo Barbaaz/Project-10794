@@ -23,7 +23,7 @@ NOW = func.utcnow()      # the database's clock, in UTC (database/schema.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages", "message_photos",
                  "user_ratings", "reports", "moderation_log", "match_overrides",
                  "collection_items", "game_reviews", "duplicate_dismissals", "steam_skips",
-                 "psn_skips"}
+                 "psn_skips", "follows"}
 
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
 ROLES = ("user", "moderator", "admin")
@@ -376,6 +376,15 @@ class PsnSkip(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     psn_id: Mapped[str] = mapped_column(String(20), primary_key=True)
     edition_id: Mapped[int | None] = mapped_column(Integer)
+    created_at = created_at()
+
+
+class Follow(Base):
+    """A user following another, to compare collections (follow_service; user, 2026-10-12)."""
+    __tablename__ = "follows"
+    __table_args__ = (Index("ix_follows_followed", "followed_id"),)
+    follower_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    followed_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     created_at = created_at()
 
 

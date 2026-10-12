@@ -14,7 +14,9 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.config import BEHIND_PROXY, COOKIE_SECURE, SECRET_KEY
-from app.routes import auth, chat, collection, games, igdb_games, listings, moderation, prices, ratings, reviews, stores
+from app.routes import (
+    auth, chat, collection, follows, games, igdb_games, listings, moderation, prices, ratings, reviews, stores,
+)
 from app.services.game_service import game_exists, merged_into
 from app.services.photo_storage import MAX_UPLOAD_BYTES, storage
 
@@ -31,7 +33,7 @@ app.config.update(
 )
 if BEHIND_PROXY:
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
-for blueprint in (auth.bp, chat.bp, collection.bp, games.bp, igdb_games.bp, listings.bp, moderation.bp, prices.bp,
+for blueprint in (auth.bp, chat.bp, collection.bp, follows.bp, games.bp, igdb_games.bp, listings.bp, moderation.bp, prices.bp,
                   ratings.bp, reviews.bp, stores.bp):
     app.register_blueprint(blueprint)
 
@@ -130,6 +132,12 @@ def messages_page():
 def profile_page(username):
     """A user's public profile: rating, ratings received, listings."""
     return render_template("profile.html", username=username)
+
+
+@app.route("/compare/<username>")
+def compare_page(username):
+    """The user's collection beside another user's (follow_service.compare)."""
+    return render_template("compare.html", username=username)
 
 
 @app.route("/collection")

@@ -8,7 +8,7 @@ chat photos open for the two sides while logged in).
 from sqlalchemy import or_, select
 
 from app.models import (
-    CollectionItem, Conversation, GameReview, Listing, Message, ModerationLog, PsnSkip, Rating, Report, SteamSkip, User,
+    CollectionItem, Conversation, Follow, GameReview, Listing, Message, ModerationLog, PsnSkip, Rating, Report, SteamSkip, User,
     fields,
 )
 from app.services.chat_service import message_dicts
@@ -88,6 +88,8 @@ def export_user(user_id):
             "collection": collection,
             "steam_skipped_apps": [k.app_id for k in s.scalars(select(SteamSkip).where(SteamSkip.user_id == user_id)
                                                                .order_by(SteamSkip.app_id))],
+            "following": [_name(u) for u in s.scalars(select(User).join(Follow, Follow.followed_id == User.id)
+                                                      .where(Follow.follower_id == user_id).order_by(User.id))],
             "psn_skipped_lists": [k.psn_id for k in s.scalars(select(PsnSkip).where(PsnSkip.user_id == user_id)
                                                              .order_by(PsnSkip.psn_id))],
             "reports_made": reports,

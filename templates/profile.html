@@ -31,6 +31,12 @@
                 <h1 id="name" class="h3 mb-0"></h1>
                 <div id="since" class="text-body-secondary small"></div>
                 <div id="report-user"></div>
+                <!-- following (follow_service): counts, the button, and "compare" with a public collection -->
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                    <span id="follow-counts" class="small text-body-secondary"></span>
+                    <button type="button" id="follow-button" class="btn btn-sm btn-primary d-none"></button>
+                    <a id="compare-link" class="btn btn-sm btn-secondary d-none" data-i18n="compare_collections"></a>
+                </div>
             </div>
             <div class="ms-auto text-end">
                 <div id="average" class="fs-3 fw-bold"></div>
@@ -58,6 +64,13 @@
             </div>
         </details>
         <div id="showcase" class="mb-2"></div>
+
+        <!-- Their own profile only: who they follow (only they see it) -->
+        <section id="following" class="mb-4 d-none">
+            <h2 class="h5" data-i18n="following_title"></h2>
+            <div id="following-list" class="list-group"></div>
+            <p id="following-none" class="small text-body-secondary d-none" data-i18n="following_none"></p>
+        </section>
 
         <h2 class="h5" data-i18n="profile_ratings"></h2>
         <div id="ratings" class="list-group mb-4"></div>
