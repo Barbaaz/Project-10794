@@ -154,12 +154,29 @@ h4, h5, h6, .h4, .h5, .h6 { font-weight: 700; letter-spacing: -0.01em; }
                 gap: .25rem; pointer-events: none; }
 .cover-badges .badge { box-shadow: 0 1px 3px rgb(0 0 0 / .35); }
 .cover-platinum { background: linear-gradient(135deg, #e9eef5, #9fb3c8); color: #1d2a38; }
-/* the play statuses (collection_grid.js STATUS_LOOK): on the covers and in the edit window */
-.status-finished { background: #198754; color: #fff; }
-.status-playing { background: #0d6efd; color: #fff; }
-.status-backlog { background: #6c757d; color: #fff; }
-.status-paused { background: #ffc107; color: #212529; }
-.status-dropped { background: #dc3545; color: #fff; }
+/* the play statuses (collection_grid.js STATUS_LOOK) and the collection's platform bar: one set of colours
+   for the covers' badges, the edit window and the statistics (2026-10-12). Validated with the dataviz
+   skill's checker (validate_palette.js), as neighbours in the status bar's order (finished, playing,
+   paused, backlog, dropped) and the platform bar's, on the light (#fff) and dark (#1b1e27) pages;
+   aqua and yellow are under 3:1 on white, so the bars always carry a legend with the counts */
+:root {
+    --status-finished: #1baf7a; --status-playing: #2a78d6; --status-paused: #eda100; --status-backlog: #6250d6;
+    --status-dropped: #e34948; --status-none: #ced4da;
+    --status-finished-ink: #06281c; --status-paused-ink: #241800; --status-light-ink: #fff;
+    --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4;
+    --series-other: #b8bcc6;
+}
+[data-bs-theme="dark"] {
+    --status-finished: #199e70; --status-playing: #3987e5; --status-paused: #c98500; --status-backlog: #9085e9;
+    --status-dropped: #e66767; --status-none: #4a4f5c;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181;
+    --series-other: #4a4f5c;
+}
+.status-finished { background: var(--status-finished); color: var(--status-finished-ink); }
+.status-playing { background: var(--status-playing); color: var(--status-light-ink); }
+.status-backlog { background: var(--status-backlog); color: var(--status-light-ink); }
+.status-paused { background: var(--status-paused); color: var(--status-paused-ink); }
+.status-dropped { background: var(--status-dropped); color: var(--status-light-ink); }
 .status-owned { background: var(--bs-secondary-bg); color: var(--bs-body-color); }
 .item-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
               line-height: 1.3; min-height: 2.6em; }

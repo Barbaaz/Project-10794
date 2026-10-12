@@ -9,28 +9,74 @@ function showMessage(ok, text) {
     box.textContent = text;
 }
 
-function stat(label, value) {
-    return `<div class="card stat"><div class="card-body p-2">
-        <div class="small text-body-secondary">${esc(label)}</div><div class="fs-5 fw-semibold">${value}</div></div></div>`;
+// A figure: its label, the value, one line under it, and for a share a meter (the dataviz skill's stat tile)
+function stat(label, value, sub = "", share = null) {
+    return `<div class="stat-tile">
+        <div class="stat-label">${esc(label)}</div>
+        <div class="stat-value">${value}</div>
+        ${share === null ? "" : `<div class="stat-meter" role="img" aria-label="${Math.round(share)}%"><span style="width: ${Math.min(100, share)}%"></span></div>`}
+        ${sub ? `<div class="stat-sub">${sub}</div>` : ""}
+    </div>`;
 }
+
+// A part-to-whole bar and its legend (the counts always shown: some colours are pale on white). A legend
+// button filters the grid by that status / platform (the sidebar's box)
+function stackBar(title, parts, group) {
+    const total = parts.reduce((n, p) => n + p.n, 0);
+    if (!total) return "";
+    const share = n => `${fmtNumber(Math.round(1000 * n / total) / 10)}%`;
+    return `<div class="col-md-6">
+        <div class="stack-title">${esc(title)}</div>
+        <div class="stack-bar" role="img" aria-label="${esc(parts.map(p => `${p.label}: ${p.n}`).join(", "))}">
+            ${parts.map(p => `<span style="flex: ${p.n} 1 0; background: ${p.color};" title="${esc(`${p.label}: ${fmtNumber(p.n)} (${share(p.n)})`)}"></span>`).join("")}
+        </div>
+        <ul class="stack-legend">${parts.map(p => `<li>
+            ${p.value === null ? `<span class="d-inline-flex align-items-center gap-1 small px-1">` : `<button type="button" data-stat-filter="${group}" data-value="${esc(p.value)}"
+                aria-pressed="${!!chosen.owned[group]?.has(p.value) && chosen.owned[group].size === 1}">`}
+                <span class="swatch" style="background: ${p.color};"></span>${esc(p.label)} <span class="count">${fmtNumber(p.n)}</span>
+            ${p.value === null ? "</span>" : "</button>"}</li>`).join("")}</ul>
+    </div>`;
+}
+
+// The order of the status bar (blue and violet never side by side: checked), "Na coleção" last, in grey
+const STATUS_BAR = ["finished", "playing", "paused", "backlog", "dropped", "owned"];
+const MAX_PLATFORM_SLOTS = 5;
 
 // Only the figures there is something to show for (an empty collection shows the two counts)
 function renderStats() {
     const s = data.stats;
-    const statuses = STATUSES.filter(x => s.statuses[x]).map(x => `${t(`status_play_${x}`)}: ${s.statuses[x]}`).join(" · ");
-    const platforms = s.platforms.map(([p, n]) => `${p}: ${n}`).join(" · ");
-    document.getElementById("stats").innerHTML = [
-        stat(t("collection_owned_count"), fmtNumber(s.owned)),
-        stat(t("collection_wishlist_count"), fmtNumber(s.wishlist)),
-        s.owned && stat(t("collection_completed"), `${fmtNumber(s.completed)} <span class="small fw-normal">(${Math.round(100 * s.completed / s.owned)}%)</span>`),
-        s.hours && stat(t("collection_hours"), fmtNumber(Math.round(s.hours * 10) / 10)),
-        s.achievements_total && stat(t("collection_achievements"),
-            `${fmtNumber(s.achievements)} / ${fmtNumber(s.achievements_total)} <span class="small fw-normal">(${Math.round(100 * s.achievements / s.achievements_total)}%)</span>`),
-        s.priced_new && stat(t("collection_worth_new"), `${eur.format(s.worth_new)} <span class="small fw-normal text-body-secondary">(${s.priced_new})</span>`),
-        s.priced_used && stat(t("collection_worth_used"), `${eur.format(s.worth_used)} <span class="small fw-normal text-body-secondary">(${s.priced_used})</span>`),
-    ].filter(Boolean).join("")
-        + (platforms ? `<div class="w-100 small text-body-secondary">${esc(platforms)}</div>` : "")
-        + (statuses ? `<div class="w-100 small text-body-secondary mt-n2">${esc(statuses)}</div>` : "");
+    const owned = data.items.filter(i => i.kind === "owned");
+    const played = owned.filter(i => i.hours).length;
+    const pct = (n, of) => of ? Math.round(100 * n / of) : 0;
+    const tiles = [
+        stat(t("collection_owned_count"), fmtNumber(s.owned), esc(t("collection_stat_wishes", { n: fmtNumber(s.wishlist) }))),
+        s.owned && stat(t("collection_completed"), fmtNumber(s.completed),
+                        esc(t("collection_stat_of_collection", { pct: pct(s.completed, s.owned) })), pct(s.completed, s.owned)),
+        s.hours && stat(t("collection_hours"), `${fmtNumber(Math.round(s.hours))} h`,
+                        esc(t("collection_stat_hours_in", { n: fmtNumber(played) }))),
+        s.achievements_total && stat(t("collection_achievements"), fmtNumber(s.achievements),
+                        esc(t("collection_stat_of_total", { total: fmtNumber(s.achievements_total), pct: pct(s.achievements, s.achievements_total) })),
+                        100 * s.achievements / s.achievements_total),
+        s.priced_new && stat(t("collection_worth_new"), eur.format(s.worth_new), esc(t("collection_stat_priced", { n: fmtNumber(s.priced_new) }))),
+        s.priced_used && stat(t("collection_worth_used"), eur.format(s.worth_used), esc(t("collection_stat_priced_used", { n: fmtNumber(s.priced_used) }))),
+    ].filter(Boolean).join("");
+    const statuses = STATUS_BAR.filter(x => s.statuses[x]).map(x => ({
+        value: x, label: t(`status_play_${x}`), n: s.statuses[x], color: `var(--status-${x === "owned" ? "none" : x})` }));
+    const top = s.platforms.slice(0, MAX_PLATFORM_SLOTS), rest = s.platforms.slice(MAX_PLATFORM_SLOTS);
+    const platforms = top.map(([name, n], i) => ({ value: name, label: name, n, color: `var(--series-${i + 1})` }));
+    if (rest.length) platforms.push({ value: null, label: t("collection_stat_other_platforms", { n: rest.length }),
+                                      n: rest.reduce((sum, [, n]) => sum + n, 0), color: "var(--series-other)" });
+    const bars = stackBar(t("collection_stat_by_status"), statuses, "status") + stackBar(t("collection_stat_by_platform"), platforms, "platform");
+    const box = document.getElementById("stats");
+    box.innerHTML = `<div class="stat-row">${tiles}</div>${bars ? `<div class="row g-3 mt-1">${bars}</div>` : ""}`;
+    box.querySelectorAll("[data-stat-filter]").forEach(b => b.onclick = () => {
+        const group = b.dataset.statFilter, only = b.getAttribute("aria-pressed") !== "true";
+        chosen.owned[group] = new Set(only ? [b.dataset.value] : []);    // that one alone, or none again
+        if (kind !== "owned") document.querySelector('[data-kind="owned"]').click();
+        renderItems();
+        renderStats();
+        document.getElementById("items").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     document.querySelector('[data-kind="owned"]').textContent = `${t("collection_tab_owned")} (${s.owned})`;
     document.querySelector('[data-kind="wishlist"]').textContent = `${t("collection_tab_wishlist")} (${s.wishlist})`;
 }

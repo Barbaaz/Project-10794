@@ -24,7 +24,28 @@
         @media (max-width: 575.98px) {      /* a phone: the whole screen */
             .item-dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
         }
-        .stat { min-width: 7.5rem; flex: 1 1 7.5rem; max-width: 11rem; }
+        /* the statistics (collection.js renderStats; user, 2026-10-12: reworked): equal tiles, a value and
+           one line under it, a meter for a share; the statuses and platforms as part-to-whole bars */
+        .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .5rem; }
+        @media (max-width: 575.98px) {      /* two a row: a last one alone takes the row */
+            .stat-row > .stat-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+        }
+        .stat-tile { background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .75rem;
+                     padding: .75rem .9rem; display: flex; flex-direction: column; gap: .15rem; }
+        .stat-label { font-size: .8rem; color: var(--bs-secondary-color); }
+        .stat-value { font-size: 1.5rem; font-weight: 600; line-height: 1.2; color: var(--bs-emphasis-color); }
+        .stat-sub { font-size: .8rem; color: var(--bs-secondary-color); }
+        .stat-meter { height: .375rem; border-radius: 999px; background: var(--bs-secondary-bg); overflow: hidden; margin-top: .35rem; }
+        .stat-meter > span { display: block; height: 100%; border-radius: 999px; background: var(--brand-btn); }
+        .stack-title { font-size: .8rem; color: var(--bs-secondary-color); margin-bottom: .35rem; }
+        .stack-bar { display: flex; gap: 2px; height: .75rem; border-radius: 4px; overflow: hidden; background: var(--bs-body-bg); }
+        .stack-bar > span { min-width: 3px; }
+        .stack-legend { display: flex; flex-wrap: wrap; gap: .25rem .4rem; margin: .5rem 0 0; padding: 0; list-style: none; }
+        .stack-legend button { display: inline-flex; align-items: center; gap: .35rem; border: 0; background: none;
+                               padding: .1rem .35rem; border-radius: .4rem; font-size: .8rem; color: var(--bs-body-color); }
+        .stack-legend button:hover, .stack-legend button[aria-pressed="true"] { background: var(--bs-secondary-bg); }
+        .stack-legend .swatch { width: .65rem; height: .65rem; border-radius: 3px; flex-shrink: 0; }
+        .stack-legend .count { color: var(--bs-secondary-color); }
         /* the edit window (collection.js ownedControls): sections of buttons */
         .editor-section { margin-top: 1rem; }
         .editor-title { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
@@ -69,7 +90,7 @@
 
     <div id="content" class="d-none">
         <!-- Statistics -->
-        <div id="stats" class="d-flex flex-wrap gap-2 mb-4"></div>
+        <div id="stats" class="mb-4"></div>
 
         <!-- The tabs, and the buttons that open "add a game" and the Steam / PSN imports (user, 2026-10-11:
              buttons, not panels above the grid) -->
