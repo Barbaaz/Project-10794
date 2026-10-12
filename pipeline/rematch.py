@@ -165,11 +165,12 @@ def record_merges(s, moves):
             # what users point to moves to the one that replaced it: listings, collection items
             s.execute(update(Listing).where(getattr(Listing, column) == old).values({column: new}))
             if kind == "edition":
-                # collection items (one per user and kind: a copy they already have there wins),
+                # collection items (one per user, kind and format: a copy they already have there wins),
                 # with the game of the edition they now point to
                 mine = aliased(CollectionItem)
                 s.execute(delete(CollectionItem).where(CollectionItem.edition_id == old, exists().where(
-                    mine.user_id == CollectionItem.user_id, mine.kind == CollectionItem.kind, mine.edition_id == new)))
+                    mine.user_id == CollectionItem.user_id, mine.kind == CollectionItem.kind, mine.edition_id == new,
+                    mine.format.is_not_distinct_from(CollectionItem.format))))
                 s.execute(update(CollectionItem).where(CollectionItem.edition_id == old).values(
                     edition_id=new,
                     game_id=select(GameEdition.game_id).where(GameEdition.id == new).scalar_subquery()))

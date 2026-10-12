@@ -4,12 +4,15 @@ PSN's unofficial API, the one the PlayStation app uses: Sony offers no public on
 don't allow this, which the user accepted (the site's PSN account could be blocked). The site signs
 in with one PSN account's NPSSO token (PSN_NPSSO, never in the code; it lasts about two months, then
 the admin saves a new one). The user gives their PSN name; PSN returns their trophy lists when the
-profile shows trophies to anyone. Each list (one game, on one console or two: "PS3,PSVITA") is
-linked to our game of that name on that console, else to IGDB's game of that name (made for the
-collection only, as Steam's); those go in as owned with the trophies earned / in total, the
-platinum, and PS4 / PS5 play time when the player shares it. The format isn't known (a disc or a
-download): left empty. A trophy list the user took out of the collection is never imported again
-(PsnSkip): the lists also have games played on PS Plus, borrowed or rented.
+profile shows trophies to anyone, and the PS4 / PS5 games they played, with the time, when it
+shares those (user, 2026-10-12: "the games and the playtime" too). Each trophy list (one game, on
+one console or two: "PS3,PSVITA") or played game without one is linked to our game of that name on
+that console, else to IGDB's game of that name (made for the collection only, as Steam's); those
+go in as owned with the trophies earned / in total, the platinum and the hours. Games only ever
+played on PS Plus (PSN says so) stay out unless the user asks for them: they don't own them.
+Imported games are digital, as Steam's (user, 2026-10-12: PSN doesn't say; the user changes a disc's
+format, and games added by hand are physical). A game the user took out of the collection
+is never imported again (PsnSkip): borrowed, rented, or PS Plus games PSN didn't say were.
 """
 import logging
 import os
@@ -47,7 +50,8 @@ TROPHY_TITLES = "https://m.np.playstation.com/api/trophy/v1/users/{}/trophyTitle
 PLAYED = "https://m.np.playstation.com/api/gamelist/v2/users/{}/titles"
 
 PLATFORMS = {"PS5": "PS5", "PS4": "PS4", "PS3": "PS3", "PSVITA": "PSVita"}    # PSN's → ours (not PSPC)
-PLAYED_PLATFORMS = {"ps5_native_game": "PS5", "ps4_game": "PS4"}             # play time: PS4 / PS5 only
+PLAYED_PLATFORMS = {"ps5_native_game": "PS5", "ps4_game": "PS4"}             # played games: PS4 / PS5 only
+PLAYED_IDS = {"PPSA": "PS5", "CUSA": "PS4"}      # the console of a game PSN files as "unknown", by its title id
 WAIT_SECONDS = 10 * 60           # one import per user in this time
 MAX_GAMES = 5000
 PAGE = 800                       # trophy lists per PSN request
@@ -58,7 +62,8 @@ MAX_SEARCHES = 200               # IGDB searches for the names it doesn't have a
 ONLINE_ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,15}")
 # a trophy list's name has marks and words a game's name doesn't: "Uncharted™: Drake's Fortune Trophies",
 # "Gran Turismo® 7", "Crash Bandicoot (PS4)"
-NOISE = re.compile(r"[™®©]|\s+troph(?:y set|ies)\s*$|\s*[(\[]?\b(?:PS[345]|PS ?Vita)\b[)\]]?\s*$", re.IGNORECASE)
+NOISE = re.compile(r"[™®©]|\s+troph(?:y set|ies)\s*$"
+                   r"|\s*[(\[]?\b(?:PS4 & PS5|PS[345]|PS ?Vita|PlayStation ?[345])\b[)\]]?\s*$", re.IGNORECASE)
 
 QUOTES = str.maketrans("‘’“”", "''\"\"")
 # "Control Ultimate Edition", "God of War III Remastered", "Darksiders Warmastered Edition": IGDB's game is "Control"…
@@ -188,9 +193,10 @@ def trophy_lists(account_id):
     return lists[:MAX_GAMES]
 
 
-def play_minutes(account_id):
-    """{(our platform code, name key): minutes} of the PS4 / PS5 games the player shares; {} when they don't."""
-    minutes, offset = {}, 0
+def played_games(account_id):
+    """[{id (title id), name, platforms: [our code], minutes, plus}] of the PS4 / PS5 games the player
+    played; [] when they don't share them. plus: played on PS Plus (not bought)."""
+    games, offset = [], 0
     for _ in range(MAX_PLAYED_PAGES):
         try:
             status, data = _get(PLAYED.format(account_id), categories="ps4_game,ps5_native_game",
@@ -200,15 +206,37 @@ def play_minutes(account_id):
         if status != 200:
             break
         for g in data.get("titles") or []:
-            code = PLAYED_PLATFORMS.get(g.get("category"))
+            code = PLAYED_PLATFORMS.get(g.get("category")) or PLAYED_IDS.get((g.get("titleId") or "")[:4])
             found = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", g.get("playDuration") or "")
-            if code and found and g.get("name"):
-                key = (code, key_of(g["name"]))
-                minutes[key] = minutes.get(key, 0) + int(found[1] or 0) * 60 + int(found[2] or 0)
+            if code and g.get("name") and g.get("titleId"):
+                games.append({"id": g["titleId"][:20], "name": g["name"], "platforms": [code],
+                              "minutes": int(found[1] or 0) * 60 + int(found[2] or 0) if found else 0,
+                              "plus": g.get("service") == "ps_plus"})
         offset = data.get("nextOffset")
         if not offset:
             break
-    return minutes
+    return games
+
+
+def games_of(lists, played):
+    """
+    The trophy lists, each with the minutes and PS Plus marks of the played games of its name and
+    console, and the played games with no trophy list (one per name and console, their minutes
+    added: the same game from two regions, or bought after PS Plus). Each: {id, name, platforms,
+    earned, total, platinum (None: no trophy list), minutes, plus: [played on PS Plus?]}
+    """
+    games = [{**l, "minutes": 0, "plus": []} for l in lists]
+    by_key = {(code, key_of(g["name"])): g for g in games for code in g["platforms"]}
+    for p in played:
+        key = (p["platforms"][0], key_of(p["name"]))
+        game = by_key.get(key)
+        if game is None:
+            game = by_key[key] = {"id": p["id"], "name": p["name"], "platforms": p["platforms"],
+                                  "earned": None, "total": None, "platinum": None, "minutes": 0, "plus": []}
+            games.append(game)
+        game["minutes"] += p["minutes"]
+        game["plus"].append(p["plus"])
+    return games
 
 
 def clean(name):
@@ -298,11 +326,12 @@ def _editions(lists):
     return editions
 
 
-def import_games(user_id, name=None):
+def import_games(user_id, name=None, ps_plus=False):
     """
     The user's PlayStation games into their collection; without a name, the player imported last
-    (the refresh button). {added, updated, total, skipped, missing: [{name, platform}]}: added = new
-    owned items, updated = owned ones whose trophies or hours changed; missing = games neither we
+    (the refresh button). ps_plus: also the games only played on PS Plus. {added, updated, total,
+    skipped, ps_plus, missing: [{name, platform}]}: added = new owned items, updated = owned ones
+    whose trophies or hours changed; ps_plus = PS Plus games left out; missing = games neither we
     nor IGDB know. Trophies come from PSN as they are; hours only go up (the user may have more).
     """
     with _last_lock:
@@ -316,43 +345,53 @@ def import_games(user_id, name=None):
             account_id, shown = user.psn_account_id, user.psn_online_id
         if not account_id:
             raise PsnError("psn_profile_invalid")
-    lists = trophy_lists(account_id)
-    with session() as s:          # taken out of the collection before (played on PS Plus, or not wanted)
-        skipped = set(s.scalars(select(PsnSkip.psn_id).where(PsnSkip.user_id == user_id)))
-    lists = [l for l in lists if l["id"] not in skipped]
+    games = games_of(trophy_lists(account_id), played_games(account_id))
+    plus_only = [g for g in games if g["plus"] and all(g["plus"])]
+    if not ps_plus:
+        games = [g for g in games if g not in plus_only]
+    with session() as s:          # taken out of the collection before (borrowed, or not wanted)
+        skips = s.execute(select(PsnSkip.psn_id, PsnSkip.edition_id).where(PsnSkip.user_id == user_id)).all()
+    skipped = {psn_id for psn_id, _ in skips}
+    games = [g for g in games if g["id"] not in skipped]
     with _last_lock:               # only read trophies count: a private profile made public can try again at once
         _last[user_id] = time.monotonic()
-    editions = _editions(lists)
-    minutes = play_minutes(account_id) if editions else {}
+    editions = _editions(games)
+    # and its edition: a trophy list and a played game of another name (or region) can be the same game
+    skipped_editions = {edition_id for _, edition_id in skips if edition_id}
+    editions = {gid: e for gid, e in editions.items() if e not in skipped_editions}
 
-    targets = {}                   # edition id → its trophy list with the most earned (two lists on one game)
-    for l in lists:
-        edition_id = editions.get(l["id"])
-        if edition_id and l["earned"] >= targets.get(edition_id, {"earned": -1})["earned"]:
-            targets[edition_id] = l
+    targets, minutes = {}, {}      # edition id → its trophy list with the most earned (else a played game), minutes
+    rank = lambda g: (g["total"] is not None, g["earned"] or 0)
+    for g in games:
+        edition_id = editions.get(g["id"])
+        if edition_id:
+            minutes[edition_id] = minutes.get(edition_id, 0) + g["minutes"]
+            if edition_id not in targets or rank(g) > rank(targets[edition_id]):
+                targets[edition_id] = g
     with session() as s:
-        items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id,
-                                                       CollectionItem.kind == "owned")).all()
+        items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id, CollectionItem.kind == "owned")
+                          .order_by(CollectionItem.format == "digital", CollectionItem.id)).all()   # the download's last: it wins
         by_list = {i.psn_id: i.id for i in items if i.psn_id}          # also after the user changed its edition
         by_edition = {i.edition_id: i.id for i in items}
         had = {i.id: (i.hours, i.achievements, i.achievements_total, i.platinum, i.psn_id) for i in items}
 
     added = updated = 0
     for edition_id, l in targets.items():
-        played = sum(minutes.get((p, key_of(l["name"])), 0) for p in l["platforms"])
-        hours = min((Decimal(played) / 60).quantize(Decimal("0.1")), collection_service.MAX_HOURS) or None   # a few minutes: none
-        trophies = {"achievements": l["earned"], "achievements_total": l["total"] or None, "platinum": l["platinum"]}
+        hours = min((Decimal(minutes[edition_id]) / 60).quantize(Decimal("0.1")), collection_service.MAX_HOURS) \
+            or None                                       # a few minutes: none
+        trophies = {"achievements": l["earned"], "achievements_total": l["total"] or None, "platinum": l["platinum"]} \
+            if l["total"] is not None else {}             # a played game without a trophy list: none to say
         item_id = by_list.get(l["id"]) or by_edition.get(edition_id)
         if item_id is None:
             try:
-                item_id = collection_service.add(user_id, edition_id, "owned", format=None, **trophies,
+                item_id = collection_service.add(user_id, edition_id, "owned", format="digital", **trophies,
                                                  **({"hours": str(hours)} if hours else {}))
             except collection_service.CollectionError:      # the collection is full
                 break
             added += 1
         else:
             old_hours, *old_trophies, old_list = had[item_id]
-            change = dict(trophies) if old_trophies != list(trophies.values()) else {}
+            change = dict(trophies) if trophies and old_trophies != list(trophies.values()) else {}
             if hours and (old_hours is None or old_hours < hours):
                 change["hours"] = str(hours)
             if change:
@@ -367,7 +406,8 @@ def import_games(user_id, name=None):
         user.psn_account_id, user.psn_online_id = account_id, shown
         user.psn_imported_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    missing = [{"name": clean(l["name"]), "platform": "/".join(l["platforms"])}
-               for l in lists if l["id"] not in editions]
+    missing = [{"name": clean(g["name"]), "platform": "/".join(g["platforms"])}
+               for g in games if g["id"] not in editions]
     missing.sort(key=lambda m: m["name"].lower())
-    return {"added": added, "updated": updated, "total": len(lists), "skipped": len(skipped), "missing": missing}
+    return {"added": added, "updated": updated, "total": len(games), "skipped": len(skipped),
+            "ps_plus": 0 if ps_plus else len(plus_only), "missing": missing}

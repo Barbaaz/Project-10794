@@ -90,10 +90,12 @@ def psn_profile():
 @bp.post("/collection/psn")
 @login_required
 def import_from_psn():
-    """{name?}: the user's PlayStation games and trophies into the collection (no name: the last one again)
-    → {added, updated, total, skipped, missing} (psn_service)"""
+    """{name?, ps_plus?}: the user's PlayStation games and trophies into the collection (no name: the last
+    one again; ps_plus: also games only played on PS Plus) → {added, updated, total, skipped, ps_plus, missing}
+    (psn_service)"""
+    data = body()
     try:
-        return jsonify(psn_service.import_games(current_user()["id"], body().get("name")))
+        return jsonify(psn_service.import_games(current_user()["id"], data.get("name"), data.get("ps_plus") is True))
     except PsnError as e:
         return jsonify(error=e.code), e.status
 

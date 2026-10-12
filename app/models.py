@@ -389,7 +389,10 @@ class CollectionItem(Base):
     """A game edition a user owns or wants (app/services/collection_service.py)."""
     __tablename__ = "collection_items"
     __table_args__ = (
-        Index("ux_collection_items", "user_id", "edition_id", "kind", unique=True),
+        # one item per edition, kind and format: a game on a disc and as a download too (user, 2026-10-12);
+        # a wish has no format, and one wish per edition
+        Index("ux_collection_items", "user_id", "edition_id", "kind", "format", unique=True,
+              postgresql_nulls_not_distinct=True),
         Index("ix_collection_items_edition", "edition_id"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)

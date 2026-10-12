@@ -220,3 +220,21 @@ def test_changing_an_items_edition(market):
     assert patch({"edition_id": market["other_edition"]}).get_json()["error"] == "edition_invalid"   # another game's
     add(client, market["edition"])                                                                 # Standard again...
     assert patch({"edition_id": market["edition"]}).get_json()["error"] == "already_in_collection"  # ...so not twice
+
+
+def test_a_game_on_a_disc_and_as_a_download(market):
+    """User, 2026-10-12: the same edition owned physically and digitally is two items; a wish stays one."""
+    client = market["client"]
+    sign_up(client, "two_copies")
+    disc = add(client, market["edition"]).get_json()["id"]                       # by hand: a disc
+    download = add(client, market["edition"], format="digital").get_json()["id"]
+    assert disc != download
+    assert add(client, market["edition"], format="digital").get_json()["id"] == download    # not three
+    assert sorted(i["format"] for i in mine(client)["items"]) == ["digital", "physical"]
+    # one can't become the other: that copy is there already
+    answer = client.patch(f"/api/collection/{download}", json={"format": "physical"}, headers=HEADERS)
+    assert (answer.status_code, answer.get_json()["error"]) == (409, "already_in_collection")
+    assert add(client, market["edition"], format="cartridge").status_code == 400
+
+    wish = add(client, market["other_edition"], "wishlist").get_json()["id"]
+    assert add(client, market["other_edition"], "wishlist").get_json()["id"] == wish

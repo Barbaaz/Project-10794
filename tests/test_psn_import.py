@@ -13,12 +13,13 @@ def trophies(bronze, silver, gold, platinum):
 
 @pytest.fixture
 def psn(market, monkeypatch):
-    """Two games of ours (PS4, PS5), and a fake PSN player with five trophy lists."""
+    """Four games of ours (PS4, PS5), and a fake PSN player with five trophy lists and three played games."""
     c = market["db"]
     platform = lambda code: c.execute("SELECT id FROM platforms WHERE code = ?", code).fetchone()[0]
     games = [c.execute("INSERT INTO games (platform_id, title, normalized_title) VALUES (?, ?, ?) RETURNING id",
                        platform(code), title, key).fetchone()[0]
-             for code, title, key in (("PS4", "Bloodborne", "bloodborne"), ("PS5", "Astro Bot", "astro bot"))]
+             for code, title, key in (("PS4", "Bloodborne", "bloodborne"), ("PS5", "Astro Bot", "astro bot"),
+                                      ("PS5", "Fortnite", "fortnite"), ("PS5", "Returnal", "returnal"))]
     psn_service._last.clear()
     player = {"lists": [
         {"npCommunicationId": "NPWR00001_00", "trophyTitleName": "Bloodborne™ Trophies", "trophyTitlePlatform": "PS4",
@@ -31,7 +32,14 @@ def psn(market, monkeypatch):
          "definedTrophies": trophies(3, 0, 0, 0), "earnedTrophies": trophies(1, 0, 0, 0)},      # nobody knows it
         {"npCommunicationId": "NPWR00005_00", "trophyTitleName": "A PC Game", "trophyTitlePlatform": "PSPC",
          "definedTrophies": trophies(3, 0, 0, 0), "earnedTrophies": trophies(1, 0, 0, 0)},      # not a console
-    ], "played": [{"name": "Bloodborne", "category": "ps4_game", "playDuration": "PT50H30M12S"}], "private": False}
+    ], "played": [
+        {"name": "Bloodborne", "category": "ps4_game", "titleId": "CUSA00207_00", "playDuration": "PT50H30M12S",
+         "service": "none_purchased"},
+        {"name": "Fortnite", "category": "unknown", "titleId": "PPSA01923_00", "playDuration": "PT4H1M",      # no trophy
+         "service": "none(purchased)"},                                                                       # list
+        {"name": "Returnal", "category": "ps5_native_game", "titleId": "PPSA01284_00", "playDuration": "PT3H",
+         "service": "ps_plus"},                                                                               # not theirs
+    ], "private": False}
     asked = []
 
     def fake_get(url, **params):
@@ -72,15 +80,18 @@ def test_every_game_goes_in_with_trophies_platinum_and_hours(psn):
     client = psn["client"]
     sign_up(client, "ana_psn")
     answer = psn_import(client, "https://profile.playstation.com/Ana_PS").get_json()
-    assert (answer["total"], answer["added"], answer["updated"]) == (4, 3, 0)      # not the PC one
+    assert (answer["total"], answer["added"], answer["updated"], answer["ps_plus"]) == (5, 4, 0, 1)   # no PC, no PS Plus
     assert answer["missing"] == [{"name": "Some Demo", "platform": "PS4"}]
 
     items = items_of(client)
     bloodborne, astro, gravity = items["Bloodborne"], items["Astro Bot"], items["Gravity Rush"]
-    assert (bloodborne["kind"], bloodborne["format"], bloodborne["hours"]) == ("owned", None, 50.5)
+    assert (bloodborne["kind"], bloodborne["format"], bloodborne["hours"]) == ("owned", "digital", 50.5)
     assert (bloodborne["achievements"], bloodborne["achievements_total"], bloodborne["platinum"]) == (13, 46, False)
     assert (astro["achievements"], astro["achievements_total"], astro["platinum"], astro["hours"]) == (48, 48, True, None)
     assert (gravity["platform_name"], gravity["achievements"]) == ("PlayStation Vita", 5)
+    fortnite = items["Fortnite"]                               # played, filed as "unknown": a PS5 game by its id
+    assert (fortnite["hours"], fortnite["achievements_total"], fortnite["format"]) == (4.0, None, "digital")
+    assert "Returnal" not in items
     made = psn["db"].execute("SELECT summary, created_by FROM games WHERE igdb_id = 11701").fetchone()
     assert tuple(made) == ("Falling with style", None)          # only in the collection, as Steam's
     assert client.get("/api/collection/psn").get_json()["profile"]["online_id"] == "Ana_PS"
@@ -124,7 +135,7 @@ def test_private_unknown_and_invalid_players(psn):
     psn["player"]["private"] = True
     assert psn_import(client, "Ana_PS").get_json()["error"] == "psn_private"
     psn["player"]["private"] = False                       # made public: no wait for a failed try
-    assert psn_import(client, "Ana_PS").get_json()["added"] == 3
+    assert psn_import(client, "Ana_PS").get_json()["added"] == 4
 
 
 def test_without_a_token_psn_is_unavailable(psn, monkeypatch):
@@ -197,3 +208,33 @@ def test_igdb_search_takes_only_the_same_words(monkeypatch):
              {"id": "B", "name": "Overcooked", "platforms": ["PS4"]},
              {"id": "C", "name": "Control Ultimate Edition", "platforms": ["PS5"]}]
     assert psn_service.igdb_games(lists) == {"A": (1, "PS4"), "C": (3, "PS5")}
+
+
+def test_ps_plus_games_only_when_asked(psn):
+    """Games only played on PS Plus aren't the player's: out unless they ask; bought after PS Plus: theirs."""
+    client = psn["client"]
+    sign_up(client, "plus_psn")
+    answer = client.post("/api/collection/psn", json={"name": "Ana_PS", "ps_plus": True}, headers=HEADERS).get_json()
+    assert (answer["added"], answer["ps_plus"]) == (5, 0)
+    assert items_of(client)["Returnal"]["hours"] == 3.0
+
+    psn_service._last.clear()
+    client.delete(f"/api/collection/{items_of(client)['Returnal']['id']}", headers=HEADERS)
+    psn["player"]["played"].append({"name": "Returnal", "category": "ps5_native_game", "titleId": "PPSA01285_00",
+                                    "playDuration": "PT1H", "service": "none_purchased"})      # bought, another region
+    client.post("/api/collection/psn", json={}, headers=HEADERS)
+    assert "Returnal" not in items_of(client)                  # taken out: not again, however it was played
+
+
+def test_a_game_taken_out_stays_out_whatever_brings_it(psn):
+    """A trophy list and a played game of another name, both the same game: taking it out skips both."""
+    client = psn["client"]
+    sign_up(client, "two_names")
+    psn["player"]["played"].append({"name": "Bloodborne (PS4)", "category": "ps4_game", "titleId": "CUSA00900_00",
+                                    "playDuration": "PT2H", "service": "none_purchased"})
+    psn["player"]["played"][0]["name"] = "Bloodborne Game of the Year"      # matched to the list by edition only
+    psn_import(client, "Ana_PS")
+    client.delete(f"/api/collection/{items_of(client)['Bloodborne']['id']}", headers=HEADERS)
+    psn_service._last.clear()
+    psn_import(client, "")
+    assert "Bloodborne" not in items_of(client)

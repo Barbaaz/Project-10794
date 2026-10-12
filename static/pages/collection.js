@@ -62,7 +62,7 @@ function priceLine(item) {
 function ownedFacts(item) {
     const facts = [
         item.status && item.status !== "owned" ? `<span class="badge text-bg-secondary">${esc(t(`status_play_${item.status}`))}</span>` : "",
-        item.format ? esc(t(`format_${item.format}`)) : "",          // a PSN import doesn't know it
+        esc(t(`format_${item.format || "physical"}`)),
         item.score ? `★ ${item.score}/10` : "",
         item.hours ? `${fmtNumber(item.hours)} h` : "",
         item.achievements_total ? `🏆 ${item.achievements ?? 0}/${item.achievements_total}` : (item.achievements ? `🏆 ${item.achievements}` : ""),
@@ -85,7 +85,6 @@ function ownedControls(item) {
                 </select>`)}
             ${field(t("collection_format"), `
                 <select class="form-select form-select-sm" data-field="format">
-                    ${item.format ? "" : `<option value="" selected>—</option>`}
                     ${["physical", "digital"].map(x => `<option value="${x}" ${item.format === x ? "selected" : ""}>${t(`format_${x}`)}</option>`).join("")}
                 </select>`)}
             ${field(t("collection_score"), `
@@ -215,7 +214,7 @@ function renderItems() {
         if (editButton) editButton.onclick = () => openEditor(id);
         row.querySelector("[data-action=remove]").onclick = async () => {
             const item = data.items.find(i => String(i.id) === id);
-            const fromSteam = item.kind === "owned" && item.format === "digital" && item.steam_app_id;   // not imported again
+            const fromSteam = item.kind === "owned" && item.steam_app_id;          // not imported again
             const fromPsn = item.kind === "owned" && item.psn_id;
             if (!confirm(t(fromPsn ? "collection_remove_confirm_psn" : fromSteam ? "collection_remove_confirm_steam" : "collection_remove_confirm"))) return;
             const { ok } = await api(`/api/collection/${id}`, { method: "DELETE" });
@@ -395,6 +394,15 @@ async function addGame(gameId, editionId) {
             <input name="typed" class="form-control form-control-sm mt-1" maxlength="100" ${chosen === "other" ? "" : "disabled"}
                    placeholder="${esc(t("collection_other_edition_placeholder"))}" aria-label="${esc(t("collection_other_edition"))}">
         </fieldset>
+        ${kind === "owned" ? `
+        <fieldset class="mt-3">
+            <legend class="h6">${t("collection_format")}</legend>
+            ${["physical", "digital"].map(x => `
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="format" id="format-${x}" value="${x}" ${x === "physical" ? "checked" : ""}>
+                    <label class="form-check-label" for="format-${x}">${t(`format_${x}`)}</label>
+                </div>`).join("")}
+        </fieldset>` : ""}
         <div class="d-flex gap-2 justify-content-end mt-3">
             <button type="button" class="btn btn-sm btn-secondary" data-back>${t("collection_back")}</button>
             <button type="submit" class="btn btn-sm btn-primary">${t("collection_add_this")}</button>
@@ -406,7 +414,8 @@ async function addGame(gameId, editionId) {
     form.querySelector("[data-back]").onclick = () => showAddStep("game");
     form.onsubmit = async event => {
         event.preventDefault();
-        const { ok, data: answer } = await api("/api/collection", { body: { kind, game_id: gameId, ...editionBody(form.edition.value, form.typed.value) } });
+        const { ok, data: answer } = await api("/api/collection", { body: { kind, game_id: gameId, ...editionBody(form.edition.value, form.typed.value),
+                                                                    ...(kind === "owned" ? { format: form.format.value } : {}) } });
         if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
         document.getElementById("add-dialog").close();
         await load();
@@ -432,8 +441,8 @@ const clearAddSearch = gamePicker({
 // The user's Steam games (steam_service) or PlayStation games (psn_service): all go in at once, with
 // hours and achievements / trophies (the ones no store sells only in the collection); those IGDB doesn't
 // know are listed. No profile: the last one again. key: steam | psn, the elements' and texts' prefix;
-// field: what the API calls the profile
-function importer(key, field) {
+// field: what the API calls the profile; options: more of the request's body (PSN: the PS Plus games too?)
+function importer(key, field, options = () => ({})) {
     const element = id => document.getElementById(`${key}-${id}`);
     async function run(profile) {
         const result = element("result"), list = element("missing");
@@ -441,11 +450,12 @@ function importer(key, field) {
         buttons.forEach(b => b.disabled = true);
         result.textContent = t("steam_importing");
         list.innerHTML = "";
-        const { ok, data: answer } = await api(`/api/collection/${key}`, { body: profile ? { [field]: profile } : {} });
+        const { ok, data: answer } = await api(`/api/collection/${key}`, { body: { ...options(), ...(profile ? { [field]: profile } : {}) } });
         buttons.forEach(b => b.disabled = false);
         if (!ok) return result.textContent = t(`error_${answer?.error || "unknown"}`);
         result.textContent = t(`${key}_imported`, { total: answer.total, added: answer.added, updated: answer.updated })
             + (answer.skipped ? " " + t("steam_skipped", { n: answer.skipped }) : "")
+            + (answer.ps_plus ? " " + t("psn_plus_left_out", { n: answer.ps_plus }) : "")
             + (answer.missing.length ? " " + t("steam_missing", { missing: answer.missing.length }) : "");
         const detail = m => m.hours ? ` · ${fmtNumber(m.hours)} h` : m.platform ? ` · ${esc(m.platform)}` : "";
         list.innerHTML = answer.missing.map(m => `
@@ -471,7 +481,7 @@ function importer(key, field) {
     loadProfile();
 }
 importer("steam", "profile");
-importer("psn", "name");
+importer("psn", "name", () => ({ ps_plus: document.getElementById("psn-plus").checked }));
 
 // The link in a wishlist alert e-mail (?alerts_off=…) works without logging in
 async function alertsOffFromLink() {

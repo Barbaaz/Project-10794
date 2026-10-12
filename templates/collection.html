@@ -141,6 +141,11 @@
                    data-i18n-placeholder="psn_profile_placeholder" data-i18n-aria-label="psn_profile">
             <button type="submit" class="btn btn-primary" data-i18n="steam_import_button"></button>
         </div>
+        <!-- games only ever played on PS Plus aren't the user's: out unless asked for -->
+        <div class="form-check small mt-2">
+            <input type="checkbox" class="form-check-input" id="psn-plus">
+            <label class="form-check-label" for="psn-plus" data-i18n="psn_plus_include"></label>
+        </div>
     </form>
     <!-- After a first import: the same player again with one button -->
     <div id="psn-saved" class="d-flex flex-wrap align-items-center gap-2 mt-2 d-none">

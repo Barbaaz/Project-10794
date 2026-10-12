@@ -37,6 +37,7 @@ def steam(market, monkeypatch):
     monkeypatch.setattr(steam_service, "achievements", lambda steamid, appid: achievements.get(appid))
     yield {**market, "games": games, "asked": asked, "achievements": achievements}
     c.execute("DELETE FROM collection_items")
+    c.execute("DELETE FROM steam_skips")
     c.execute("UPDATE users SET steam_id = NULL")
     made = [r[0] for r in c.execute("SELECT id FROM games WHERE igdb_id = 71").fetchall()]
     for game_id in [*games, *made]:
@@ -124,3 +125,15 @@ def test_a_game_taken_out_is_not_imported_again(steam):
     client.post("/api/collection", json={"edition_id": elden["edition_id"], "kind": "owned"}, headers=HEADERS)
     steam_service._last.clear()
     assert steam_import(client, "").get_json()["skipped"] == 0         # wanted again
+
+
+def test_a_game_taken_out_after_changing_its_format_is_not_imported_again(steam):
+    """User, 2026-10-12: imported games taken out never come back, also when made physical first."""
+    client = steam["client"]
+    sign_up(client, "made_physical")
+    steam_import(client, "ana")
+    elden = next(i for i in client.get("/api/collection").get_json()["items"] if i["name"] == "Elden Ring")
+    client.patch(f"/api/collection/{elden['id']}", json={"format": "physical"}, headers=HEADERS)
+    assert client.delete(f"/api/collection/{elden['id']}", headers=HEADERS).get_json()["steam_skipped"] is True
+    steam_service._last.clear()
+    assert steam_import(client, "").get_json()["skipped"] == 1

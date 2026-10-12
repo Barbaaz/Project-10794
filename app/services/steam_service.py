@@ -191,8 +191,10 @@ def import_games(user_id, profile=None):
         if edition_id and g["minutes"] >= targets.get(edition_id, {"minutes": -1})["minutes"]:
             targets[edition_id] = g
     with session() as s:
+        # a disc and a download of one edition: the download's (the order puts it last)
         owned = {i.edition_id: (i.id, i.hours, i.achievements_total) for i in s.scalars(select(CollectionItem).where(
-            CollectionItem.user_id == user_id, CollectionItem.kind == "owned"))}
+            CollectionItem.user_id == user_id, CollectionItem.kind == "owned").order_by(
+            CollectionItem.format == "digital", CollectionItem.id))}
 
     changes = {}                       # edition id → what to set (new items: maybe nothing)
     for edition_id, g in targets.items():
