@@ -60,7 +60,7 @@
         <!-- Statistics -->
         <div id="stats" class="d-flex flex-wrap gap-2 mb-4"></div>
 
-        <!-- The tabs, and the two buttons that open "add a game" and "import from Steam" (user, 2026-10-11:
+        <!-- The tabs, and the buttons that open "add a game" and the Steam / PSN imports (user, 2026-10-11:
              buttons, not panels above the grid) -->
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
             <ul class="nav nav-pills" role="tablist">
@@ -69,6 +69,7 @@
             </ul>
             <div class="d-flex flex-wrap gap-2 ms-auto">
                 <button type="button" id="open-steam" class="btn btn-sm btn-secondary" aria-haspopup="dialog" data-i18n="steam_import"></button>
+                <button type="button" id="open-psn" class="btn btn-sm btn-secondary" aria-haspopup="dialog" data-i18n="psn_import"></button>
                 <button type="button" id="open-add" class="btn btn-sm btn-primary" aria-haspopup="dialog"></button>
             </div>
         </div>
@@ -125,6 +126,29 @@
     </div>
     <div id="steam-result" class="small mt-2"></div>
     <div id="steam-missing" class="list-group mt-1" style="max-height: 320px; overflow-y: auto;"></div>
+</dialog>
+
+<!-- The user's PlayStation games and trophies (psn_service): only on the owned tab -->
+<dialog id="psn-dialog" class="item-dialog" aria-labelledby="psn-dialog-title">
+    <div class="d-flex align-items-start gap-2 mb-2">
+        <h2 id="psn-dialog-title" class="h5 mb-0 flex-grow-1" data-i18n="psn_import"></h2>
+        <button type="button" class="btn-close" data-close data-i18n-aria-label="collection_edit_done"></button>
+    </div>
+    <form id="psn-form" novalidate>
+        <p class="small mb-2" data-i18n="psn_import_help"></p>
+        <div class="input-group input-group-sm">
+            <input id="psn-profile" class="form-control" autocomplete="off" required maxlength="100"
+                   data-i18n-placeholder="psn_profile_placeholder" data-i18n-aria-label="psn_profile">
+            <button type="submit" class="btn btn-primary" data-i18n="steam_import_button"></button>
+        </div>
+    </form>
+    <!-- After a first import: the same player again with one button -->
+    <div id="psn-saved" class="d-flex flex-wrap align-items-center gap-2 mt-2 d-none">
+        <button type="button" id="psn-refresh" class="btn btn-sm btn-secondary" data-i18n="psn_refresh"></button>
+        <span id="psn-last" class="small text-body-secondary"></span>
+    </div>
+    <div id="psn-result" class="small mt-2"></div>
+    <div id="psn-missing" class="list-group mt-1" style="max-height: 320px; overflow-y: auto;"></div>
 </dialog>
 
 <!-- An owned game's details, edited over the grid (collection.js openEditor) -->

@@ -62,10 +62,11 @@ function priceLine(item) {
 function ownedFacts(item) {
     const facts = [
         item.status && item.status !== "owned" ? `<span class="badge text-bg-secondary">${esc(t(`status_play_${item.status}`))}</span>` : "",
-        esc(t(`format_${item.format || "physical"}`)),
+        item.format ? esc(t(`format_${item.format}`)) : "",          // a PSN import doesn't know it
         item.score ? `★ ${item.score}/10` : "",
         item.hours ? `${fmtNumber(item.hours)} h` : "",
         item.achievements_total ? `🏆 ${item.achievements ?? 0}/${item.achievements_total}` : (item.achievements ? `🏆 ${item.achievements}` : ""),
+        item.platinum ? `<span class="badge text-bg-info">${esc(t("collection_platinum"))}</span>` : "",
         item.notes ? `<span class="fst-italic text-truncate" style="max-width: 16rem;">“${esc(item.notes)}”</span>` : "",
     ];
     return facts.filter(Boolean).map(f => f.startsWith("<") ? f : `<span>${f}</span>`).join("");
@@ -84,6 +85,7 @@ function ownedControls(item) {
                 </select>`)}
             ${field(t("collection_format"), `
                 <select class="form-select form-select-sm" data-field="format">
+                    ${item.format ? "" : `<option value="" selected>—</option>`}
                     ${["physical", "digital"].map(x => `<option value="${x}" ${item.format === x ? "selected" : ""}>${t(`format_${x}`)}</option>`).join("")}
                 </select>`)}
             ${field(t("collection_score"), `
@@ -98,6 +100,9 @@ function ownedControls(item) {
                 <input type="number" min="0" class="form-control form-control-sm" data-field="achievements" value="${item.achievements ?? ""}" placeholder="0">`)}
             ${field(t("collection_achievements_total"), `
                 <input type="number" min="0" class="form-control form-control-sm" data-field="achievements_total" value="${item.achievements_total ?? ""}" placeholder="—">`)}
+            ${(item.platform_name || "").startsWith("PlayStation") ? `<div class="col-6 col-md-4 d-flex align-items-end"><div class="form-check">
+                <label class="form-check-label small"><input type="checkbox" class="form-check-input" data-field="platinum" ${item.platinum ? "checked" : ""}>
+                ${esc(t("collection_platinum"))}</label></div></div>` : ""}
             ${field(t("collection_notes"), `
                 <input type="text" maxlength="1000" class="form-control form-control-sm" data-field="notes" value="${esc(item.notes || "")}">`, "col-12")}
         </div>`;
@@ -184,6 +189,7 @@ function renderItems() {
     document.getElementById("add-game-title").textContent = addTitle;
     document.getElementById("open-add").textContent = addTitle;
     document.getElementById("open-steam").classList.toggle("d-none", kind !== "owned");
+    document.getElementById("open-psn").classList.toggle("d-none", kind !== "owned");
     const status = document.getElementById("filter-status");
     status.classList.toggle("d-none", kind !== "owned");
     const wish = document.getElementById("filter-wish");
@@ -210,7 +216,8 @@ function renderItems() {
         row.querySelector("[data-action=remove]").onclick = async () => {
             const item = data.items.find(i => String(i.id) === id);
             const fromSteam = item.kind === "owned" && item.format === "digital" && item.steam_app_id;   // not imported again
-            if (!confirm(t(fromSteam ? "collection_remove_confirm_steam" : "collection_remove_confirm"))) return;
+            const fromPsn = item.kind === "owned" && item.psn_id;
+            if (!confirm(t(fromPsn ? "collection_remove_confirm_psn" : fromSteam ? "collection_remove_confirm_steam" : "collection_remove_confirm"))) return;
             const { ok } = await api(`/api/collection/${id}`, { method: "DELETE" });
             if (ok) load();
         };
@@ -257,10 +264,12 @@ function openEditor(id) {
         </div>`;
     body.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
     body.querySelectorAll("[data-field]").forEach(input => input.onchange = async () => {
-        const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { [input.dataset.field]: input.value } });
+        const value = input.type === "checkbox" ? input.checked : input.value;
+        const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { [input.dataset.field]: value } });
         if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
         const numeric = ["hours", "achievements", "achievements_total"].includes(input.dataset.field);
-        item[input.dataset.field] = numeric ? (input.value ? Number(input.value.replace(",", ".")) : null) : input.value || null;
+        item[input.dataset.field] = input.type === "checkbox" ? value
+            : numeric ? (value ? Number(value.replace(",", ".")) : null) : value || null;
         data.stats = recount();
         renderStats();
     });
@@ -303,8 +312,8 @@ async function loadEditionChange(item) {
 }
 dialog.onclick = event => { if (event.target === dialog) dialog.close(); };      // a click outside the window
 
-// "Adicionar um jogo" and "Importar da Steam" open their windows; ✕ or a click outside closes them
-for (const [button, box] of [["open-add", "add-dialog"], ["open-steam", "steam-dialog"]]) {
+// "Adicionar um jogo" and the imports open their windows; ✕ or a click outside closes them
+for (const [button, box] of [["open-add", "add-dialog"], ["open-steam", "steam-dialog"], ["open-psn", "psn-dialog"]]) {
     const window_ = document.getElementById(box);
     document.getElementById(button).onclick = () => window_.showModal();
     window_.onclick = event => { if (event.target === window_) window_.close(); };
@@ -420,43 +429,49 @@ const clearAddSearch = gamePicker({
     igdbResults: document.getElementById("add-igdb-results"),
 }, addGame, code => showMessage(false, t(`error_${code}`)));
 
-// The user's Steam games (steam_service): all go in at once, with hours and achievements (the ones no
-// store sells only in the collection); those IGDB doesn't know are listed. No profile: the last one again
-async function importSteam(profile) {
-    const result = document.getElementById("steam-result"), list = document.getElementById("steam-missing");
-    const buttons = document.querySelectorAll("#steam-form button, #steam-refresh");
-    buttons.forEach(b => b.disabled = true);
-    result.textContent = t("steam_importing");
-    list.innerHTML = "";
-    const { ok, data: answer } = await api("/api/collection/steam", { body: profile ? { profile } : {} });
-    buttons.forEach(b => b.disabled = false);
-    if (!ok) return result.textContent = t(`error_${answer?.error || "unknown"}`);
-    result.textContent = t("steam_imported", { total: answer.total, added: answer.added, updated: answer.updated })
-        + (answer.skipped ? " " + t("steam_skipped", { n: answer.skipped }) : "")
-        + (answer.missing.length ? " " + t("steam_missing", { missing: answer.missing.length }) : "");
-    const hours = h => h ? ` · ${fmtNumber(h)} h` : "";
-    list.innerHTML = answer.missing.map(m => `
-        <div class="list-group-item py-1 small">${esc(m.name)}<span class="text-body-secondary">${hours(m.hours)}</span></div>`).join("");
-    if (answer.added || answer.updated) load();
-    loadSteamProfile();
+// The user's Steam games (steam_service) or PlayStation games (psn_service): all go in at once, with
+// hours and achievements / trophies (the ones no store sells only in the collection); those IGDB doesn't
+// know are listed. No profile: the last one again. key: steam | psn, the elements' and texts' prefix;
+// field: what the API calls the profile
+function importer(key, field) {
+    const element = id => document.getElementById(`${key}-${id}`);
+    async function run(profile) {
+        const result = element("result"), list = element("missing");
+        const buttons = document.querySelectorAll(`#${key}-form button, #${key}-refresh`);
+        buttons.forEach(b => b.disabled = true);
+        result.textContent = t("steam_importing");
+        list.innerHTML = "";
+        const { ok, data: answer } = await api(`/api/collection/${key}`, { body: profile ? { [field]: profile } : {} });
+        buttons.forEach(b => b.disabled = false);
+        if (!ok) return result.textContent = t(`error_${answer?.error || "unknown"}`);
+        result.textContent = t(`${key}_imported`, { total: answer.total, added: answer.added, updated: answer.updated })
+            + (answer.skipped ? " " + t("steam_skipped", { n: answer.skipped }) : "")
+            + (answer.missing.length ? " " + t("steam_missing", { missing: answer.missing.length }) : "");
+        const detail = m => m.hours ? ` · ${fmtNumber(m.hours)} h` : m.platform ? ` · ${esc(m.platform)}` : "";
+        list.innerHTML = answer.missing.map(m => `
+            <div class="list-group-item py-1 small">${esc(m.name)}<span class="text-body-secondary">${detail(m)}</span></div>`).join("");
+        if (answer.added || answer.updated) load();
+        loadProfile();
+    }
+    async function loadProfile() {
+        const response = await fetch(`/api/collection/${key}`);
+        const data = response.ok ? await response.json() : null;
+        const saved = data?.profile;
+        element("saved").classList.toggle("d-none", !saved);
+        if (!saved) return;
+        element("last").textContent = (saved.online_id ? saved.online_id + " · " : "") + (saved.imported_at
+            ? t("steam_last_import", { date: new Date(saved.imported_at).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) })
+            : "");
+    }
+    element("form").onsubmit = event => {
+        event.preventDefault();
+        run(element("profile").value);
+    };
+    element("refresh").onclick = () => run(null);
+    loadProfile();
 }
-
-async function loadSteamProfile() {
-    const response = await fetch("/api/collection/steam");
-    const data = response.ok ? await response.json() : null;
-    const saved = data?.profile;
-    document.getElementById("steam-saved").classList.toggle("d-none", !saved);
-    if (!saved) return;
-    document.getElementById("steam-last").textContent = data.profile.imported_at
-        ? t("steam_last_import", { date: new Date(data.profile.imported_at).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) })
-        : "";
-}
-document.getElementById("steam-form").onsubmit = event => {
-    event.preventDefault();
-    importSteam(document.getElementById("steam-profile").value);
-};
-document.getElementById("steam-refresh").onclick = () => importSteam(null);
-loadSteamProfile();
+importer("steam", "profile");
+importer("psn", "name");
 
 // The link in a wishlist alert e-mail (?alerts_off=…) works without logging in
 async function alertsOffFromLink() {

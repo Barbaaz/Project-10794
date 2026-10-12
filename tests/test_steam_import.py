@@ -113,7 +113,8 @@ def test_a_game_taken_out_is_not_imported_again(steam):
     sign_up(client, "private_games")
     steam_import(client, "ana")
     elden = next(i for i in client.get("/api/collection").get_json()["items"] if i["name"] == "Elden Ring")
-    assert client.delete(f"/api/collection/{elden['id']}", headers=HEADERS).get_json() == {"ok": True, "steam_skipped": True}
+    assert client.delete(f"/api/collection/{elden['id']}", headers=HEADERS).get_json() == {"ok": True, "steam_skipped": True,
+                                                                                         "psn_skipped": False}
     steam_service._last.clear()
     answer = steam_import(client, "").get_json()
     assert (answer["added"], answer["skipped"]) == (0, 1)

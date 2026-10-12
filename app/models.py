@@ -22,7 +22,8 @@ NOW = func.utcnow()      # the database's clock, in UTC (database/schema.sql)
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages", "message_photos",
                  "user_ratings", "reports", "moderation_log", "match_overrides",
-                 "collection_items", "game_reviews", "duplicate_dismissals", "steam_skips"}
+                 "collection_items", "game_reviews", "duplicate_dismissals", "steam_skips",
+                 "psn_skips"}
 
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
 ROLES = ("user", "moderator", "admin")
@@ -169,6 +170,9 @@ class User(Base):
     lang: Mapped[str] = mapped_column(String(2), server_default="pt", nullable=False)   # pt / en, for e-mails
     steam_id: Mapped[str | None] = mapped_column(String(20))   # the last Steam import's profile (steam_service)
     steam_imported_at = mapped_column(DateTime)
+    psn_account_id: Mapped[str | None] = mapped_column(String(20))      # the last PSN import's player (psn_service)
+    psn_online_id: Mapped[str | None] = mapped_column(Unicode(16))
+    psn_imported_at = mapped_column(DateTime)
     # the profile's showcase sections, in order, comma-separated (collection_service.SHOWCASE; None: all)
     profile_sections: Mapped[str | None] = mapped_column(String(100))
     last_login_at = mapped_column(DateTime)
@@ -365,6 +369,16 @@ class SteamSkip(Base):
     created_at = created_at()
 
 
+class PsnSkip(Base):
+    """A PSN trophy list the user took out of their collection: the PSN import leaves it out (psn_service);
+    edition_id: the edition it was, so adding that edition by hand brings it back (not a key: editions merge)."""
+    __tablename__ = "psn_skips"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    psn_id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    edition_id: Mapped[int | None] = mapped_column(Integer)
+    created_at = created_at()
+
+
 COLLECTION_KINDS = ("owned", "wishlist")
 FORMATS = ("physical", "digital")
 # the user's order (2026-10-11); "owned" = no other, what an owned item starts as
@@ -389,6 +403,8 @@ class CollectionItem(Base):
     notes: Mapped[str | None] = mapped_column(Unicode(1000))
     achievements: Mapped[int | None] = mapped_column(Integer)          # done (owned)
     achievements_total: Mapped[int | None] = mapped_column(Integer)
+    psn_id: Mapped[str | None] = mapped_column(String(20))             # its PSN trophy list (psn_service)
+    platinum: Mapped[bool | None] = mapped_column(Boolean)             # PlayStation: the platinum trophy earned
     wish_price = mapped_column(Numeric(10, 2))                         # best new price when wished (wishlist)
     # wishlist alerts: the best new price at the last check (None: none in stock), and when
     alert_price = mapped_column(Numeric(10, 2))

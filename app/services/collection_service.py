@@ -15,7 +15,7 @@ from sqlalchemy import delete, func, select
 
 from app.models import (
     COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, Game, GameEdition, GameReview, Listing, Platform,
-    SteamSkip, User, fields,
+    PsnSkip, SteamSkip, User, fields,
 )
 from db import session
 
@@ -47,7 +47,7 @@ def collection(user_id):
         items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                           .order_by(CollectionItem.kind, CollectionItem.updated_at.desc(), CollectionItem.id.desc())).all()
         rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "achievements", "achievements_total",
-                       "favourite_rank", "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
+                       "platinum", "psn_id", "favourite_rank", "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
         public, alerts, sections = user.collection_public, user.wish_alerts, sections_of(user.profile_sections)
         # the user's review score of each game (one per game, as on the game page); a hidden one can't change
         reviews = {game_id: (score, hidden) for game_id, score, hidden in s.execute(
@@ -167,6 +167,8 @@ def add(user_id, edition_id, kind, game_id=None, new_edition=None, **changes):
         s.flush()
         if kind == "owned" and edition.game.steam_app_id:      # added by hand: Steam imports take it again
             s.execute(delete(SteamSkip).where(SteamSkip.user_id == user_id, SteamSkip.app_id == edition.game.steam_app_id))
+        if kind == "owned":       # the same for the PSN import
+            s.execute(delete(PsnSkip).where(PsnSkip.user_id == user_id, PsnSkip.edition_id == edition.id))
         if kind == "owned":       # bought it: off the wishlist
             for wanted in s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id,
                                                                  CollectionItem.kind == "wishlist",
@@ -239,14 +241,17 @@ def best_new_price(edition_id):
 
 def remove(user_id, item_id):
     """Take an item out; an owned digital game on Steam isn't imported from Steam again (SteamSkip:
-    user 2026-10-11, games marked private on Steam)."""
+    user 2026-10-11, games marked private on Steam), nor one imported from PSN (PsnSkip: played on PS Plus)."""
     with session() as s:
         item = _own(s, user_id, item_id)
         app_id = item.game.steam_app_id if item.kind == "owned" and item.format == "digital" else None
         if app_id and not s.get(SteamSkip, (user_id, app_id)):
             s.add(SteamSkip(user_id=user_id, app_id=app_id))
+        psn_id = item.psn_id if item.kind == "owned" else None
+        if psn_id and not s.get(PsnSkip, (user_id, psn_id)):
+            s.add(PsnSkip(user_id=user_id, psn_id=psn_id, edition_id=item.edition_id))
         s.delete(item)
-    return {"ok": True, "steam_skipped": bool(app_id)}
+    return {"ok": True, "steam_skipped": bool(app_id), "psn_skipped": bool(psn_id)}
 
 
 def set_settings(user_id, changes):
@@ -353,6 +358,8 @@ def _apply(item, changes):
         if done is not None and total is not None and done > total:
             raise CollectionError("achievements_invalid")
         item.achievements, item.achievements_total = (done, total) if item.kind == "owned" else (None, None)
+    if "platinum" in changes:                  # PlayStation (None: the game has none, or not said)
+        item.platinum = None if changes["platinum"] in (None, "") or item.kind != "owned" else bool(changes["platinum"])
     if "notes" in changes:
         notes = (changes["notes"] or "").strip() or None
         if notes and len(notes) > MAX_NOTES:

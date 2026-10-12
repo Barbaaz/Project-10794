@@ -2,13 +2,14 @@
 from flask import Blueprint, abort, jsonify, request
 
 from app.routes.auth import current_user, login_required
-from app.services import collection_service, steam_service, wish_alert_service
+from app.services import collection_service, psn_service, steam_service, wish_alert_service
 from app.services.collection_service import CollectionError
+from app.services.psn_service import PsnError
 from app.services.steam_service import SteamError
 
 bp = Blueprint("collection", __name__, url_prefix="/api")
 
-EDITABLE = ("format", "status", "hours", "achievements", "achievements_total", "notes")
+EDITABLE = ("format", "status", "hours", "achievements", "achievements_total", "platinum", "notes")
 
 
 @bp.errorhandler(CollectionError)
@@ -76,6 +77,24 @@ def import_from_steam():
     try:
         return jsonify(steam_service.import_games(current_user()["id"], body().get("profile")))
     except SteamError as e:
+        return jsonify(error=e.code), e.status
+
+
+@bp.get("/collection/psn")
+@login_required
+def psn_profile():
+    """{profile: {online_id, imported_at} | null}: the last PSN import's player, for the refresh button"""
+    return jsonify(profile=psn_service.saved_profile(current_user()["id"]))
+
+
+@bp.post("/collection/psn")
+@login_required
+def import_from_psn():
+    """{name?}: the user's PlayStation games and trophies into the collection (no name: the last one again)
+    → {added, updated, total, skipped, missing} (psn_service)"""
+    try:
+        return jsonify(psn_service.import_games(current_user()["id"], body().get("name")))
+    except PsnError as e:
         return jsonify(error=e.code), e.status
 
 

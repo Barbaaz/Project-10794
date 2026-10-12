@@ -16,7 +16,7 @@ from sqlalchemy import delete, or_, select
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import config
-from app.models import NOW, CollectionItem, Conversation, Listing, Message, SteamSkip, User, fields
+from app.models import NOW, CollectionItem, Conversation, Listing, Message, PsnSkip, SteamSkip, User, fields
 from app.services import mail_service
 from app.services.photo_storage import storage
 from db import session
@@ -169,9 +169,11 @@ def delete_account(user_id, password, ip="?"):
                 listing.status, listing.updated_at = "removed", NOW
         s.execute(delete(CollectionItem).where(CollectionItem.user_id == user_id))
         s.execute(delete(SteamSkip).where(SteamSkip.user_id == user_id))
+        s.execute(delete(PsnSkip).where(PsnSkip.user_id == user_id))
 
         logins = {(user.username or "").lower(), user.email}
         user.username = user.password_hash = user.location = user.steam_id = None
+        user.psn_account_id = user.psn_online_id = None
         user.email = f"deleted-{user.id}@deleted.invalid"         # unique and never a real address
         user.display_name = ""
         user.is_active = user.collection_public = user.wish_alerts = False

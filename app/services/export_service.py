@@ -8,14 +8,16 @@ chat photos open for the two sides while logged in).
 from sqlalchemy import or_, select
 
 from app.models import (
-    CollectionItem, Conversation, GameReview, Listing, Message, ModerationLog, Rating, Report, SteamSkip, User, fields,
+    CollectionItem, Conversation, GameReview, Listing, Message, ModerationLog, PsnSkip, Rating, Report, SteamSkip, User,
+    fields,
 )
 from app.services.chat_service import message_dicts
 from app.services.photo_storage import storage
 from db import session
 
 ACCOUNT_FIELDS = ("id", "username", "display_name", "email", "location", "role", "lang", "collection_public",
-                  "wish_alerts", "profile_sections", "steam_id", "steam_imported_at", "created_at", "last_login_at")
+                  "wish_alerts", "profile_sections", "steam_id", "steam_imported_at", "psn_online_id", "psn_imported_at",
+                  "created_at", "last_login_at")
 
 
 def _game(game, edition=None):
@@ -60,7 +62,7 @@ def export_user(user_id):
                    **{other: _name(s.get(User, r.rated_id if other == "rated" else r.rater_id))})
             for r in s.scalars(select(Rating).where(column == user_id).order_by(Rating.id))]
 
-        collection = [fields(i, "id", "kind", "format", "status", "hours", "achievements", "achievements_total",
+        collection = [fields(i, "id", "kind", "format", "status", "hours", "achievements", "achievements_total", "platinum",
                              "favourite_rank", "notes", "wish_price", "created_at", "updated_at", **_game(i.game, i.edition))
                       for i in s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                                          .order_by(CollectionItem.id))]
@@ -86,6 +88,8 @@ def export_user(user_id):
             "collection": collection,
             "steam_skipped_apps": [k.app_id for k in s.scalars(select(SteamSkip).where(SteamSkip.user_id == user_id)
                                                                .order_by(SteamSkip.app_id))],
+            "psn_skipped_lists": [k.psn_id for k in s.scalars(select(PsnSkip).where(PsnSkip.user_id == user_id)
+                                                             .order_by(PsnSkip.psn_id))],
             "reports_made": reports,
             "moderation_actions": moderation,
         }
