@@ -115,13 +115,26 @@ h4, h5, h6, .h4, .h5, .h6 { font-weight: 700; letter-spacing: -0.01em; }
 .site-header .header-tools { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 767.98px) { .header-search { order: 3; flex-basis: 100%; max-width: none; } }
 .site-header .account-menu .dropdown-menu { right: 0; left: auto; top: calc(100% + .25rem); min-width: 13rem; }
-/* Vender / Mensagens / Coleção: icon buttons on a phone, plain words from a wide screen up */
+/* The notifications panel (common.js showNotifications): as wide as fits a phone, its deals scroll on their own */
+.site-header .notifications-panel { right: 0; left: auto; top: calc(100% + .25rem); width: min(22rem, calc(100vw - 2rem)); }
+@media (min-width: 576px) { .site-header .notifications-panel { top: calc(100% + .25rem) !important; } }
+/* a phone: the bell isn't at the edge, so the panel spans the screen under it (its top set by common.js) */
+@media (max-width: 575.98px) { .site-header .notifications-panel { position: fixed; left: 1rem; right: 1rem; width: auto; } }
+.notifications-panel .notif-list { max-height: min(60vh, 26rem); overflow-y: auto; }
+.notifications-panel .notif-item img { width: 36px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem;
+                                       background: var(--bs-secondary-bg); flex: none; }
+/* store-photo's padding is a share of the panel's width: on a 36 px picture it would hide it */
+.notifications-panel .notif-item img.store-photo { padding: 2px; }
+.notifications-panel .min-w-0 { min-width: 0; }
+/* Vender / Coleção: icon buttons on a phone, plain words from a wide screen up; Mensagens and the bell always icons */
 .header-link { --bs-btn-bg: var(--bs-secondary-bg); --bs-btn-color: var(--bs-emphasis-color); --bs-btn-border-color: transparent;
                --bs-btn-hover-bg: var(--soft-btn-hover); --bs-btn-hover-color: var(--bs-emphasis-color); --bs-btn-hover-border-color: transparent;
                --bs-btn-active-bg: var(--soft-btn-hover); --bs-btn-active-color: var(--bs-emphasis-color); --bs-btn-active-border-color: transparent; }
 @media (min-width: 992px) {
     .header-link { --bs-btn-bg: transparent; --bs-btn-color: var(--bs-body-color); --bs-btn-padding-x: .55rem; font-size: .92rem; }
     .header-link .icon { display: none; }
+    /* The bell and the inbox stay icons at every width (user, 2026-10-13); their names are in title / aria-label */
+    .header-link.icon-only .icon { display: inline; }
 }
 @media (max-width: 575.98px) {
     .site-brand-link { font-size: 1.05rem; }
@@ -202,7 +215,7 @@ img.store-photo { object-fit: contain !important; background: #fff !important; p
     .filter-sidebar { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
 }
 
-/* profile pictures (user, 2026-10-12): round; without one, 👤 in a circle */
+/* profile pictures (user, 2026-10-12): round; without one, a drawn figure in a circle */
 .avatar { border-radius: 50%; object-fit: cover; flex-shrink: 0; vertical-align: middle; }
 .avatar-none { display: inline-flex; align-items: center; justify-content: center; background: var(--bs-secondary-bg); }
 
@@ -213,3 +226,6 @@ img.store-photo { object-fit: contain !important; background: #fff !important; p
 .back-to-top.shown { opacity: 1; visibility: visible; transform: none; }
 @media (prefers-reduced-motion: reduce) { .back-to-top { transition: none; } }
 @media print { .back-to-top { display: none; } }
+
+/* The line icons (common.js icon()): on the text's line */
+.svg-icon { vertical-align: -.2em; flex: none; }

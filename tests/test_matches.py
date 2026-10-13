@@ -215,3 +215,17 @@ def test_move_errors_and_access(mod):
     sign_up(client, "not_a_mod")
     assert client.get("/api/mod/matches?q=shadow").status_code == 403
     assert post({"product_ids": [some], "edition_id": 1}).status_code == 403
+
+
+def test_card_picture_follows_the_store_order():
+    """User, 2026-10-13: the stores' photos in this order (Gaming Replay, Mega Mania, CSTech, Press Start),
+    IGDB's cover when none of them has one; other stores' photos are left to the page."""
+    from app.services.common import card_cover
+    row = {"cover_image_id": "co1abc", "edition_key": "deluxe"}
+    offer = lambda store, image="": {"store": store, "image": image and f"https://{store}.example/{image}.jpg"}
+    assert card_cover(row, [offer("press_start", "p"), offer("cstech", "c"), offer("mega-mania", "m")]) \
+        == "https://mega-mania.example/m.jpg"
+    assert card_cover(row, [offer("gaming_replay"), offer("press_start", "p")]) == "https://press_start.example/p.jpg"
+    igdb = "https://images.igdb.com/igdb/image/upload/t_cover_big_2x/co1abc.jpg"
+    assert card_cover(row, [offer("techinn", "t")]) == igdb
+    assert card_cover({"cover_image_id": None}, [offer("techinn", "t")]) is None

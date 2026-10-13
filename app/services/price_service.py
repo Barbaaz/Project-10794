@@ -32,12 +32,12 @@ def attach_store_offers(items):
         # the card's name in both languages ("Title — Edition")
         item["name"] = card_name(better_title(item), item["edition_key"], item["edition"])
         item["name_en"] = card_name(title_en(item), item["edition_key"], edition_en(item["edition"]))
-        item["cover"] = card_cover(item)
         own = {k: item[k] for k in ("offer_id", "store", "store_name", "condition", "price", "in_stock",
                                     "is_preorder", "url", "image") if k in item}
         own.update(was_price=item.get("was_price"), discount_percent=item.get("discount_percent"))
         item["offers"] = [own] + [o for o in others
                                   if o["edition_id"] == item["edition_id"] and o["offer_id"] != item["offer_id"]]
+        item["cover"] = card_cover(item, item["offers"])
     return mark_review_scores(mark_historical_lows(items))
 
 

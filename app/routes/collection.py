@@ -31,7 +31,7 @@ def mine():
 @bp.get("/collection/deals")
 @login_required
 def deals():
-    """{count, items}: wishes that are a good deal now (the 📚 header button's badge)"""
+    """{count, items}: wishes that are a good deal now (the header's notifications)"""
     return jsonify(collection_service.good_deals(current_user()["id"]))
 
 

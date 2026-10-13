@@ -3,7 +3,7 @@ import re
 from datetime import datetime, timezone
 
 from app.services.common import (
-    EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, card_group, edition_en, lowest_prices, page_result,
+    EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, card_cover, card_group, edition_en, lowest_prices, page_result,
     title_word_filters,
 )
 from app.services.genre_service import genre_filter
@@ -137,6 +137,8 @@ def get_game(game_id):
     # Editions whose products all left the stores have nothing to show; a game no store sells
     # (created from IGDB for a used copy) keeps its editions, to be sold / collected
     game["editions"] = mark_historical_lows([e for e in editions if e["offers"]] or editions, key="id")
+    # The page's picture, as the cards' (common.card_cover): the stores in their order, the standard edition's first
+    game["picture"] = card_cover(game, [o for e in game["editions"] for o in e["offers"]])
 
     release = game_release_date(game_id) or {}
     game["release_date"] = release.get("release_date")

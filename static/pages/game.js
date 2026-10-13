@@ -48,7 +48,8 @@ function render() {
         release.classList.remove("d-none");
     }
 
-    const cover = game.image || game.editions.flatMap(e => e.offers).find(o => o.image)?.image
+    // the stores' photo in the site's order, else IGDB's cover (game_service: picture), else any photo
+    const cover = game.picture || game.image || game.editions.flatMap(e => e.offers).find(o => o.image)?.image
         || (game.cover_image_id ? igdbImage(game.cover_image_id, "t_cover_big") : null);
     if (cover) document.getElementById("cover").src = cover;
     else document.getElementById("cover").remove();      // no empty space

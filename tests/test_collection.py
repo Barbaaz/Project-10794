@@ -146,6 +146,9 @@ def test_a_wish_remembers_its_price(market, monkeypatch):
     store_price["now"] = 44.99
     deals = client.get("/api/collection/deals").get_json()
     assert deals["count"] == 1 and deals["items"][0]["price_drop"] == 15.0
+    # what the header's 🔔 panel shows: the game to link, its price and why it's a deal
+    deal = deals["items"][0]
+    assert (deal["game_id"], deal["best_price"], deal["on_sale"]) == (market["game"], 44.99, False)
 
     # bought: no longer a wish, no wish price
     client.patch(f"/api/collection/{wish}", json={"kind": "owned"}, headers=HEADERS)

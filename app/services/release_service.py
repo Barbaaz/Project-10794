@@ -1,5 +1,5 @@
 """Pre-orders and upcoming releases for the front page."""
-from app.services.common import EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, cached, card_group
+from app.services.common import EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, cached, card_cover, card_group
 from app.services.review_service import mark_review_scores
 from app.services.tag_service import mark_historical_lows
 from db import fetch_all, placeholders
@@ -70,11 +70,14 @@ def preorders():
                      CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, e.name, e.id, o.price, o.store_product_id
         """)
 
-        groups = {}
+        groups, first = {}, {}
         for r in rows:
             group = groups.setdefault(r["edition_id"], card_group(
                 r, [], release_date=r["game_release_date"], date_is_estimate=r["date_is_estimate"]))
+            first.setdefault(r["edition_id"], r)
             group["offers"].append(r)
+        for edition_id, group in groups.items():          # the picture by store, now the offers are in
+            group["cover"] = card_cover(first[edition_id], group["offers"])
         return mark_review_scores(mark_historical_lows(list(groups.values())))
 
     return cached("preorders", compute)
