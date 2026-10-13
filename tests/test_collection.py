@@ -92,7 +92,8 @@ def test_private_unless_made_public(market):
     sign_up(client, "visitor")
     public = client.get("/api/users/shower/collection").get_json()
     assert [i["status"] for i in public["items"]] == ["paused"]
-    assert "notes" not in public["items"][0] and "hours" not in public["items"][0]        # notes stay private
+    assert "notes" not in public["items"][0]                       # notes stay private; hours show (comparisons,
+    assert "hours" in public["items"][0]                           # the collection's own page: user, 2026-10-12)
     assert public["stats"]["owned"] == 1
 
 
@@ -220,3 +221,42 @@ def test_changing_an_items_edition(market):
     assert patch({"edition_id": market["other_edition"]}).get_json()["error"] == "edition_invalid"   # another game's
     add(client, market["edition"])                                                                 # Standard again...
     assert patch({"edition_id": market["edition"]}).get_json()["error"] == "already_in_collection"  # ...so not twice
+
+
+def test_a_game_on_a_disc_and_as_a_download(market):
+    """User, 2026-10-12: the same edition owned physically and digitally is two items; a wish stays one."""
+    client = market["client"]
+    sign_up(client, "two_copies")
+    disc = add(client, market["edition"]).get_json()["id"]                       # by hand: a disc
+    download = add(client, market["edition"], format="digital").get_json()["id"]
+    assert disc != download
+    assert add(client, market["edition"], format="digital").get_json()["id"] == download    # not three
+    assert sorted(i["format"] for i in mine(client)["items"]) == ["digital", "physical"]
+    # one can't become the other: that copy is there already
+    answer = client.patch(f"/api/collection/{download}", json={"format": "physical"}, headers=HEADERS)
+    assert (answer.status_code, answer.get_json()["error"]) == (409, "already_in_collection")
+    assert add(client, market["edition"], format="cartridge").status_code == 400
+
+    wish = add(client, market["other_edition"], "wishlist").get_json()["id"]
+    assert add(client, market["other_edition"], "wishlist").get_json()["id"] == wish
+
+
+def test_a_wish_on_sale_has_its_discount(market, monkeypatch):
+    """User, 2026-10-12: the wishlist sorts by the discount and the sale price; only real discounts count."""
+    import app.services.game_service as games
+    real = games.editions_with_offers
+
+    def with_stores(ids):
+        groups = real(ids)
+        for g in groups:
+            g["offers"] = [
+                {"price": 39.99, "in_stock": True, "condition": "new", "store_name": "A", "is_discount": True, "discount_percent": 33.3},
+                {"price": 35.00, "in_stock": True, "condition": "new", "store_name": "B", "is_discount": False, "discount_percent": 40},
+                {"price": 20.00, "in_stock": False, "condition": "new", "store_name": "C", "is_discount": True, "discount_percent": 66}]
+        return groups
+    monkeypatch.setattr(games, "editions_with_offers", with_stores)
+    client = market["client"]
+    sign_up(client, "sale_sorter")
+    add(client, market["edition"], kind="wishlist")
+    item = mine(client)["items"][0]
+    assert (item["on_sale"], item["discount"], item["sale_price"], item["best_price"]) == (True, 33.3, 39.99, 35.0)

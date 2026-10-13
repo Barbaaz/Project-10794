@@ -9,98 +9,165 @@ function showMessage(ok, text) {
     box.textContent = text;
 }
 
-function stat(label, value) {
-    return `<div class="card stat"><div class="card-body p-2">
-        <div class="small text-body-secondary">${esc(label)}</div><div class="fs-5 fw-semibold">${value}</div></div></div>`;
+// A figure: its label, the value, one line under it, and for a share a meter (the dataviz skill's stat tile)
+function stat(label, value, sub = "", share = null) {
+    return `<div class="stat-tile">
+        <div class="stat-label">${esc(label)}</div>
+        <div class="stat-value">${value}</div>
+        ${share === null ? "" : `<div class="stat-meter" role="img" aria-label="${Math.round(share)}%"><span style="width: ${Math.min(100, share)}%"></span></div>`}
+        ${sub ? `<div class="stat-sub">${sub}</div>` : ""}
+    </div>`;
 }
+
+// A part-to-whole bar and its legend (the counts always shown: some colours are pale on white). A legend
+// button filters the grid by that status / platform (the sidebar's box)
+function stackBar(title, parts, group) {
+    const total = parts.reduce((n, p) => n + p.n, 0);
+    if (!total) return "";
+    const share = n => `${fmtNumber(Math.round(1000 * n / total) / 10)}%`;
+    return `<div class="col-md-6">
+        <div class="stack-title">${esc(title)}</div>
+        <div class="stack-bar" role="img" aria-label="${esc(parts.map(p => `${p.label}: ${p.n}`).join(", "))}">
+            ${parts.map(p => `<span style="flex: ${p.n} 1 0; background: ${p.color};" title="${esc(`${p.label}: ${fmtNumber(p.n)} (${share(p.n)})`)}"></span>`).join("")}
+        </div>
+        <ul class="stack-legend">${parts.map(p => `<li>
+            ${p.value === null ? `<span class="d-inline-flex align-items-center gap-1 small px-1">` : `<button type="button" data-stat-filter="${group}" data-value="${esc(p.value)}"
+                aria-pressed="${!!chosen.owned[group]?.has(p.value) && chosen.owned[group].size === 1}">`}
+                <span class="swatch" style="background: ${p.color};"></span>${esc(p.label)} <span class="count">${fmtNumber(p.n)}</span>
+            ${p.value === null ? "</span>" : "</button>"}</li>`).join("")}</ul>
+    </div>`;
+}
+
+// The order of the status bar (blue and violet never side by side: checked), "Na coleção" last, in grey
+const STATUS_BAR = ["finished", "playing", "paused", "backlog", "dropped", "owned"];
+const MAX_PLATFORM_SLOTS = 5;
 
 // Only the figures there is something to show for (an empty collection shows the two counts)
 function renderStats() {
     const s = data.stats;
-    const statuses = STATUSES.filter(x => s.statuses[x]).map(x => `${t(`status_play_${x}`)}: ${s.statuses[x]}`).join(" · ");
-    const platforms = s.platforms.map(([p, n]) => `${p}: ${n}`).join(" · ");
-    document.getElementById("stats").innerHTML = [
-        stat(t("collection_owned_count"), fmtNumber(s.owned)),
-        stat(t("collection_wishlist_count"), fmtNumber(s.wishlist)),
-        s.owned && stat(t("collection_completed"), `${fmtNumber(s.completed)} <span class="small fw-normal">(${Math.round(100 * s.completed / s.owned)}%)</span>`),
-        s.hours && stat(t("collection_hours"), fmtNumber(Math.round(s.hours * 10) / 10)),
-        s.achievements_total && stat(t("collection_achievements"),
-            `${fmtNumber(s.achievements)} / ${fmtNumber(s.achievements_total)} <span class="small fw-normal">(${Math.round(100 * s.achievements / s.achievements_total)}%)</span>`),
-        s.priced_new && stat(t("collection_worth_new"), `${eur.format(s.worth_new)} <span class="small fw-normal text-body-secondary">(${s.priced_new})</span>`),
-        s.priced_used && stat(t("collection_worth_used"), `${eur.format(s.worth_used)} <span class="small fw-normal text-body-secondary">(${s.priced_used})</span>`),
-    ].filter(Boolean).join("")
-        + (platforms ? `<div class="w-100 small text-body-secondary">${esc(platforms)}</div>` : "")
-        + (statuses ? `<div class="w-100 small text-body-secondary mt-n2">${esc(statuses)}</div>` : "");
+    const owned = data.items.filter(i => i.kind === "owned");
+    const played = owned.filter(i => i.hours).length;
+    const pct = (n, of) => of ? Math.round(100 * n / of) : 0;
+    const tiles = [
+        stat(t("collection_owned_count"), fmtNumber(s.owned), esc(t("collection_stat_wishes", { n: fmtNumber(s.wishlist) }))),
+        s.owned && stat(t("collection_completed"), fmtNumber(s.completed),
+                        esc(t("collection_stat_of_collection", { pct: pct(s.completed, s.owned) })), pct(s.completed, s.owned)),
+        s.hours && stat(t("collection_hours"), `${fmtNumber(Math.round(s.hours))} h`,
+                        esc(t("collection_stat_hours_in", { n: fmtNumber(played) }))),
+        s.achievements_total && stat(t("collection_achievements"), fmtNumber(s.achievements),
+                        esc(t("collection_stat_of_total", { total: fmtNumber(s.achievements_total), pct: pct(s.achievements, s.achievements_total) })),
+                        100 * s.achievements / s.achievements_total),
+        s.priced_new && stat(t("collection_worth_new"), eur.format(s.worth_new), esc(t("collection_stat_priced", { n: fmtNumber(s.priced_new) }))),
+        s.priced_used && stat(t("collection_worth_used"), eur.format(s.worth_used), esc(t("collection_stat_priced_used", { n: fmtNumber(s.priced_used) }))),
+    ].filter(Boolean).join("");
+    const statuses = STATUS_BAR.filter(x => s.statuses[x]).map(x => ({
+        value: x, label: t(`status_play_${x}`), n: s.statuses[x], color: `var(--status-${x === "owned" ? "none" : x})` }));
+    const top = s.platforms.slice(0, MAX_PLATFORM_SLOTS), rest = s.platforms.slice(MAX_PLATFORM_SLOTS);
+    const platforms = top.map(([name, n], i) => ({ value: name, label: name, n, color: `var(--series-${i + 1})` }));
+    if (rest.length) platforms.push({ value: null, label: t("collection_stat_other_platforms", { n: rest.length }),
+                                      n: rest.reduce((sum, [, n]) => sum + n, 0), color: "var(--series-other)" });
+    const bars = stackBar(t("collection_stat_by_status"), statuses, "status") + stackBar(t("collection_stat_by_platform"), platforms, "platform");
+    const box = document.getElementById("stats");
+    box.innerHTML = `<div class="stat-row">${tiles}</div>${bars ? `<div class="row g-3 mt-1">${bars}</div>` : ""}`;
+    box.querySelectorAll("[data-stat-filter]").forEach(b => b.onclick = () => {
+        const group = b.dataset.statFilter, only = b.getAttribute("aria-pressed") !== "true";
+        chosen.owned[group] = new Set(only ? [b.dataset.value] : []);    // that one alone, or none again
+        if (kind !== "owned") document.querySelector('[data-kind="owned"]').click();
+        renderItems();
+        renderStats();
+        document.getElementById("items").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
     document.querySelector('[data-kind="owned"]').textContent = `${t("collection_tab_owned")} (${s.owned})`;
     document.querySelector('[data-kind="wishlist"]').textContent = `${t("collection_tab_wishlist")} (${s.wishlist})`;
 }
 
-// What it costs now: best store price (with a sale / historical low badge) and the cheapest used copy
+// What it costs now, one fact per line so the cards line up: best store price and store, else "Ver na
+// Steam", "À procura" or no price; the cheapest used copy; a wish's badges (on sale, lowest, cheaper)
 function priceLine(item) {
     const parts = [];
     if (item.best_price !== null) {
-        parts.push(`${t("collection_best_now")} <strong>${eur.format(item.best_price)}</strong> · ${esc(item.best_store)}
-            ${item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}</span>` : ""}
-            ${item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : ""}
-            ${item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : ""}`);
+        parts.push(`<span title="${esc(t("collection_best_now"))}"><strong>${eur.format(item.best_price)}</strong> · ${esc(item.best_store)}</span>`);
     } else if (item.steam_app_id) {
         // no store here sells it, but it's on Steam (a PC game; user, 2026-10-11)
-        parts.push(`<a class="btn btn-sm btn-secondary" href="https://store.steampowered.com/app/${Number(item.steam_app_id)}/"
+        // a button (user, 2026-10-12), without padding top and bottom: it keeps to the card's one line
+        parts.push(`<a class="btn btn-sm btn-secondary py-0 px-2" href="https://store.steampowered.com/app/${Number(item.steam_app_id)}/"
                        target="_blank" rel="noopener">${t("collection_on_steam")}</a>`);
     } else if (item.kind === "wishlist" && !item.used) {
         // nobody sells it: "looking for", with an e-mail when a store or a user does (wish_alert_service)
-        parts.push(`<span class="badge text-bg-info">${t("collection_looking_for")}</span>
-            <span class="text-body-secondary">${t("collection_looking_for_help")}</span>`);
+        parts.push(`<span class="badge text-bg-info" title="${esc(t("collection_looking_for_help"))}">${t("collection_looking_for")}</span>`);
     } else {
         parts.push(`<span class="text-body-secondary">${t("collection_no_store_price")}</span>`);
     }
-    if (item.used) parts.push(`<a href="/listing/${item.used.listing_id}">${esc(t("used_from", { price: eur.format(item.used.price) }))}</a>`);
-    return parts.join(" · ");
+    const used = item.used ? `<a href="/listing/${item.used.listing_id}">${esc(t("used_from", { price: eur.format(item.used.price) }))}</a>` : "";
+    const lines = `<div class="item-line small">${parts.join("")}</div><div class="item-line small">${used}</div>`;
+    if (item.kind !== "wishlist") return lines;
+    const badges = [
+        item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}${item.discount ? ` −${Math.round(item.discount)}%` : ""}</span>` : "",
+        item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : "",
+        item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : "",
+    ].join("");
+    return lines + `<div class="item-facts small">${badges}</div>`;
 }
 
-// What the user wrote about an owned game, in one line (the editor stays closed until "Editar")
+// What the user wrote about an owned game, in fixed rows (collection_grid.js factRows); the notes are in the
+// editor ("Editar")
 function ownedFacts(item) {
-    const facts = [
-        item.status && item.status !== "owned" ? `<span class="badge text-bg-secondary">${esc(t(`status_play_${item.status}`))}</span>` : "",
-        esc(t(`format_${item.format || "physical"}`)),
-        item.score ? `★ ${item.score}/10` : "",
-        item.hours ? `${fmtNumber(item.hours)} h` : "",
-        item.achievements_total ? `🏆 ${item.achievements ?? 0}/${item.achievements_total}` : (item.achievements ? `🏆 ${item.achievements}` : ""),
-        item.notes ? `<span class="fst-italic text-truncate" style="max-width: 16rem;">“${esc(item.notes)}”</span>` : "",
-    ];
-    return facts.filter(Boolean).map(f => f.startsWith("<") ? f : `<span>${f}</span>`).join("");
+    return factRows(item);
 }
 
-function field(label, control, cols = "col-6 col-md-4") {
-    return `<div class="${cols}"><label class="form-label small text-body-secondary mb-0 d-block">${esc(label)}${control}</label></div>`;
+// The edit window's controls (user, 2026-10-12: "more intuitive"): the status and the format as buttons
+// (the status in its badge's colour), the progress together (hours, trophies with a bar, the platinum),
+// the score as 1-10 buttons, the notes. Each is saved as it changes ("✓ Guardado")
+function choices(field, options, current, label) {
+    return `<div class="choice-group" role="group" aria-label="${esc(label)}">${options.map(o => `
+        <button type="button" class="choice" data-choice="${field}" data-value="${esc(o.value)}" data-on="${o.css || "choice-on"}"
+                aria-pressed="${o.value === current}">${o.label}</button>`).join("")}</div>`;
+}
+
+function section(title, content) {
+    return `<section class="editor-section"><h3 class="editor-title">${esc(title)}</h3>${content}</section>`;
+}
+
+function progressBar(item) {
+    if (!item.achievements_total) return "";
+    const share = Math.min(100, Math.round(100 * (item.achievements || 0) / item.achievements_total));
+    return `<div class="d-flex align-items-center gap-2 mt-2"><div class="progress flex-grow-1" style="height: .5rem;" role="progressbar"
+                 aria-valuenow="${share}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: ${share}%"></div></div>
+            <span class="small text-body-secondary">${share}%</span></div>`;
 }
 
 function ownedControls(item) {
+    const playstation = (item.platform_name || "").startsWith("PlayStation");
+    const statuses = STATUSES.map(s => ({ value: s, css: STATUS_LOOK[s].css,
+                                          label: `${STATUS_LOOK[s].icon ? `${STATUS_LOOK[s].icon} ` : ""}${esc(t(`status_play_${s}`))}` }));
     return `
-        <div class="row g-2 mt-1" data-editor>
-            ${field(t("collection_status"), `
-                <select class="form-select form-select-sm" data-field="status">
-                    ${STATUSES.map(x => `<option value="${x}" ${item.status === x ? "selected" : ""}>${t(`status_play_${x}`)}</option>`).join("")}
-                </select>`)}
-            ${field(t("collection_format"), `
-                <select class="form-select form-select-sm" data-field="format">
-                    ${["physical", "digital"].map(x => `<option value="${x}" ${item.format === x ? "selected" : ""}>${t(`format_${x}`)}</option>`).join("")}
-                </select>`)}
-            ${field(t("collection_score"), `
-                <select class="form-select form-select-sm" data-score ${item.score_locked ? "disabled" : ""} title="${esc(t("collection_score_hint"))}">
-                    <option value="" aria-label="${esc(t("collection_no_score"))}">—</option>
-                    ${Array.from({ length: 10 }, (_, i) => 10 - i).map(n => `<option value="${n}" ${item.score === n ? "selected" : ""}>★ ${n}/10</option>`).join("")}
-                </select>`)}
-            ${field(t("collection_hours"), `
-                <input type="text" inputmode="decimal" class="form-control form-control-sm" data-field="hours"
-                       value="${item.hours === null ? "" : fmtNumber(item.hours)}" placeholder="0">`)}
-            ${field(t("collection_achievements_done"), `
-                <input type="number" min="0" class="form-control form-control-sm" data-field="achievements" value="${item.achievements ?? ""}" placeholder="0">`)}
-            ${field(t("collection_achievements_total"), `
-                <input type="number" min="0" class="form-control form-control-sm" data-field="achievements_total" value="${item.achievements_total ?? ""}" placeholder="—">`)}
-            ${field(t("collection_notes"), `
-                <input type="text" maxlength="1000" class="form-control form-control-sm" data-field="notes" value="${esc(item.notes || "")}">`, "col-12")}
-        </div>`;
+        ${section(t("collection_status"), choices("status", statuses, item.status || "owned", t("collection_status")))}
+        ${section(t("collection_format"), choices("format", ["physical", "digital"].map(f => ({ value: f, label: esc(t(`format_${f}`)) })),
+                                                  item.format || "physical", t("collection_format")))}
+        ${section(t("collection_progress"), `
+            <div class="row g-2">
+                <div class="col-5"><label class="small text-body-secondary d-block" for="edit-hours">${esc(t("collection_hours"))}</label>
+                    <div class="input-group input-group-sm">
+                        <input id="edit-hours" type="text" inputmode="decimal" class="form-control" data-field="hours"
+                               value="${item.hours === null ? "" : fmtNumber(item.hours)}" placeholder="0"><span class="input-group-text">h</span></div></div>
+                <div class="col-7"><span class="small text-body-secondary d-block">${esc(t("collection_trophies"))}</span>
+                    <div class="input-group input-group-sm">
+                        <input type="number" min="0" class="form-control" data-field="achievements" value="${item.achievements ?? ""}" placeholder="0"
+                               aria-label="${esc(t("collection_achievements_done"))}">
+                        <span class="input-group-text">/</span>
+                        <input type="number" min="0" class="form-control" data-field="achievements_total" value="${item.achievements_total ?? ""}"
+                               placeholder="—" aria-label="${esc(t("collection_achievements_total"))}"></div></div>
+            </div>
+            <div data-progress>${progressBar(item)}</div>
+            ${playstation ? `<button type="button" class="choice mt-2" data-toggle="platinum" data-on="cover-platinum"
+                                     aria-pressed="${!!item.platinum}">🏆 ${esc(t("collection_platinum"))}</button>` : ""}`)}
+        ${section(t("collection_your_score"), `
+            ${choices("score", [{ value: "", label: "—" }, ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))],
+                      item.score ? String(item.score) : "", t("collection_your_score"))}
+            <div class="small text-body-secondary mt-1">${esc(t(item.score_locked ? "collection_score_locked" : "collection_score_hint"))}</div>`)}
+        ${section(t("collection_notes"), `
+            <textarea class="form-control form-control-sm" rows="2" maxlength="1000" data-field="notes"
+                      aria-label="${esc(t("collection_notes"))}">${esc(item.notes || "")}</textarea>`)}`;
 }
 
 // One item as a card in the grid: cover, name, platform, prices, what the user wrote, buttons
@@ -109,13 +176,16 @@ function itemRow(item) {
     return `
         <div class="col">
           <div class="card h-100 item-card overflow-hidden ${item.good_deal ? "border-success border-2" : ""}" data-id="${item.id}">
-            <a href="/game/${item.game_id}" class="item-cover-link" tabindex="-1" aria-hidden="true"><img class="item-cover" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
+            <div class="position-relative">
+                <a href="/game/${item.game_id}" class="item-cover-link" tabindex="-1" aria-hidden="true"><img class="item-cover ${coverClass(item.image)}" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
+                ${coverBadges(item)}
+            </div>
             <div class="card-body p-2 d-flex flex-column min-w-0">
                     <a href="/game/${item.game_id}" class="item-title fw-semibold small link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
-                    <div class="small text-body-secondary">${esc(item.platform_name || "")}</div>
-                    <div class="small mt-1">${priceLine(item)}</div>
-                    ${owned ? `<div class="item-facts small mt-1" data-facts>${ownedFacts(item)}</div>` : ""}
-                    <div class="d-flex flex-wrap gap-1 mt-auto pt-2">
+                    <div class="item-line small text-body-secondary">${esc(item.platform_name || "")}</div>
+                    <div class="mt-1">${priceLine(item)}</div>
+                    ${owned ? `<div class="mt-1" data-facts>${ownedFacts(item)}</div>` : ""}
+                    <div class="item-actions mt-auto pt-2">
                         ${owned ? `<button type="button" class="btn btn-sm btn-secondary" data-action="edit" aria-haspopup="dialog">${t("collection_edit")}</button>` : ""}
                         ${owned
                             // only physical copies can be sold (a digital game can't be handed over)
@@ -129,22 +199,19 @@ function itemRow(item) {
         </div>`;
 }
 
-// One button per platform in the list (with how many), "Todas" first; the chosen one filters the grid
-let platform = "";
-function platformChips(items) {
-    const counts = {};
-    items.forEach(i => counts[i.platform_name || "?"] = (counts[i.platform_name || "?"] || 0) + 1);
-    const names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b, LOCALE));
-    if (platform && !counts[platform]) platform = "";
-    const box = document.getElementById("filter-platforms");
-    box.classList.toggle("d-none", names.length < 2);
-    box.innerHTML = [["", t("collection_all_platforms"), items.length], ...names.map(n => [n, n, counts[n]])].map(([value, label, n]) =>
-        `<button type="button" class="chip-btn" data-platform="${esc(value)}" aria-pressed="${platform === value}">${esc(label)} <span class="opacity-75">${n}</span></button>`).join("");
-    box.querySelectorAll("[data-platform]").forEach(b => b.onclick = () => { platform = b.dataset.platform; renderItems(); });
+// The sidebar's ticked boxes, one set per tab (collection_grid.js)
+const chosen = { owned: {}, wishlist: {} };
+function filterGroups(items) {
+    if (kind === "owned") return ownedFilterGroups(items);
+    return [platformGroup(items),
+            { key: "show", title: t("collection_wish_filter"), options: Object.keys(WISH_FILTERS).filter(Boolean)
+                  .map(f => ({ value: f, label: t(`wish_filter_${f}`) })), test: (i, v) => WISH_FILTERS[v](i) }];
 }
 
 // The order and, on the wishlist, which wishes (user, 2026-10-11: "sort my wishlist and maybe filter it")
-const SORTS = { owned: ["name", "added", "value", "hours"], wishlist: ["name", "added", "price_asc", "price_desc", "drop"] };
+// the wishlist also by the discount and the sale price (user, 2026-10-12)
+const SORTS = { owned: ["name", "added", "value", "hours"],
+                wishlist: ["name", "added", "price_asc", "price_desc", "discount", "sale_price", "drop"] };
 const WISH_FILTERS = {
     "": () => true,
     deals: i => i.good_deal,                                     // on sale, at its lowest, or cheaper than when wished
@@ -168,6 +235,8 @@ const ORDER = {
     price_asc: (a, b) => last(a, b, price, false),
     price_desc: (a, b) => last(a, b, price, true),
     drop: (a, b) => last(a, b, i => i.price_drop ?? null, true),
+    discount: (a, b) => last(a, b, i => i.discount ?? null, true),          // not on sale: at the end
+    sale_price: (a, b) => last(a, b, i => i.sale_price ?? null, false),
 };
 
 function sortOptions() {
@@ -184,19 +253,16 @@ function renderItems() {
     document.getElementById("add-game-title").textContent = addTitle;
     document.getElementById("open-add").textContent = addTitle;
     document.getElementById("open-steam").classList.toggle("d-none", kind !== "owned");
-    const status = document.getElementById("filter-status");
-    status.classList.toggle("d-none", kind !== "owned");
-    const wish = document.getElementById("filter-wish");
-    wish.classList.toggle("d-none", kind !== "wishlist");
+    document.getElementById("open-psn").classList.toggle("d-none", kind !== "owned");
     sortOptions();
     const words = document.getElementById("filter-text").value.toLowerCase().split(/\s+/).filter(Boolean);
     const listed = data.items.filter(i => i.kind === kind
-        && (kind !== "owned" || !status.value || i.status === status.value)
-        && (kind !== "wishlist" || WISH_FILTERS[wish.value](i))
         && words.every(w => `${i.name || ""} ${i.name_en || ""}`.toLowerCase().includes(w)));
-    platformChips(listed);
-    const items = listed.filter(i => !platform || (i.platform_name || "?") === platform)
-        .sort((a, b) => ORDER[sortBy[kind]](a, b) || byName(a, b));
+    const groups = filterGroups(listed);
+    const sidebar = document.getElementById("filters");
+    renderFilters(sidebar, listed, groups, chosen[kind], renderItems);
+    filtersToggle(document.getElementById("filters-toggle"), sidebar, chosen[kind]);
+    const items = filterItems(listed, groups, chosen[kind]).sort((a, b) => ORDER[sortBy[kind]](a, b) || byName(a, b));
     const list = document.getElementById("items");
     list.innerHTML = items.map(itemRow).join("");
     const empty = document.getElementById("empty");
@@ -207,13 +273,7 @@ function renderItems() {
         const id = row.dataset.id;
         const editButton = row.querySelector("[data-action=edit]");
         if (editButton) editButton.onclick = () => openEditor(id);
-        row.querySelector("[data-action=remove]").onclick = async () => {
-            const item = data.items.find(i => String(i.id) === id);
-            const fromSteam = item.kind === "owned" && item.format === "digital" && item.steam_app_id;   // not imported again
-            if (!confirm(t(fromSteam ? "collection_remove_confirm_steam" : "collection_remove_confirm"))) return;
-            const { ok } = await api(`/api/collection/${id}`, { method: "DELETE" });
-            if (ok) load();
-        };
+        row.querySelector("[data-action=remove]").onclick = () => removeItem(data.items.find(i => String(i.id) === id));
         const bought = row.querySelector("[data-action=bought]");
         if (bought) bought.onclick = async () => {
             const { ok } = await api(`/api/collection/${id}`, { method: "PATCH", body: { kind: "owned" } });
@@ -222,8 +282,18 @@ function renderItems() {
     });
 }
 
+// Take an item out (the card's ✕, the window's "Tirar da coleção"); an imported one isn't imported again
+async function removeItem(item) {
+    const fromSteam = item.kind === "owned" && item.steam_app_id;
+    const fromPsn = item.kind === "owned" && item.psn_id;
+    if (!confirm(t(fromPsn ? "collection_remove_confirm_psn" : fromSteam ? "collection_remove_confirm_steam" : "collection_remove_confirm"))) return false;
+    const { ok } = await api(`/api/collection/${item.id}`, { method: "DELETE" });
+    if (ok) await load();
+    return ok;
+}
+
 // An owned game's details in a window over the grid (user, 2026-10-11: not inside the card); each
-// field is saved when it changes, the grid is drawn again on closing
+// change is saved at once and says so, the grid is drawn again on closing
 const dialog = document.getElementById("item-dialog");
 let editing = null;          // the id of the item in the window
 let reloadOnClose = false;   // its edition changed: its name and prices are the new edition's
@@ -233,14 +303,16 @@ function openEditor(id) {
     const body = document.getElementById("item-dialog-body");
     body.innerHTML = `
         <div class="d-flex gap-3 align-items-start">
-            <img class="dialog-cover" src="${esc(item.image || "")}" alt="">
+            <img class="dialog-cover ${coverClass(item.image)}" src="${esc(item.image || "")}" alt="">
             <div class="flex-grow-1 min-w-0">
                 <h2 id="item-dialog-title" class="h5 mb-0">${esc(localName(item) || "")}</h2>
                 <div class="small text-body-secondary">${esc(item.platform_name || "")}</div>
+                <button type="button" class="btn btn-link btn-sm p-0 text-start" data-edition-toggle aria-expanded="false" aria-controls="edition-change">
+                    ${esc(t("collection_edition"))}: <span data-edition-name>…</span> · ${esc(t("collection_edition_change_link"))}</button>
             </div>
             <button type="button" class="btn-close" data-close aria-label="${esc(t("collection_edit_done"))}"></button>
         </div>
-        <form id="edition-change" class="row g-2 mt-2" novalidate>
+        <form id="edition-change" class="row g-2 mt-1 d-none" novalidate>
             <div class="col-12"><label class="form-label small text-body-secondary mb-0 d-block">${esc(t("collection_edition"))}
                 <select class="form-select form-select-sm" name="edition" disabled><option>…</option></select></label></div>
             <div class="col-12 d-none" data-typed>
@@ -251,31 +323,65 @@ function openEditor(id) {
                 </div>
             </div>
         </form>
+        <p class="small text-body-secondary mt-2 mb-0">${esc(t("collection_saved_automatically"))}</p>
         ${ownedControls(item)}
-        <div class="d-flex justify-content-end mt-3">
-            <button type="button" class="btn btn-primary btn-sm" data-close>${t("collection_edit_done")}</button>
+        <div class="d-flex align-items-center gap-2 border-top pt-2 mt-3">
+            <button type="button" class="btn btn-link btn-sm text-danger px-0" data-remove>${esc(t("collection_remove_from"))}</button>
+            <span class="small text-success ms-auto" data-saved role="status"></span>
+            <button type="button" class="btn btn-primary btn-sm" data-close>${t("collection_done")}</button>
         </div>`;
-    body.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
-    body.querySelectorAll("[data-field]").forEach(input => input.onchange = async () => {
-        const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { [input.dataset.field]: input.value } });
-        if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
-        const numeric = ["hours", "achievements", "achievements_total"].includes(input.dataset.field);
-        item[input.dataset.field] = numeric ? (input.value ? Number(input.value.replace(",", ".")) : null) : input.value || null;
+    const saved = body.querySelector("[data-saved]");
+    const done = ok => {                       // "✓ Guardado" for a moment, or what went wrong
+        saved.className = `small ms-auto ${ok === true ? "text-success" : "text-danger"}`;
+        saved.textContent = ok === true ? t("collection_saved") : ok;
+        clearTimeout(done.timer);
+        if (ok === true) done.timer = setTimeout(() => saved.textContent = "", 2500);
+    };
+    const save = async (field, value) => {
+        const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { [field]: value } });
+        if (!ok) { done(t(`error_${answer?.error || "unknown"}`)); return false; }
+        const numeric = ["hours", "achievements", "achievements_total"].includes(field);
+        item[field] = typeof value === "boolean" ? value : numeric ? (value ? Number(String(value).replace(",", ".")) : null) : value || null;
         data.stats = recount();
         renderStats();
+        done(true);
+        return true;
+    };
+    const press = (button, on) => {           // a pressed button in its colour (a status: its badge's)
+        button.setAttribute("aria-pressed", on);
+        button.classList.toggle(button.dataset.on, on);
+    };
+    body.querySelectorAll("[data-choice] , [data-toggle]").forEach(b => press(b, b.getAttribute("aria-pressed") === "true"));
+    body.querySelectorAll("[data-choice]").forEach(button => button.onclick = async () => {
+        const field = button.dataset.choice, group = body.querySelectorAll(`[data-choice="${field}"]`);
+        const before = [...group].find(b => b.getAttribute("aria-pressed") === "true");
+        group.forEach(b => press(b, b === button));
+        const ok = field === "score" ? await saveScore(button.dataset.value) : await save(field, button.dataset.value);
+        if (!ok) group.forEach(b => press(b, b === before));
+    });
+    body.querySelectorAll("[data-toggle]").forEach(button => button.onclick = async () => {
+        const on = button.getAttribute("aria-pressed") !== "true";
+        press(button, on);
+        if (!await save(button.dataset.toggle, on)) press(button, !on);
+    });
+    body.querySelectorAll("[data-field]").forEach(input => input.onchange = async () => {
+        if (await save(input.dataset.field, input.value) && input.dataset.field.startsWith("achievements"))
+            body.querySelector("[data-progress]").innerHTML = progressBar(item);
     });
     // the score is the user's review of the game (game page): one per game, kept in step on every item of it
-    const score = body.querySelector("[data-score]");
-    score.onchange = async () => {
-        const { ok, data: answer } = await api(`/api/games/${item.game_id}/reviews/mine/score`,
-                                               { method: "PUT", body: { score: score.value } });
-        if (!ok) {
-            score.value = item.score ?? "";
-            return showMessage(false, t(`error_${answer?.error || "unknown"}`));
-        }
+    const saveScore = async value => {
+        if (item.score_locked) return false;
+        const { ok, data: answer } = await api(`/api/games/${item.game_id}/reviews/mine/score`, { method: "PUT", body: { score: value } });
+        if (!ok) { done(t(`error_${answer?.error || "unknown"}`)); return false; }
         data.items.filter(i => i.game_id === item.game_id).forEach(i => i.score = answer.score);
-        showMessage(true, t("collection_score_saved"));
+        done(true);
+        return true;
     };
+    if (item.score_locked) body.querySelectorAll('[data-choice="score"]').forEach(b => b.disabled = true);
+    const editionForm = body.querySelector("#edition-change"), toggle = body.querySelector("[data-edition-toggle]");
+    toggle.onclick = () => toggle.setAttribute("aria-expanded", !editionForm.classList.toggle("d-none"));
+    body.querySelector("[data-remove]").onclick = async () => { if (await removeItem(item)) dialog.close(); };
+    body.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
     dialog.showModal();
     loadEditionChange(item);
 }
@@ -288,6 +394,8 @@ async function loadEditionChange(item) {
     form.edition.innerHTML = [...choices, { value: "other", label: t("collection_other_edition") }].map(c =>
         `<option value="${esc(c.value)}" ${c.value === current ? "selected" : ""}>${esc(c.label)}</option>`).join("");
     form.edition.disabled = false;
+    const name = document.querySelector("[data-edition-name]");
+    if (name) name.textContent = choices.find(c => c.value === current)?.label || t("collection_other_edition");
     const save = async () => {
         const { ok, data: answer } = await api(`/api/collection/${item.id}`, { method: "PATCH", body: editionBody(form.edition.value, form.typed.value) });
         if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
@@ -303,8 +411,8 @@ async function loadEditionChange(item) {
 }
 dialog.onclick = event => { if (event.target === dialog) dialog.close(); };      // a click outside the window
 
-// "Adicionar um jogo" and "Importar da Steam" open their windows; ✕ or a click outside closes them
-for (const [button, box] of [["open-add", "add-dialog"], ["open-steam", "steam-dialog"]]) {
+// "Adicionar um jogo" and the imports open their windows; ✕ or a click outside closes them
+for (const [button, box] of [["open-add", "add-dialog"], ["open-steam", "steam-dialog"], ["open-psn", "psn-dialog"]]) {
     const window_ = document.getElementById(box);
     document.getElementById(button).onclick = () => window_.showModal();
     window_.onclick = event => { if (event.target === window_) window_.close(); };
@@ -331,10 +439,25 @@ function recount() {
              achievements_total: withTotal.reduce((sum, i) => sum + i.achievements_total, 0) };
 }
 
-function renderPublicLink() {
-    const box = document.getElementById("public-link");
-    box.classList.toggle("d-none", !data.public);
-    box.innerHTML = data.public ? `${esc(t("collection_public_at"))} <a href="/user/${encodeURIComponent(currentUser.username)}">/user/${esc(currentUser.username)}</a>` : "";
+// Who sees the collection: private, or public with its page and its link to share
+function renderSharing() {
+    const open = data.public, page = `/user/${encodeURIComponent(currentUser.username)}/collection`;
+    document.getElementById("public-icon").textContent = open ? "🌐" : "🔒";
+    document.getElementById("public-title").textContent = t(open ? "collection_public_on" : "collection_public_off");
+    document.getElementById("public-text").textContent = t(open ? "collection_public_on_text" : "collection_public_off_text");
+    document.getElementById("public-actions").classList.toggle("d-none", !open);
+    const link = document.getElementById("public-page");
+    link.href = page;
+    link.textContent = t("collection_public_see");
+    document.getElementById("public-copy").onclick = async event => {
+        try {
+            await navigator.clipboard.writeText(location.origin + page);
+            event.target.textContent = t("collection_link_copied");
+        } catch (e) {
+            event.target.textContent = location.origin + page;        // no clipboard: the link to copy by hand
+        }
+        setTimeout(() => event.target.textContent = t("collection_copy_link"), 2500);
+    };
 }
 
 async function load() {
@@ -344,7 +467,7 @@ async function load() {
     data = await response.json();
     document.getElementById("public-switch").checked = data.public;
     document.getElementById("alerts-switch").checked = data.wish_alerts;
-    renderPublicLink();
+    renderSharing();
     renderStats();
     renderItems();
     document.getElementById("content").classList.remove("d-none");
@@ -386,6 +509,15 @@ async function addGame(gameId, editionId) {
             <input name="typed" class="form-control form-control-sm mt-1" maxlength="100" ${chosen === "other" ? "" : "disabled"}
                    placeholder="${esc(t("collection_other_edition_placeholder"))}" aria-label="${esc(t("collection_other_edition"))}">
         </fieldset>
+        ${kind === "owned" ? `
+        <fieldset class="mt-3">
+            <legend class="h6">${t("collection_format")}</legend>
+            ${["physical", "digital"].map(x => `
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="format" id="format-${x}" value="${x}" ${x === "physical" ? "checked" : ""}>
+                    <label class="form-check-label" for="format-${x}">${t(`format_${x}`)}</label>
+                </div>`).join("")}
+        </fieldset>` : ""}
         <div class="d-flex gap-2 justify-content-end mt-3">
             <button type="button" class="btn btn-sm btn-secondary" data-back>${t("collection_back")}</button>
             <button type="submit" class="btn btn-sm btn-primary">${t("collection_add_this")}</button>
@@ -397,7 +529,8 @@ async function addGame(gameId, editionId) {
     form.querySelector("[data-back]").onclick = () => showAddStep("game");
     form.onsubmit = async event => {
         event.preventDefault();
-        const { ok, data: answer } = await api("/api/collection", { body: { kind, game_id: gameId, ...editionBody(form.edition.value, form.typed.value) } });
+        const { ok, data: answer } = await api("/api/collection", { body: { kind, game_id: gameId, ...editionBody(form.edition.value, form.typed.value),
+                                                                    ...(kind === "owned" ? { format: form.format.value } : {}) } });
         if (!ok) return showMessage(false, t(`error_${answer?.error || "unknown"}`));
         document.getElementById("add-dialog").close();
         await load();
@@ -420,43 +553,60 @@ const clearAddSearch = gamePicker({
     igdbResults: document.getElementById("add-igdb-results"),
 }, addGame, code => showMessage(false, t(`error_${code}`)));
 
-// The user's Steam games (steam_service): all go in at once, with hours and achievements (the ones no
-// store sells only in the collection); those IGDB doesn't know are listed. No profile: the last one again
-async function importSteam(profile) {
-    const result = document.getElementById("steam-result"), list = document.getElementById("steam-missing");
-    const buttons = document.querySelectorAll("#steam-form button, #steam-refresh");
-    buttons.forEach(b => b.disabled = true);
-    result.textContent = t("steam_importing");
-    list.innerHTML = "";
-    const { ok, data: answer } = await api("/api/collection/steam", { body: profile ? { profile } : {} });
-    buttons.forEach(b => b.disabled = false);
-    if (!ok) return result.textContent = t(`error_${answer?.error || "unknown"}`);
-    result.textContent = t("steam_imported", { total: answer.total, added: answer.added, updated: answer.updated })
-        + (answer.skipped ? " " + t("steam_skipped", { n: answer.skipped }) : "")
-        + (answer.missing.length ? " " + t("steam_missing", { missing: answer.missing.length }) : "");
-    const hours = h => h ? ` · ${fmtNumber(h)} h` : "";
-    list.innerHTML = answer.missing.map(m => `
-        <div class="list-group-item py-1 small">${esc(m.name)}<span class="text-body-secondary">${hours(m.hours)}</span></div>`).join("");
-    if (answer.added || answer.updated) load();
-    loadSteamProfile();
+// The user's Steam games (steam_service) or PlayStation games (psn_service): all go in at once, with
+// hours and achievements / trophies (the ones no store sells only in the collection); those IGDB doesn't
+// know are listed. No profile: the last one again. key: steam | psn, the elements' and texts' prefix;
+// field: what the API calls the profile; options: more of the request's body (PSN: the PS Plus games too?)
+function importer(key, field, options = () => ({})) {
+    const element = id => document.getElementById(`${key}-${id}`);
+    async function run(profile) {
+        const result = element("result"), list = element("missing");
+        const buttons = document.querySelectorAll(`#${key}-form button, #${key}-refresh`);
+        buttons.forEach(b => b.disabled = true);
+        // a few hundred games take a minute or two: a moving bar and the seconds so far, so it doesn't look stuck
+        const started = Date.now();
+        const tick = () => result.textContent = t("import_waiting", { seconds: Math.round((Date.now() - started) / 1000) });
+        tick();
+        const timer = setInterval(tick, 1000);
+        element("progress").classList.remove("d-none");
+        list.innerHTML = "";
+        const { ok, data: answer } = await api(`/api/collection/${key}`, { body: { ...options(), ...(profile ? { [field]: profile } : {}) } })
+            .catch(() => ({ ok: false, data: null }))        // the connection dropped: the usual error
+            .finally(() => {
+                clearInterval(timer);
+                element("progress").classList.add("d-none");
+            });
+        buttons.forEach(b => b.disabled = false);
+        if (!ok) return result.textContent = t(`error_${answer?.error || "unknown"}`);
+        result.textContent = t(`${key}_imported`, { total: answer.total, added: answer.added, updated: answer.updated })
+            + (answer.skipped ? " " + t("steam_skipped", { n: answer.skipped }) : "")
+            + (answer.ps_plus ? " " + t("psn_plus_left_out", { n: answer.ps_plus }) : "")
+            + (answer.missing.length ? " " + t("steam_missing", { missing: answer.missing.length }) : "");
+        const detail = m => m.hours ? ` · ${fmtNumber(m.hours)} h` : m.platform ? ` · ${esc(m.platform)}` : "";
+        list.innerHTML = answer.missing.map(m => `
+            <div class="list-group-item py-1 small">${esc(m.name)}<span class="text-body-secondary">${detail(m)}</span></div>`).join("");
+        if (answer.added || answer.updated) load();
+        loadProfile();
+    }
+    async function loadProfile() {
+        const response = await fetch(`/api/collection/${key}`);
+        const data = response.ok ? await response.json() : null;
+        const saved = data?.profile;
+        element("saved").classList.toggle("d-none", !saved);
+        if (!saved) return;
+        element("last").textContent = (saved.online_id ? saved.online_id + " · " : "") + (saved.imported_at
+            ? t("steam_last_import", { date: new Date(saved.imported_at).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) })
+            : "");
+    }
+    element("form").onsubmit = event => {
+        event.preventDefault();
+        run(element("profile").value);
+    };
+    element("refresh").onclick = () => run(null);
+    loadProfile();
 }
-
-async function loadSteamProfile() {
-    const response = await fetch("/api/collection/steam");
-    const data = response.ok ? await response.json() : null;
-    const saved = data?.profile;
-    document.getElementById("steam-saved").classList.toggle("d-none", !saved);
-    if (!saved) return;
-    document.getElementById("steam-last").textContent = data.profile.imported_at
-        ? t("steam_last_import", { date: new Date(data.profile.imported_at).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) })
-        : "";
-}
-document.getElementById("steam-form").onsubmit = event => {
-    event.preventDefault();
-    importSteam(document.getElementById("steam-profile").value);
-};
-document.getElementById("steam-refresh").onclick = () => importSteam(null);
-loadSteamProfile();
+importer("steam", "profile");
+importer("psn", "name", () => ({ ps_plus: document.getElementById("psn-plus").checked }));
 
 // The link in a wishlist alert e-mail (?alerts_off=…) works without logging in
 async function alertsOffFromLink() {
@@ -474,12 +624,6 @@ async function start() {
     await renderAccountArea();
     if (!currentUser && fromLink) return document.getElementById("loading").classList.add("d-none");
     if (!currentUser) return location.replace(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
-    document.getElementById("filter-status").innerHTML = `<option value="">${t("collection_all_statuses")}</option>`
-        + STATUSES.map(x => `<option value="${x}">${t(`status_play_${x}`)}</option>`).join("");
-    document.getElementById("filter-status").onchange = renderItems;
-    document.getElementById("filter-wish").innerHTML = Object.keys(WISH_FILTERS).map(f =>
-        `<option value="${f}">${t(`wish_filter_${f || "all"}`)}</option>`).join("");
-    document.getElementById("filter-wish").onchange = renderItems;
     document.getElementById("sort").onchange = event => { sortBy[kind] = event.target.value; renderItems(); };
     document.getElementById("filter-text").oninput = renderItems;
     document.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => {
@@ -489,7 +633,8 @@ async function start() {
     });
     document.getElementById("public-switch").onchange = async e => {
         const { ok } = await api("/api/collection/settings", { method: "PUT", body: { public: e.target.checked } });
-        if (ok) { data.public = e.target.checked; renderPublicLink(); }
+        if (ok) { data.public = e.target.checked; renderSharing(); }
+        else e.target.checked = !e.target.checked;
     };
     document.getElementById("alerts-switch").onchange = async e => {
         const { ok } = await api("/api/collection/settings", { method: "PUT",

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Game Price Tracker</title>
+    <title>SaveOnGames</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <!-- installable on a phone (static/manifest.webmanifest, static/sw.js) -->
     <link rel="manifest" href="/manifest.webmanifest">
@@ -14,10 +14,9 @@
     <script src="/static/common.js"></script>
     <script src="/static/i18n.js"></script>
     <script src="/static/market.js"></script>
+    <script src="/static/collection_grid.js"></script>
     <style>
-        /* the collection as a grid of covers (user, 2026-10-11); "Editar" opens a window over it */
-        .item-cover { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--bs-secondary-bg); }
-        .item-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        /* the collection as a grid of covers (common.css .item-*); "Editar" opens a window over it */
         .item-dialog { width: min(560px, calc(100vw - 2rem)); border: 1px solid var(--bs-border-color); border-radius: .75rem;
                        background: var(--bs-body-bg); color: var(--bs-body-color); padding: 1rem; }
         .item-dialog::backdrop { background: rgb(0 0 0 / .5); }
@@ -25,42 +24,90 @@
         @media (max-width: 575.98px) {      /* a phone: the whole screen */
             .item-dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
         }
-        .stat { min-width: 7.5rem; flex: 1 1 7.5rem; max-width: 11rem; }
-        .item-facts { display: flex; flex-wrap: wrap; gap: .25rem .75rem; align-items: center; }
+        /* the statistics (collection.js renderStats; user, 2026-10-12: reworked): equal tiles, a value and
+           one line under it, a meter for a share; the statuses and platforms as part-to-whole bars */
+        .stat-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: .5rem; }
+        .settings-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .5rem; }
+        .setting-row { display: flex; align-items: flex-start; gap: .75rem; padding: .75rem .9rem; border: 1px solid var(--bs-border-color);
+                       border-radius: .75rem; background: var(--bs-body-bg); }
+        .setting-icon { font-size: 1.25rem; line-height: 1.2; }
+        .setting-row .form-switch .form-check-input { width: 2.5em; height: 1.35em; margin-top: .1rem; cursor: pointer; }
+        @media (max-width: 575.98px) {      /* two a row: a last one alone takes the row */
+            .stat-row > .stat-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+        }
+        .stat-tile { background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .75rem;
+                     padding: .75rem .9rem; display: flex; flex-direction: column; gap: .15rem; }
+        .stat-label { font-size: .8rem; color: var(--bs-secondary-color); }
+        .stat-value { font-size: 1.5rem; font-weight: 600; line-height: 1.2; color: var(--bs-emphasis-color); }
+        .stat-sub { font-size: .8rem; color: var(--bs-secondary-color); }
+        .stat-meter { height: .375rem; border-radius: 999px; background: var(--bs-secondary-bg); overflow: hidden; margin-top: .35rem; }
+        .stat-meter > span { display: block; height: 100%; border-radius: 999px; background: var(--brand-btn); }
+        .stack-title { font-size: .8rem; color: var(--bs-secondary-color); margin-bottom: .35rem; }
+        .stack-bar { display: flex; gap: 2px; height: .75rem; border-radius: 4px; overflow: hidden; background: var(--bs-body-bg); }
+        .stack-bar > span { min-width: 3px; }
+        .stack-legend { display: flex; flex-wrap: wrap; gap: .25rem .4rem; margin: .5rem 0 0; padding: 0; list-style: none; }
+        .stack-legend button { display: inline-flex; align-items: center; gap: .35rem; border: 0; background: none;
+                               padding: .1rem .35rem; border-radius: .4rem; font-size: .8rem; color: var(--bs-body-color); }
+        .stack-legend button:hover, .stack-legend button[aria-pressed="true"] { background: var(--bs-secondary-bg); }
+        .stack-legend .swatch { width: .65rem; height: .65rem; border-radius: 3px; flex-shrink: 0; }
+        .stack-legend .count { color: var(--bs-secondary-color); }
+        /* the edit window (collection.js ownedControls): sections of buttons */
+        .editor-section { margin-top: 1rem; }
+        .editor-title { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
+                        color: var(--bs-secondary-color); margin-bottom: .35rem; }
+        .choice-group { display: flex; flex-wrap: wrap; gap: .35rem; }
+        .choice { border: 1px solid var(--bs-border-color); border-radius: 999px; padding: .25rem .7rem; font-size: .875rem;
+                  min-width: 2.25rem; }
+        :where(.choice) { background: var(--bs-body-bg); color: var(--bs-body-color); }   /* a pressed one's colour wins */
+        .choice:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--bs-secondary-bg); }
+        .choice[aria-pressed="true"] { border-color: transparent; font-weight: 600; }
+        .choice.choice-on { background: var(--bs-emphasis-color); color: var(--bs-body-bg); }
+        .choice:disabled { opacity: .5; }
+        .choice:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
     </style>
 </head>
 <body class="bg-body-tertiary">
 
 {% include "_header.html" %}
 
-<div class="container pb-4" style="max-width: 1000px;">
+<div class="container pb-4" style="max-width: 1320px;">
 
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-        <h1 class="h3 mb-0" data-i18n="collection_title"></h1>
-        <div class="d-flex flex-wrap gap-3">
-            <div class="form-check form-switch mb-0">
-                <input class="form-check-input" type="checkbox" role="switch" id="public-switch">
-                <label class="form-check-label small" for="public-switch" data-i18n="collection_public"></label>
+    <h1 class="h3 mb-3" data-i18n="collection_title"></h1>
+    <!-- Who sees the collection, and the wishlist e-mails (user, 2026-10-12: reworked): one row each, what it
+         means in a line, the switch on the right; a public collection's page and its link (collection.js renderSharing) -->
+    <div class="settings-panel mb-3">
+        <div class="setting-row">
+            <span id="public-icon" class="setting-icon" aria-hidden="true"></span>
+            <div class="flex-grow-1 min-w-0">
+                <label class="fw-semibold small d-block" for="public-switch" id="public-title"></label>
+                <div id="public-text" class="small text-body-secondary"></div>
+                <div id="public-actions" class="small d-flex flex-wrap gap-2 mt-1 d-none">
+                    <a id="public-page"></a>
+                    <button type="button" id="public-copy" class="btn btn-link btn-sm p-0 align-baseline" data-i18n="collection_copy_link"></button>
+                </div>
             </div>
-            <div class="form-check form-switch mb-0">
-                <input class="form-check-input" type="checkbox" role="switch" id="alerts-switch"
-                       aria-describedby="alerts-hint">
-                <label class="form-check-label small" for="alerts-switch" data-i18n="collection_wish_alerts"
-                       data-i18n-title="collection_wish_alerts_hint"></label>
-                <span id="alerts-hint" class="visually-hidden" data-i18n="collection_wish_alerts_hint"></span>
+            <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="public-switch"
+                 aria-describedby="public-text"></div>
+        </div>
+        <div class="setting-row">
+            <span class="setting-icon" aria-hidden="true">🔔</span>
+            <div class="flex-grow-1 min-w-0">
+                <label class="fw-semibold small d-block" for="alerts-switch" data-i18n="collection_alerts_title"></label>
+                <div id="alerts-hint" class="small text-body-secondary" data-i18n="collection_wish_alerts_hint"></div>
             </div>
+            <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="alerts-switch"
+                 aria-describedby="alerts-hint"></div>
         </div>
     </div>
-    <div id="public-link" class="small mb-3 d-none"></div>
 
     <div id="loading" class="text-center my-5"><div class="spinner-border text-primary"></div></div>
     <div id="message" class="alert d-none py-2 small" role="alert"></div>
 
     <div id="content" class="d-none">
         <!-- Statistics -->
-        <div id="stats" class="d-flex flex-wrap gap-2 mb-4"></div>
+        <div id="stats" class="mb-4"></div>
 
-        <!-- The tabs, and the two buttons that open "add a game" and "import from Steam" (user, 2026-10-11:
+        <!-- The tabs, and the buttons that open "add a game" and the Steam / PSN imports (user, 2026-10-11:
              buttons, not panels above the grid) -->
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
             <ul class="nav nav-pills" role="tablist">
@@ -69,21 +116,28 @@
             </ul>
             <div class="d-flex flex-wrap gap-2 ms-auto">
                 <button type="button" id="open-steam" class="btn btn-sm btn-secondary" aria-haspopup="dialog" data-i18n="steam_import"></button>
+                <button type="button" id="open-psn" class="btn btn-sm btn-secondary" aria-haspopup="dialog" data-i18n="psn_import"></button>
                 <button type="button" id="open-add" class="btn btn-sm btn-primary" aria-haspopup="dialog"></button>
             </div>
         </div>
+        <!-- the name and the order above the grid; the checkbox filters in a sidebar (collection_grid.js;
+             user, 2026-10-12), opened by "Filtros" below large screens -->
         <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+            <button type="button" id="filters-toggle" class="btn btn-sm btn-secondary d-lg-none" aria-expanded="false"
+                    aria-controls="filters"></button>
             <input id="filter-text" type="search" class="form-control form-control-sm w-auto"
                    data-i18n-placeholder="collection_filter" data-i18n-aria-label="collection_filter">
-            <select id="filter-status" class="form-select form-select-sm w-auto" data-i18n-aria-label="collection_status"></select>
-            <!-- the wishlist: what to show (deals, on sale, used, looking for); both lists: the order -->
-            <select id="filter-wish" class="form-select form-select-sm w-auto" data-i18n-aria-label="collection_wish_filter"></select>
             <select id="sort" class="form-select form-select-sm w-auto" data-i18n-aria-label="collection_sort"></select>
         </div>
-        <!-- one button per console / platform in this list (collection.js platformChips) -->
-        <div id="filter-platforms" class="d-flex flex-wrap gap-2 mb-3" role="group" data-i18n-aria-label="collection_platforms"></div>
-        <div id="items" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-3"></div>
-        <p id="empty" class="text-body-secondary d-none"></p>
+        <div class="row g-3">
+            <aside class="col-lg-3 col-xl-2">
+                <div id="filters" class="filter-sidebar" role="group" data-i18n-aria-label="filters"></div>
+            </aside>
+            <div class="col-lg-9 col-xl-10">
+                <div id="items" class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-3"></div>
+                <p id="empty" class="text-body-secondary d-none"></p>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -123,8 +177,46 @@
         <button type="button" id="steam-refresh" class="btn btn-sm btn-secondary" data-i18n="steam_refresh"></button>
         <span id="steam-last" class="small text-body-secondary"></span>
     </div>
+    <!-- while it imports (collection.js importer): one request with no progress to read, so a moving bar
+         and the seconds so far -->
+    <div id="steam-progress" class="progress mt-3 d-none" role="progressbar" data-i18n-aria-label="steam_importing" style="height: .5rem;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated w-100" style="background-color: var(--brand-btn);"></div>
+    </div>
     <div id="steam-result" class="small mt-2"></div>
     <div id="steam-missing" class="list-group mt-1" style="max-height: 320px; overflow-y: auto;"></div>
+</dialog>
+
+<!-- The user's PlayStation games and trophies (psn_service): only on the owned tab -->
+<dialog id="psn-dialog" class="item-dialog" aria-labelledby="psn-dialog-title">
+    <div class="d-flex align-items-start gap-2 mb-2">
+        <h2 id="psn-dialog-title" class="h5 mb-0 flex-grow-1" data-i18n="psn_import"></h2>
+        <button type="button" class="btn-close" data-close data-i18n-aria-label="collection_edit_done"></button>
+    </div>
+    <form id="psn-form" novalidate>
+        <p class="small mb-2" data-i18n="psn_import_help"></p>
+        <div class="input-group input-group-sm">
+            <input id="psn-profile" class="form-control" autocomplete="off" required maxlength="100"
+                   data-i18n-placeholder="psn_profile_placeholder" data-i18n-aria-label="psn_profile">
+            <button type="submit" class="btn btn-primary" data-i18n="steam_import_button"></button>
+        </div>
+        <!-- games only ever played on PS Plus aren't the user's: out unless asked for -->
+        <div class="form-check small mt-2">
+            <input type="checkbox" class="form-check-input" id="psn-plus">
+            <label class="form-check-label" for="psn-plus" data-i18n="psn_plus_include"></label>
+        </div>
+    </form>
+    <!-- After a first import: the same player again with one button -->
+    <div id="psn-saved" class="d-flex flex-wrap align-items-center gap-2 mt-2 d-none">
+        <button type="button" id="psn-refresh" class="btn btn-sm btn-secondary" data-i18n="psn_refresh"></button>
+        <span id="psn-last" class="small text-body-secondary"></span>
+    </div>
+    <!-- while it imports (collection.js importer): one request with no progress to read, so a moving bar
+         and the seconds so far -->
+    <div id="psn-progress" class="progress mt-3 d-none" role="progressbar" data-i18n-aria-label="steam_importing" style="height: .5rem;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated w-100" style="background-color: var(--brand-btn);"></div>
+    </div>
+    <div id="psn-result" class="small mt-2"></div>
+    <div id="psn-missing" class="list-group mt-1" style="max-height: 320px; overflow-y: auto;"></div>
 </dialog>
 
 <!-- An owned game's details, edited over the grid (collection.js openEditor) -->

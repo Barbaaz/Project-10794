@@ -118,6 +118,38 @@ def test_no_igdb_editions_without_an_igdb_match(igdb):
     assert client.get(f"/api/igdb/games/{igdb['game']}/editions").get_json() == []     # the market game has no IGDB id
 
 
+@pytest.fixture
+def store_saves_okami_meanwhile(igdb, monkeypatch):
+    """The stores' processing saves its Okami (PS2) while a game is being made from IGDB: after the
+    check for a game of that name, before ours is added (2026-10-13: a PSN import during a scraper run)"""
+    c = igdb["db"]
+    plain = igdb_game_service.game_info
+
+    def game_info(g):
+        c.execute("INSERT INTO games (platform_id, title, normalized_title) "
+                  "SELECT id, 'Okami', 'okami' FROM platforms WHERE code = 'PS2'")
+        return plain(g)
+    monkeypatch.setattr(igdb_game_service, "game_info", game_info)
+    yield lambda: c.execute("SELECT id FROM games WHERE normalized_title = 'okami'").fetchone()
+    c.execute("DELETE FROM game_editions WHERE game_id IN (SELECT id FROM games WHERE normalized_title = 'okami')")
+    c.execute("DELETE FROM games WHERE normalized_title = 'okami'")
+
+
+def test_a_game_the_stores_saved_meanwhile_is_taken_not_made_twice(igdb, store_saves_okami_meanwhile):
+    client = igdb["client"]
+    sign_up(client, "retro_seller6")
+    made = client.post("/api/igdb/games", headers=HEADERS, json={"igdb_id": 9001, "platform": "PS2"})
+    assert made.status_code == 200
+    assert made.get_json()["game_id"] == store_saves_okami_meanwhile()[0]
+
+
+def test_an_import_takes_the_game_the_stores_saved_meanwhile(igdb, store_saves_okami_meanwhile):
+    """collection_editions (Steam / PSN imports): the import goes on with the stores' game"""
+    edition = igdb_game_service.collection_editions([9001], "PS2")[9001]
+    game_id = igdb["db"].execute("SELECT game_id FROM game_editions WHERE id = ?", edition).fetchone()[0]
+    assert game_id == store_saves_okami_meanwhile()[0]
+
+
 def test_a_game_from_igdb_can_go_into_the_collection_and_stays(igdb):
     """/collection's "Adicionar um jogo": a game we don't have, created from IGDB, on the collection or the
     wishlist; the rematch's orphan clean-up leaves it while it's in someone's collection."""

@@ -32,6 +32,18 @@ function esc(text) {
 }
 
 // "@name"; "utilizador removido" for an account deleted since (no username or page any more)
+// A card's picture: IGDB's flat cover fills the 3:4 frame; a store's photo (a special edition's box, a
+// game IGDB lacks) is shown whole on white, never cut (user, 2026-10-12: "normalize the images")
+function coverClass(url) {
+    return url && !url.includes("images.igdb.com") ? "store-photo" : "";
+}
+
+// A user's picture (their profile picture, else 👤), `size` px round
+function avatarImage(url, size = 32) {
+    return url ? `<img src="${esc(url)}" alt="" class="avatar" width="${size}" height="${size}">`
+               : `<span class="avatar avatar-none" style="width: ${size}px; height: ${size}px; font-size: ${Math.round(size * .55)}px;">👤</span>`;
+}
+
 function userLabel(username) {
     return username ? `@${username}` : t("deleted_user");
 }
@@ -122,10 +134,10 @@ async function renderAccountArea() {
         ${navButton("/collection", "📚", t("nav_collection"), 'id="collection-link"')}
         <div class="account-menu position-relative">
             <button type="button" class="btn btn-sm header-link" id="account-menu-btn" aria-haspopup="menu" aria-expanded="false"
-                    aria-controls="account-menu" title="${esc(t("account_menu"))}"><span class="icon">👤</span><span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
+                    aria-controls="account-menu" title="${esc(t("account_menu"))}"><span class="icon">${currentUser.avatar ? avatarImage(currentUser.avatar, 22) : "👤"}</span><span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
             <div class="dropdown-menu shadow" id="account-menu" role="menu">
                 <span class="dropdown-header">@${esc(name)}</span>
-                <a class="dropdown-item" role="menuitem" href="/account">${t("my_account")}</a>
+                <a class="dropdown-item" role="menuitem" href="/account">⚙️ ${t("settings_title")}</a>
                 <a class="dropdown-item" role="menuitem" href="/user/${encodeURIComponent(currentUser.username || "")}">${t("my_profile")}</a>
                 ${staff ? `<a class="dropdown-item" role="menuitem" href="/admin">🛡️ ${t("mod_title")}</a>` : ""}
                 <div class="d-sm-none">

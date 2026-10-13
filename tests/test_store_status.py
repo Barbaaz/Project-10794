@@ -61,5 +61,5 @@ def test_demo_mode(client, monkeypatch):
 def test_run_summary():
     assert run_summary([], []) is None
     title, message = run_summary(["cstech"], ["mega-mania"])
-    assert title == "Game Price Tracker"
+    assert title == "SaveOnGames"
     assert "Falhou: cstech" in message and "mega-mania" in message

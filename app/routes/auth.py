@@ -9,8 +9,9 @@ from functools import wraps
 
 from flask import Blueprint, Response, abort, g, jsonify, request, session
 
-from app.services import auth_service, export_service
+from app.services import auth_service, export_service, gaming_accounts
 from app.services.auth_service import AccountError
+from app.services.photo_storage import PhotoError
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -126,6 +127,40 @@ def change_password():
         return account_error(e)
     log_in(user)                 # this session gets the new password's mark
     return jsonify(user)
+
+
+@bp.patch("/profile")
+@login_required
+def update_profile():
+    """{display_name?, location?, psn?, xbox?, steam?…}: the profile's name, location, gamer names and
+    channels (gaming_accounts.KINDS) → the account"""
+    data = request.get_json(silent=True) or {}
+    texts = {k: v for k, v in data.items() if v is None or isinstance(v, str)}
+    changes = {k: texts[k] for k in ("display_name", "location") if k in texts}
+    changes["accounts"] = {k: texts[k] for k in gaming_accounts.KINDS if k in texts}
+    try:
+        return jsonify(auth_service.update_profile(current_user()["id"], changes))
+    except AccountError as e:
+        return account_error(e)
+
+
+@bp.post("/avatar")
+@login_required
+def upload_avatar():
+    """multipart "avatar": the profile picture (a square, metadata removed) → the account"""
+    upload = request.files.get("avatar")
+    if not upload or not upload.filename:
+        return jsonify(error="photo_type"), 400
+    try:
+        return jsonify(auth_service.set_avatar(current_user()["id"], upload.read()))
+    except PhotoError as e:
+        return jsonify(error=e.code), 400
+
+
+@bp.delete("/avatar")
+@login_required
+def delete_avatar():
+    return jsonify(auth_service.remove_avatar(current_user()["id"]))
 
 
 @bp.post("/delete")

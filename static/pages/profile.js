@@ -6,6 +6,23 @@ function stars(n) {
     return `<span class="text-warning" aria-label="${esc(t("stars_n", { n }))}">${"★".repeat(n)}${"☆".repeat(5 - n)}</span>`;
 }
 
+// The services' own names: the same in both languages
+const SERVICES = { psn: "PSN", xbox: "Xbox", steam: "Steam", nintendo: "Nintendo Switch", epic: "Epic Games",
+                   youtube: "YouTube", twitch: "Twitch" };
+
+// The gamer names and channels (gaming_accounts.shown): a link to the service's page where it has one
+function showAccounts(accounts) {
+    const box = document.getElementById("gaming-accounts");
+    box.innerHTML = accounts.map(a => {
+        const text = `<strong>${esc(SERVICES[a.kind])}</strong>${a.name ? ` ${esc(a.name)}` : ""}`;
+        return a.url
+            ? `<a role="listitem" class="badge rounded-pill bg-body-secondary text-body border text-decoration-none fw-normal"
+                  href="${esc(a.url)}" target="_blank" rel="noopener noreferrer nofollow ugc">${text} ↗</a>`
+            : `<span role="listitem" class="badge rounded-pill bg-body-secondary text-body border fw-normal user-select-all">${text}</span>`;
+    }).join("");
+    box.classList.toggle("d-none", !accounts.length);
+}
+
 async function load() {
     await renderAccountArea();
     const response = await fetch(`/api/users/${encodeURIComponent(USERNAME)}`);
@@ -13,7 +30,7 @@ async function load() {
     if (!response.ok) return document.getElementById("error").classList.remove("d-none");
     const user = await response.json();
     USER_ID = user.id;
-    document.title = `@${user.username} · Game Price Tracker`;
+    document.title = `@${user.username} · SaveOnGames`;
     document.getElementById("name").textContent =
         user.display_name !== user.username ? `${user.display_name} (@${user.username})` : `@${user.username}`;
     document.getElementById("since").textContent =
@@ -21,7 +38,13 @@ async function load() {
     document.getElementById("average").innerHTML = user.rating_count ? `★ ${fmtNumber(user.rating)}` : "—";
     document.getElementById("count").textContent = t("profile_rating_count", { count: user.rating_count });
 
+    document.getElementById("avatar").innerHTML = avatarImage(user.avatar, 72);
+    const where = document.getElementById("location");
+    where.textContent = user.location ? `📍 ${user.location}` : "";
+    where.classList.toggle("d-none", !user.location);
+    showAccounts(user.accounts);
     const mine = currentUser && currentUser.id === user.id;     // the person can answer their ratings
+    document.getElementById("edit-profile").classList.toggle("d-none", !mine);
     document.getElementById("report-user").innerHTML = mine ? "" : reportButton("user", user.id);
     const list = document.getElementById("ratings");
     list.innerHTML = user.ratings.map(r => `
@@ -51,6 +74,41 @@ async function load() {
     showGameReviews(user.game_reviews);
     document.getElementById("profile").classList.remove("d-none");
     loadCollection();
+    loadFollows(mine);
+}
+
+// Following (follow_service): the counts, follow / unfollow, and on the user's own profile who they follow
+async function loadFollows(mine) {
+    const counts = await fetch(`/api/users/${encodeURIComponent(USERNAME)}/follows`).then(r => r.ok ? r.json() : null);
+    if (!counts) return;
+    document.getElementById("follow-counts").textContent =
+        t("follow_counts", { followers: counts.followers, following: counts.following });
+    const button = document.getElementById("follow-button");
+    button.classList.toggle("d-none", mine);
+    button.textContent = t(counts.followed ? "unfollow" : "follow");
+    button.classList.toggle("btn-primary", !counts.followed);
+    button.classList.toggle("btn-secondary", counts.followed);
+    button.setAttribute("aria-pressed", counts.followed);
+    button.onclick = async () => {
+        if (!currentUser) return location.assign(`/account?next=${encodeURIComponent(location.pathname)}`);
+        const { ok } = await api(`/api/users/${encodeURIComponent(USERNAME)}/follow`,
+                                 { method: counts.followed ? "DELETE" : "POST" });
+        if (ok) loadFollows(mine);
+    };
+    if (mine) loadFollowing();
+}
+
+async function loadFollowing() {
+    const people = await fetch("/api/following").then(r => r.ok ? r.json() : []);
+    document.getElementById("following-list").innerHTML = people.map(p => `
+        <div class="list-group-item d-flex flex-wrap align-items-center gap-2">
+            ${avatarImage(p.avatar, 32)}
+            <a href="/user/${encodeURIComponent(p.username)}" class="me-auto">${esc(userLabel(p.username))}</a>
+            ${p.collection_public ? `<a href="/compare/${encodeURIComponent(p.username)}" class="btn btn-sm btn-secondary">${t("compare_collections")}</a>`
+                                  : `<span class="small text-body-secondary">${t("compare_private")}</span>`}
+        </div>`).join("");
+    document.getElementById("following-none").classList.toggle("d-none", people.length > 0);
+    document.getElementById("following").classList.remove("d-none");
 }
 
 // Long texts are cut here; the whole review is on the game's page
@@ -77,16 +135,16 @@ async function loadCollection() {
     const response = await fetch(`/api/users/${encodeURIComponent(USERNAME)}/collection`);
     if (currentUser && currentUser.id === USER_ID) loadShowcaseEditor(response.ok);
     if (!response.ok) return;
-    const { items, stats, showcase } = await response.json();
+    if (currentUser && currentUser.id !== USER_ID) {        // public: the visitor can compare theirs with it
+        const link = document.getElementById("compare-link");
+        link.href = `/compare/${encodeURIComponent(USERNAME)}`;
+        link.classList.remove("d-none");
+    }
+    const { stats, showcase } = await response.json();
     showShowcase(showcase);
     document.getElementById("collection-summary").textContent =
         t("profile_collection_summary", { owned: stats.owned, completed: stats.completed, wishlist: stats.wishlist });
-    const owned = items.filter(i => i.kind === "owned").sort((a, b) => (a.name || "").localeCompare(b.name || "", LOCALE));
-    document.getElementById("collection-items").innerHTML = owned.map(i => `
-        <li class="list-group-item px-0 d-flex justify-content-between gap-2">
-            <a href="/game/${i.game_id}">${esc(localName(i) || "")}</a>
-            <span class="text-body-secondary text-nowrap">${esc(i.platform_name || "")}${i.status && i.status !== "owned" ? ` · ${esc(t(`status_play_${i.status}`))}` : ""}</span>
-        </li>`).join("");
+    document.getElementById("collection-link").href = `/user/${encodeURIComponent(USERNAME)}/collection`;
     document.getElementById("collection").classList.remove("d-none");
 }
 
@@ -106,7 +164,7 @@ function showShowcase(sections) {
             <h2 class="h5">${esc(t(`showcase_${s.section}`))}</h2>
             <div class="row row-cols-3 row-cols-sm-5 g-2">${s.items.map((g, i) => `
                 <div class="col"><a href="/game/${g.game_id}" class="d-block text-decoration-none text-body small">
-                    ${g.image ? `<img src="${esc(g.image)}" alt="" class="w-100 rounded mb-1 object-fit-cover" style="aspect-ratio: 3 / 4;">`
+                    ${g.image ? `<img src="${esc(g.image)}" alt="" class="w-100 rounded mb-1 object-fit-cover ${coverClass(g.image)}" style="aspect-ratio: 3 / 4;">`
                               : `<div class="w-100 rounded mb-1 bg-body-secondary" style="aspect-ratio: 3 / 4;"></div>`}
                     <div class="text-truncate fw-semibold">${esc(localName(g) || "")}</div>
                     <div class="text-body-secondary text-truncate">${esc(caption(s.section, g, i))} · ${esc(g.platform_name || "")}</div>

@@ -6,6 +6,7 @@ request_password_reset). Google / Microsoft sign-in
 come later and create accounts without a password (password_hash None).
 """
 import hashlib
+import json
 import hmac
 import logging
 import re
@@ -16,9 +17,9 @@ from sqlalchemy import delete, or_, select
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import config
-from app.models import NOW, CollectionItem, Conversation, Listing, Message, SteamSkip, User, fields
+from app.models import NOW, CollectionItem, Conversation, Follow, Listing, Message, PsnSkip, SteamSkip, User, fields
 from app.services import mail_service
-from app.services.photo_storage import storage
+from app.services.photo_storage import process_avatar, storage
 from db import session
 
 log = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ _failures_lock = threading.Lock()   # the server answers several requests at onc
 
 # What a user sees about their own account (never the password hash). Other people see less:
 # never the email (see the marketplace's seller info)
-OWN_FIELDS = ("id", "username", "display_name", "email", "location", "role", "created_at")
+OWN_FIELDS = ("id", "username", "display_name", "email", "location", "accounts", "avatar", "role", "created_at")
 
 
 class AccountError(Exception):
@@ -80,6 +81,54 @@ def register(username, email, password, display_name=None, lang=None, ip=None):
         s.add(user)
         s.flush()
         user_id = user.id
+    return get_user(user_id)
+
+
+MAX_LOCATION = 100
+
+
+def update_profile(user_id, changes):
+    """{display_name?, location?, accounts?}: what the profile shows besides the username (user, 2026-10-12:
+    there was no way to change them). An empty display name is the username; an empty location, none.
+    accounts: {kind: typed name or link} of the gamer names and channels (gaming_accounts), "" takes one off."""
+    from app.services import gaming_accounts         # it uses this module's AccountError
+    with session() as s:
+        user = s.get(User, user_id)
+        if "display_name" in changes:
+            name = (changes["display_name"] or "").strip() or user.username
+            if len(name) > 100:
+                raise AccountError("display_name_long")
+            user.display_name = name
+        if "location" in changes:
+            location = (changes["location"] or "").strip()
+            if len(location) > MAX_LOCATION:
+                raise AccountError("location_long")
+            user.location = location or None
+        if changes.get("accounts"):
+            accounts = gaming_accounts.cleaned(changes["accounts"], user.accounts)
+            user.accounts_json = json.dumps(accounts) if accounts else None
+    return get_user(user_id)
+
+
+def set_avatar(user_id, data):
+    """The profile picture from an upload (photo_storage.process_avatar); the old one's file goes."""
+    picture = process_avatar(data)
+    key = storage.save(f"avatars/{user_id}", picture)
+    with session() as s:
+        user = s.get(User, user_id)
+        old, user.avatar_key = user.avatar_key, key
+    if old:
+        storage.delete(old)
+    return get_user(user_id)
+
+
+def remove_avatar(user_id):
+    """No profile picture (the user's choice, or a moderator's: moderation_service)."""
+    with session() as s:
+        user = s.get(User, user_id)
+        old, user.avatar_key = user.avatar_key, None
+    if old:
+        storage.delete(old)
     return get_user(user_id)
 
 
@@ -169,9 +218,15 @@ def delete_account(user_id, password, ip="?"):
                 listing.status, listing.updated_at = "removed", NOW
         s.execute(delete(CollectionItem).where(CollectionItem.user_id == user_id))
         s.execute(delete(SteamSkip).where(SteamSkip.user_id == user_id))
+        s.execute(delete(PsnSkip).where(PsnSkip.user_id == user_id))
+        s.execute(delete(Follow).where(or_(Follow.follower_id == user_id, Follow.followed_id == user_id)))
 
         logins = {(user.username or "").lower(), user.email}
-        user.username = user.password_hash = user.location = user.steam_id = None
+        user.username = user.password_hash = user.location = user.steam_id = user.accounts_json = None
+        user.psn_account_id = user.psn_online_id = None
+        if user.avatar_key:
+            photo_keys.append(user.avatar_key)
+            user.avatar_key = None
         user.email = f"deleted-{user.id}@deleted.invalid"         # unique and never a real address
         user.display_name = ""
         user.is_active = user.collection_public = user.wish_alerts = False

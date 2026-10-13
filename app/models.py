@@ -10,6 +10,8 @@ The price analysis queries (the current_offers view, windows, "latest price per 
 stay SQL: they're reports that read better as SQL.
 Times are UTC, without a time zone, set by the database (utcnow(), database/schema.sql).
 """
+import json
+
 from sqlalchemy import (
     BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Unicode, UnicodeText,
     UniqueConstraint, false, func, text, true,
@@ -22,7 +24,8 @@ NOW = func.utcnow()      # the database's clock, in UTC (database/schema.sql)
 # The tables Alembic manages (migrations/); the others belong to the price side (database/*.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages", "message_photos",
                  "user_ratings", "reports", "moderation_log", "match_overrides",
-                 "collection_items", "game_reviews", "duplicate_dismissals", "steam_skips"}
+                 "collection_items", "game_reviews", "duplicate_dismissals", "steam_skips",
+                 "psn_skips", "follows"}
 
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
 ROLES = ("user", "moderator", "admin")
@@ -169,11 +172,27 @@ class User(Base):
     lang: Mapped[str] = mapped_column(String(2), server_default="pt", nullable=False)   # pt / en, for e-mails
     steam_id: Mapped[str | None] = mapped_column(String(20))   # the last Steam import's profile (steam_service)
     steam_imported_at = mapped_column(DateTime)
+    psn_account_id: Mapped[str | None] = mapped_column(String(20))      # the last PSN import's player (psn_service)
+    psn_online_id: Mapped[str | None] = mapped_column(Unicode(16))
+    psn_imported_at = mapped_column(DateTime)
+    avatar_key: Mapped[str | None] = mapped_column(String(80))      # the profile picture (photo_storage)
     # the profile's showcase sections, in order, comma-separated (collection_service.SHOWCASE; None: all)
     profile_sections: Mapped[str | None] = mapped_column(String(100))
+    # the gamer names and channels on the profile, JSON {kind: name} (gaming_accounts; None: none)
+    accounts_json: Mapped[str | None] = mapped_column(UnicodeText)
     last_login_at = mapped_column(DateTime)
     created_at = created_at()
     deleted_at = mapped_column(DateTime)      # the user deleted their account: anonymised (auth_service.delete_account)
+
+    @property
+    def avatar(self):
+        """The profile picture's address, or None."""
+        return f"/media/{self.avatar_key}" if self.avatar_key else None
+
+    @property
+    def accounts(self):
+        """{kind: name}: the gamer names and channels the user shows (gaming_accounts)."""
+        return json.loads(self.accounts_json) if self.accounts_json else {}
 
     @property
     def is_moderator(self):
@@ -365,6 +384,25 @@ class SteamSkip(Base):
     created_at = created_at()
 
 
+class PsnSkip(Base):
+    """A PSN trophy list the user took out of their collection: the PSN import leaves it out (psn_service);
+    edition_id: the edition it was, so adding that edition by hand brings it back (not a key: editions merge)."""
+    __tablename__ = "psn_skips"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    psn_id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    edition_id: Mapped[int | None] = mapped_column(Integer)
+    created_at = created_at()
+
+
+class Follow(Base):
+    """A user following another, to compare collections (follow_service; user, 2026-10-12)."""
+    __tablename__ = "follows"
+    __table_args__ = (Index("ix_follows_followed", "followed_id"),)
+    follower_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    followed_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    created_at = created_at()
+
+
 COLLECTION_KINDS = ("owned", "wishlist")
 FORMATS = ("physical", "digital")
 # the user's order (2026-10-11); "owned" = no other, what an owned item starts as
@@ -375,7 +413,10 @@ class CollectionItem(Base):
     """A game edition a user owns or wants (app/services/collection_service.py)."""
     __tablename__ = "collection_items"
     __table_args__ = (
-        Index("ux_collection_items", "user_id", "edition_id", "kind", unique=True),
+        # one item per edition, kind and format: a game on a disc and as a download too (user, 2026-10-12);
+        # a wish has no format, and one wish per edition
+        Index("ux_collection_items", "user_id", "edition_id", "kind", "format", unique=True,
+              postgresql_nulls_not_distinct=True),
         Index("ix_collection_items_edition", "edition_id"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -389,6 +430,8 @@ class CollectionItem(Base):
     notes: Mapped[str | None] = mapped_column(Unicode(1000))
     achievements: Mapped[int | None] = mapped_column(Integer)          # done (owned)
     achievements_total: Mapped[int | None] = mapped_column(Integer)
+    psn_id: Mapped[str | None] = mapped_column(String(20))             # its PSN trophy list (psn_service)
+    platinum: Mapped[bool | None] = mapped_column(Boolean)             # PlayStation: the platinum trophy earned
     wish_price = mapped_column(Numeric(10, 2))                         # best new price when wished (wishlist)
     # wishlist alerts: the best new price at the last check (None: none in stock), and when
     alert_price = mapped_column(Numeric(10, 2))

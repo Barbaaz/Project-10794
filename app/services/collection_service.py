@@ -15,7 +15,7 @@ from sqlalchemy import delete, func, select
 
 from app.models import (
     COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, Game, GameEdition, GameReview, Listing, Platform,
-    SteamSkip, User, fields,
+    PsnSkip, SteamSkip, User, fields,
 )
 from db import session
 
@@ -47,7 +47,7 @@ def collection(user_id):
         items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                           .order_by(CollectionItem.kind, CollectionItem.updated_at.desc(), CollectionItem.id.desc())).all()
         rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "achievements", "achievements_total",
-                       "favourite_rank", "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
+                       "platinum", "psn_id", "favourite_rank", "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
         public, alerts, sections = user.collection_public, user.wish_alerts, sections_of(user.profile_sections)
         # the user's review score of each game (one per game, as on the game page); a hidden one can't change
         reviews = {game_id: (score, hidden) for game_id, score, hidden in s.execute(
@@ -70,9 +70,14 @@ def with_prices(rows):
         offers = [o for o in g.get("offers", []) if o["in_stock"] and o["condition"] == "new"]
         best = min(offers, key=lambda o: o["price"]) if offers else None
         r.update(name=g.get("name"), name_en=g.get("name_en"), platform=g.get("console"),
-                 platform_name=g.get("platform_name"), image=g.get("image"),
+                 # IGDB's flat cover, as the front page's cards (user, 2026-10-12: the same kind of picture on
+                 # every card); a store's photo when there's none (a special edition's box, a game IGDB lacks)
+                 platform_name=g.get("platform_name"), image=g.get("cover") or g.get("image"),
                  best_price=best["price"] if best else None, best_store=best["store_name"] if best else None,
                  on_sale=any(o["is_discount"] for o in offers),
+                 # the best real discount now (below the 30 days' lowest) and its price, to sort a wishlist by
+                 discount=max((o.get("discount_percent") or 0 for o in offers if o["is_discount"]), default=None) or None,
+                 sale_price=min((o["price"] for o in offers if o["is_discount"]), default=None),
                  at_historical_low=g.get("at_historical_low", False), used=g.get("used"))
         wished = r.get("wish_price")
         r["price_drop"] = round(wished - r["best_price"], 2) if wished and best and best["price"] < wished else None
@@ -141,7 +146,8 @@ def named_edition(s, game_id, name):
 def add(user_id, edition_id, kind, game_id=None, new_edition=None, **changes):
     """
     Add an edition to the collection or the wishlist (the item, or the existing one); new_edition:
-    the name of the game_id's edition the user has, when it isn't one we know (named_edition).
+    the name of the game_id's edition the user has, when it isn't one we know (named_edition). An
+    owned edition is one item per format (physical unless said): a disc and a download are two.
     """
     if kind not in COLLECTION_KINDS:
         raise CollectionError("kind_invalid")
@@ -151,14 +157,17 @@ def add(user_id, edition_id, kind, game_id=None, new_edition=None, **changes):
         edition = s.get(GameEdition, _int(edition_id))
         if not edition:
             raise CollectionError("not_found", 404)
+        if kind == "owned" and changes.get("format") not in (*FORMATS, None):
+            raise CollectionError("format_invalid")
+        format = (changes.get("format") or "physical") if kind == "owned" else None
         item = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id, CollectionItem.kind == kind,
-                                                      CollectionItem.edition_id == edition.id)).first()
+                                                      CollectionItem.edition_id == edition.id,
+                                                      CollectionItem.format.is_not_distinct_from(format))).first()
         if item is None:
             if s.query(CollectionItem).filter(CollectionItem.user_id == user_id).count() >= MAX_ITEMS:
                 raise CollectionError("collection_full")
             item = CollectionItem(user_id=user_id, game_id=edition.game_id, edition_id=edition.id, kind=kind,
-                                  format="physical" if kind == "owned" else None,
-                                  status="owned" if kind == "owned" else None,
+                                  format=format, status="owned" if kind == "owned" else None,
                                   wish_price=best_new_price(edition.id) if kind == "wishlist" else None)
             if kind == "wishlist":    # alerts from the price it was wished at (wish_alert_service)
                 item.alert_price, item.alert_checked_at = item.wish_price, NOW
@@ -167,6 +176,8 @@ def add(user_id, edition_id, kind, game_id=None, new_edition=None, **changes):
         s.flush()
         if kind == "owned" and edition.game.steam_app_id:      # added by hand: Steam imports take it again
             s.execute(delete(SteamSkip).where(SteamSkip.user_id == user_id, SteamSkip.app_id == edition.game.steam_app_id))
+        if kind == "owned":       # the same for the PSN import
+            s.execute(delete(PsnSkip).where(PsnSkip.user_id == user_id, PsnSkip.edition_id == edition.id))
         if kind == "owned":       # bought it: off the wishlist
             for wanted in s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id,
                                                                  CollectionItem.kind == "wishlist",
@@ -205,11 +216,12 @@ def update(user_id, item_id, changes):
         if changes.get("edition_id") or changes.get("new_edition"):         # the edition they really have
             _move_to_edition(s, item, changes.get("edition_id"), changes.get("new_edition"))
         if changes.get("kind") == "owned" and item.kind == "wishlist":    # "I bought it"
-            if s.scalars(select(CollectionItem.id).where(CollectionItem.user_id == user_id, CollectionItem.kind == "owned",
-                                                         CollectionItem.edition_id == item.edition_id)).first():
+            if _other(s, item, "owned", "physical"):
                 s.delete(item)                   # already owned: the wish is just done
                 return None
             item.kind, item.format, item.status, item.wish_price = "owned", "physical", "owned", None
+        if item.kind == "owned" and changes.get("format") in FORMATS and _other(s, item, "owned", changes["format"]):
+            raise CollectionError("already_in_collection", 409)     # that copy is there already
         _apply(item, changes)
         item.updated_at = NOW
         return item.id
@@ -222,11 +234,17 @@ def _move_to_edition(s, item, edition_id, new_edition):
     edition = s.get(GameEdition, _int(edition_id))
     if not edition or edition.game_id != item.game_id:
         raise CollectionError("edition_invalid")
-    if edition.id != item.edition_id and s.scalars(select(CollectionItem.id).where(
-            CollectionItem.user_id == item.user_id, CollectionItem.kind == item.kind,
-            CollectionItem.edition_id == edition.id)).first():
+    if edition.id != item.edition_id and _other(s, item, item.kind, item.format, edition.id):
         raise CollectionError("already_in_collection", 409)
     item.edition_id = edition.id
+
+
+def _other(s, item, kind, format, edition_id=None):
+    """The user's other item of this kind and format on the item's edition (or that one), if any."""
+    return s.scalars(select(CollectionItem.id).where(
+        CollectionItem.user_id == item.user_id, CollectionItem.kind == kind, CollectionItem.id != item.id,
+        CollectionItem.edition_id == (edition_id or item.edition_id),
+        CollectionItem.format.is_not_distinct_from(format))).first()
 
 
 def best_new_price(edition_id):
@@ -238,15 +256,28 @@ def best_new_price(edition_id):
 
 
 def remove(user_id, item_id):
-    """Take an item out; an owned digital game on Steam isn't imported from Steam again (SteamSkip:
-    user 2026-10-11, games marked private on Steam)."""
+    """Take an item out; an owned game on Steam isn't imported from Steam again (SteamSkip: user
+    2026-10-11, games marked private on Steam), nor one imported from PSN (PsnSkip: played on PS Plus).
+    User, 2026-10-12: a removed imported game never comes back, also after changing its format: a
+    digital one, or any once the user imports from Steam."""
     with session() as s:
         item = _own(s, user_id, item_id)
-        app_id = item.game.steam_app_id if item.kind == "owned" and item.format == "digital" else None
+        on_steam = item.format == "digital" or bool(s.get(User, user_id).steam_id)
+        app_id = item.game.steam_app_id if item.kind == "owned" and on_steam else None
         if app_id and not s.get(SteamSkip, (user_id, app_id)):
             s.add(SteamSkip(user_id=user_id, app_id=app_id))
+        psn_id = item.psn_id if item.kind == "owned" else None
+        if psn_id and not s.get(PsnSkip, (user_id, psn_id)):
+            s.add(PsnSkip(user_id=user_id, psn_id=psn_id, edition_id=item.edition_id))
         s.delete(item)
-    return {"ok": True, "steam_skipped": bool(app_id)}
+    return {"ok": True, "steam_skipped": bool(app_id), "psn_skipped": bool(psn_id)}
+
+
+def settings(user_id):
+    """{public, wish_alerts, lang}: the collection's and the e-mails' settings, for the settings page."""
+    with session() as s:
+        user = s.get(User, user_id)
+        return {"public": user.collection_public, "wish_alerts": user.wish_alerts, "lang": user.lang}
 
 
 def set_settings(user_id, changes):
@@ -260,7 +291,7 @@ def set_settings(user_id, changes):
             user.wish_alerts = bool(changes["wish_alerts"])
         if changes.get("lang") in LANGS:
             user.lang = changes["lang"]
-        return {"public": user.collection_public, "wish_alerts": user.wish_alerts}
+        return {"public": user.collection_public, "wish_alerts": user.wish_alerts, "lang": user.lang}
 
 
 def public_collection(username):
@@ -272,7 +303,7 @@ def public_collection(username):
         user_id = user.id
     data = collection(user_id)
     keep = ("kind", "status", "format", "edition_id", "game_id", "name", "name_en", "platform", "platform_name", "image",
-            "best_price", "used")
+            "best_price", "used", "hours", "achievements", "achievements_total", "platinum")
     return {"items": [{k: r[k] for k in keep} for r in data["items"]], "stats": data["stats"],
             "showcase": showcase(data["items"], data["profile_sections"])}
 
@@ -353,6 +384,8 @@ def _apply(item, changes):
         if done is not None and total is not None and done > total:
             raise CollectionError("achievements_invalid")
         item.achievements, item.achievements_total = (done, total) if item.kind == "owned" else (None, None)
+    if "platinum" in changes:                  # PlayStation (None: the game has none, or not said)
+        item.platinum = None if changes["platinum"] in (None, "") or item.kind != "owned" else bool(changes["platinum"])
     if "notes" in changes:
         notes = (changes["notes"] or "").strip() or None
         if notes and len(notes) > MAX_NOTES:

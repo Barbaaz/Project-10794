@@ -2,13 +2,14 @@
 from flask import Blueprint, abort, jsonify, request
 
 from app.routes.auth import current_user, login_required
-from app.services import collection_service, steam_service, wish_alert_service
+from app.services import collection_service, psn_service, steam_service, wish_alert_service
 from app.services.collection_service import CollectionError
+from app.services.psn_service import PsnError
 from app.services.steam_service import SteamError
 
 bp = Blueprint("collection", __name__, url_prefix="/api")
 
-EDITABLE = ("format", "status", "hours", "achievements", "achievements_total", "notes")
+EDITABLE = ("format", "status", "hours", "achievements", "achievements_total", "platinum", "notes")
 
 
 @bp.errorhandler(CollectionError)
@@ -79,6 +80,26 @@ def import_from_steam():
         return jsonify(error=e.code), e.status
 
 
+@bp.get("/collection/psn")
+@login_required
+def psn_profile():
+    """{profile: {online_id, imported_at} | null}: the last PSN import's player, for the refresh button"""
+    return jsonify(profile=psn_service.saved_profile(current_user()["id"]))
+
+
+@bp.post("/collection/psn")
+@login_required
+def import_from_psn():
+    """{name?, ps_plus?}: the user's PlayStation games and trophies into the collection (no name: the last
+    one again; ps_plus: also games only played on PS Plus) → {added, updated, total, skipped, ps_plus, missing}
+    (psn_service)"""
+    data = body()
+    try:
+        return jsonify(psn_service.import_games(current_user()["id"], data.get("name"), data.get("ps_plus") is True))
+    except PsnError as e:
+        return jsonify(error=e.code), e.status
+
+
 @bp.patch("/collection/<int:item_id>")
 @login_required
 def update(item_id):
@@ -92,6 +113,13 @@ def update(item_id):
 @login_required
 def remove(item_id):
     return jsonify(collection_service.remove(current_user()["id"], item_id))
+
+
+@bp.get("/collection/settings")
+@login_required
+def get_settings():
+    """{public, wish_alerts, lang}: for the settings page (/account), without loading the collection"""
+    return jsonify(collection_service.settings(current_user()["id"]))
 
 
 @bp.put("/collection/settings")

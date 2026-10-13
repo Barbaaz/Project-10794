@@ -1,5 +1,5 @@
 """
-Photos people upload (listing photos): checked, cleaned and kept.
+Photos people upload (listing and chat photos, profile pictures): checked, cleaned and kept.
 
 process_photo() turns an upload into a safe JPEG: only real images (JPEG / PNG / WebP) are
 accepted, turned the right way up, shrunk to MAX_SIZE px, and saved WITHOUT the hidden data
@@ -23,6 +23,7 @@ ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
 MAX_SIZE = 1600
 THUMB_SIZE = 400
 MAX_PIXELS = 50_000_000      # refuse "decompression bombs" (tiny files that expand to huge images)
+AVATAR_SIZE = 256
 
 
 class PhotoError(Exception):
@@ -35,6 +36,20 @@ class PhotoError(Exception):
 
 def process_photo(data):
     """(photo JPEG bytes, thumbnail JPEG bytes) from an uploaded file's bytes, or PhotoError."""
+    image = _open(data)
+    return _jpeg(image, MAX_SIZE), _jpeg(image, THUMB_SIZE)
+
+
+def process_avatar(data):
+    """A profile picture (user, 2026-10-12): the middle square of the upload, AVATAR_SIZE px, a JPEG
+    without metadata; PhotoError as for photos."""
+    out = io.BytesIO()
+    ImageOps.fit(_open(data), (AVATAR_SIZE, AVATAR_SIZE)).save(out, "JPEG", quality=85, optimize=True)
+    return out.getvalue()
+
+
+def _open(data):
+    """The upload as an RGB image the right way up (its EXIF then dropped), or PhotoError."""
     if len(data) > MAX_UPLOAD_BYTES:
         raise PhotoError("photo_too_big")
     try:
@@ -51,8 +66,7 @@ def process_photo(data):
     except (OSError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning):
         raise PhotoError("photo_type")
 
-    image = ImageOps.exif_transpose(image).convert("RGB")   # the right way up, then EXIF is dropped
-    return _jpeg(image, MAX_SIZE), _jpeg(image, THUMB_SIZE)
+    return ImageOps.exif_transpose(image).convert("RGB")   # the right way up, then EXIF is dropped
 
 
 def _jpeg(image, size):

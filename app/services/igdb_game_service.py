@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.models import Game, GameEdition, Platform
 from core.editions import key_of_edition_name
@@ -113,11 +114,9 @@ def create(user_id, igdb_id, platform_code):
             raise IGDBGameError("games_per_day", 429)
 
         info = game_info(g)
-        game = Game(platform_id=platform.id, title=g["name"][:300], normalized_title=key, created_by=user_id,
-                    image_url=COVER_URL.format(info["cover_image_id"]) if info["cover_image_id"] else None,
-                    igdb_checked_at=datetime.now(timezone.utc).replace(tzinfo=None), **info)
-        s.add(game)
-        s.flush()
+        game = _added(s, Game(platform_id=platform.id, title=g["name"][:300], normalized_title=key, created_by=user_id,
+                              image_url=COVER_URL.format(info["cover_image_id"]) if info["cover_image_id"] else None,
+                              igdb_checked_at=datetime.now(timezone.utc).replace(tzinfo=None), **info))
         return _with_standard_edition(s, game)
 
 
@@ -146,11 +145,9 @@ def collection_editions(igdb_ids, platform_code, batch=500):
                 game = s.scalars(select(Game).where(Game.normalized_title == key, Game.platform_id == platform.id)).first()
                 if game is None:
                     info = game_info(g)
-                    game = Game(platform_id=platform.id, title=g["name"][:300], normalized_title=key,
-                                image_url=COVER_URL.format(info["cover_image_id"]) if info["cover_image_id"] else None,
-                                igdb_checked_at=now, **info)
-                    s.add(game)
-                    s.flush()
+                    game = _added(s, Game(platform_id=platform.id, title=g["name"][:300], normalized_title=key,
+                                          image_url=COVER_URL.format(info["cover_image_id"]) if info["cover_image_id"] else None,
+                                          igdb_checked_at=now, **info))
                 found[g["id"]] = _with_standard_edition(s, game)["edition_id"]
     return found
 
@@ -182,6 +179,23 @@ def edition_options(game_id):
         if key not in have:
             names.setdefault(key, name[:200])
     return sorted(names.values())
+
+
+def _added(s, game):
+    """
+    The game, added; or the game of its name on its platform that the stores' processing saved since we
+    looked (a scraper run at the same time; 2026-10-13, a PSN import's 500), instead of a second one.
+    """
+    try:
+        with s.begin_nested():
+            s.add(game)
+        return game
+    except IntegrityError:
+        saved = s.scalars(select(Game).where(Game.normalized_title == game.normalized_title,
+                                             Game.platform_id == game.platform_id)).first()
+        if saved is None:
+            raise
+        return saved
 
 
 def _with_standard_edition(s, game):

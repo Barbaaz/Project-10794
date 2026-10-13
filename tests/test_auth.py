@@ -8,7 +8,7 @@ from helpers import HEADERS
 
 @pytest.fixture
 def client(web_client, test_db):
-    for table in ("moderation_log", "reports", "user_ratings", "messages", "conversations", "listing_photos", "user_listings", "collection_items", "users"):
+    for table in ("moderation_log", "reports", "user_ratings", "messages", "conversations", "listing_photos", "user_listings", "collection_items", "follows", "users"):
         test_db.conn.cursor().execute(f"DELETE FROM {table}")
     auth_service._failures.clear()
     return web_client
@@ -243,3 +243,94 @@ def test_changes_need_our_pages_header(client):
     # a form on another site can't add this header: the request is refused
     response = client.post("/api/auth/register", json={"username": "x_user", "email": "x@x.pt", "password": "segredo123"})
     assert (response.status_code, response.get_json()["error"]) == (403, "missing_request_header")
+
+
+def test_editing_the_profile(market):
+    """User, 2026-10-12: the display name and the location can be changed (an empty name is the username)."""
+    from helpers import HEADERS, sign_up
+    client = market["client"]
+    sign_up(client, "edita")
+    edit = lambda **fields: client.patch("/api/auth/profile", json=fields, headers=HEADERS)
+    assert edit(display_name="  Edite Silva ", location="Braga").get_json()["display_name"] == "Edite Silva"
+    profile = client.get("/api/users/edita").get_json()
+    assert (profile["display_name"], profile["location"]) == ("Edite Silva", "Braga")
+    assert edit(display_name="", location="  ").get_json()["display_name"] == "edita"
+    assert client.get("/api/users/edita").get_json()["location"] is None
+    assert edit(location="x" * 101).get_json()["error"] == "location_long"
+    assert edit(display_name="x" * 101).status_code == 400
+    assert client.patch("/api/auth/profile", json={"location": "Faro"}).status_code in (400, 403)   # no X-Requested-With
+    client.post("/api/auth/logout", headers=HEADERS)
+    assert edit(location="Faro").status_code == 401
+
+
+def test_gaming_accounts_on_the_profile(market):
+    """User, 2026-10-13: gamer names and channels on the profile, typed or pasted as links; links only to
+    the services' own pages; empty takes one off; gone with the account."""
+    from helpers import HEADERS, sign_up
+    client = market["client"]
+    user_id = sign_up(client, "gamer_tags")["id"]
+    edit = lambda **fields: client.patch("/api/auth/profile", json=fields, headers=HEADERS)
+    mine = edit(psn="Gamer_Tags", xbox="Gamer Tags#1234", steam="https://steamcommunity.com/id/gamertags/",
+                nintendo="1234 5678 9012", epic="Gamer Tags", youtube="https://www.youtube.com/@GamerTags?si=x",
+                twitch="twitch.tv/gamer_tags").get_json()
+    assert mine["accounts"] == {"psn": "Gamer_Tags", "xbox": "Gamer Tags#1234", "steam": "id/gamertags",
+                                "nintendo": "SW-1234-5678-9012", "epic": "Gamer Tags", "youtube": "@GamerTags",
+                                "twitch": "gamer_tags"}
+    shown = {a["kind"]: (a["name"], a["url"]) for a in client.get("/api/users/gamer_tags").get_json()["accounts"]}
+    assert shown["psn"] == ("Gamer_Tags", None)
+    assert shown["steam"] == ("gamertags", "https://steamcommunity.com/id/gamertags")
+    assert shown["youtube"] == ("@GamerTags", "https://www.youtube.com/@GamerTags")
+    assert shown["twitch"] == ("gamer_tags", "https://www.twitch.tv/gamer_tags")
+
+    # a number-only page shows the service's name; other changes leave the accounts as they were
+    assert edit(steam="steamcommunity.com/profiles/76561197960287930", location="Porto").get_json()["accounts"]["steam"] \
+        == "profiles/76561197960287930"
+    steam = [a for a in client.get("/api/users/gamer_tags").get_json()["accounts"] if a["kind"] == "steam"][0]
+    assert steam == {"kind": "steam", "name": None, "url": "https://steamcommunity.com/profiles/76561197960287930"}
+    assert len(edit(display_name="Gamer").get_json()["accounts"]) == 7
+
+    # nothing that isn't the service's name: no other site, no script
+    for kind, text in (("twitch", "https://evil.example/x"), ("youtube", "javascript:alert(1)"), ("psn", "a"),
+                       ("steam", "https://evil.example/id/x"), ("nintendo", "12345"), ("epic", "<b>x</b>")):
+        assert edit(**{kind: text}).get_json()["error"] == f"{kind}_invalid", kind
+    assert edit(psn="", twitch=None).get_json()["accounts"].keys() == {"xbox", "steam", "nintendo", "epic", "youtube"}
+
+    client.post("/api/auth/delete", json={"password": "segredo123"}, headers=HEADERS)
+    assert market["db"].execute("SELECT accounts_json FROM users WHERE id = ?", user_id).fetchone()[0] is None
+
+
+def test_a_profile_picture(market):
+    """User, 2026-10-12: a profile picture, made a square without metadata; replaced, removed, and gone with
+    the account; a moderator can remove it."""
+    import io
+    from PIL import Image
+    from helpers import HEADERS, jpeg, log_in, sign_up
+    from app.services import moderation_service
+    client = market["client"]
+    sign_up(client, "pictured")
+    upload = lambda data: client.post("/api/auth/avatar", data={"avatar": (io.BytesIO(data), "me.jpg")},
+                                      headers=HEADERS, content_type="multipart/form-data")
+    first = upload(jpeg(1200, 800, gps=True)).get_json()["avatar"]
+    picture = client.get(first)
+    image = Image.open(io.BytesIO(picture.data))
+    picture.close()                                         # the file is free to go (Windows)
+    assert (picture.status_code, image.size, image.getexif().get(0x8825)) == (200, (256, 256), None)   # no GPS
+    assert client.get("/api/users/pictured").get_json()["avatar"] == first
+    second = upload(jpeg()).get_json()["avatar"]
+    assert second != first and client.get(first).status_code == 404               # the old file goes
+    assert upload(b"not a picture").get_json()["error"] == "photo_type"
+    assert client.delete("/api/auth/avatar", headers=HEADERS).get_json()["avatar"] is None
+    assert client.get(second).status_code == 404
+
+    third = upload(jpeg()).get_json()["avatar"]                                     # one that breaks the rules
+    user_id = client.get("/api/auth/me").get_json()["id"]
+    sign_up(client, "mod_pic")
+    market["db"].execute("UPDATE users SET role = 'moderator' WHERE username = 'mod_pic'")
+    moderator_id = client.get("/api/auth/me").get_json()["id"]
+    moderation_service.act(moderator_id, "remove_avatar", user_id)
+    assert client.get("/api/users/pictured").get_json()["avatar"] is None and client.get(third).status_code == 404
+
+    log_in(client, "pictured")
+    fourth = upload(jpeg()).get_json()["avatar"]
+    client.post("/api/auth/delete", json={"password": "segredo123"}, headers=HEADERS)
+    assert client.get(fourth).status_code == 404                                     # gone with the account

@@ -83,6 +83,7 @@ you have (Ctrl+O, Enter saves; Ctrl+X leaves):
 IGDB_CLIENT_ID=...                  # new games' information (the same as on the PC)
 IGDB_CLIENT_SECRET=...
 STEAM_API_KEY=...                   # /collection's Steam import (the same as on the PC)
+PSN_NPSSO=...                       # /collection's PSN import (renew about every two months: .env.example)
 SMTP_HOST=...                       # e-mail: password reset, and alerts when a store fails
 SMTP_PORT=587
 SMTP_USER=...

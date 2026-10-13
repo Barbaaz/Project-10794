@@ -14,7 +14,9 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.config import BEHIND_PROXY, COOKIE_SECURE, SECRET_KEY
-from app.routes import auth, chat, collection, games, igdb_games, listings, moderation, prices, ratings, reviews, stores
+from app.routes import (
+    auth, chat, collection, follows, games, igdb_games, listings, moderation, prices, ratings, reviews, stores,
+)
 from app.services.game_service import game_exists, merged_into
 from app.services.photo_storage import MAX_UPLOAD_BYTES, storage
 
@@ -31,7 +33,7 @@ app.config.update(
 )
 if BEHIND_PROXY:
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
-for blueprint in (auth.bp, chat.bp, collection.bp, games.bp, igdb_games.bp, listings.bp, moderation.bp, prices.bp,
+for blueprint in (auth.bp, chat.bp, collection.bp, follows.bp, games.bp, igdb_games.bp, listings.bp, moderation.bp, prices.bp,
                   ratings.bp, reviews.bp, stores.bp):
     app.register_blueprint(blueprint)
 
@@ -132,6 +134,18 @@ def profile_page(username):
     return render_template("profile.html", username=username)
 
 
+@app.route("/user/<username>/collection")
+def user_collection_page(username):
+    """A user's public collection as a grid of covers (user, 2026-10-12: its own page, not a list in the profile)."""
+    return render_template("user_collection.html", username=username)
+
+
+@app.route("/compare/<username>")
+def compare_page(username):
+    """The user's collection beside another user's (follow_service.compare)."""
+    return render_template("compare.html", username=username)
+
+
 @app.route("/collection")
 def collection_page():
     """The user's game collection and wishlist (the page sends logged-out visitors to /account)."""
@@ -145,13 +159,14 @@ def admin_page():
     return render_template("admin.html")
 
 
-# The only public uploads: listing photos, as LocalPhotoStorage names them (listings/<id>/<uuid hex>.jpg)
-PUBLIC_MEDIA = re.compile(r"listings/\d+/[0-9a-f]{32}\.jpg")
+# The only public uploads: listing photos and profile pictures, as LocalPhotoStorage names them
+# (listings/<id>/<uuid hex>.jpg, avatars/<user id>/<uuid hex>.jpg)
+PUBLIC_MEDIA = re.compile(r"(?:listings|avatars)/\d+/[0-9a-f]{32}\.jpg")
 
 
 @app.route("/media/<path:key>")
 def media(key):
-    """Listing photos kept on this computer (app/services/photo_storage.py). Only keys of exactly that
+    """Listing photos and profile pictures kept on this computer (app/services/photo_storage.py). Only keys of exactly that
     shape: the photos sent in conversations (chats/…) go only through /api/conversations/<id>/photos/,
     and "./chats/…", "listings/../chats/…" or "Chats/…" (Windows ignores case) must not reach them."""
     if not PUBLIC_MEDIA.fullmatch(key):
