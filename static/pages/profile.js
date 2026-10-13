@@ -144,7 +144,7 @@ async function loadCollection() {
     showShowcase(showcase);
     document.getElementById("collection-summary").textContent =
         t("profile_collection_summary", { owned: stats.owned, completed: stats.completed, wishlist: stats.wishlist });
-    document.getElementById("collection-link").href = `/user/${encodeURIComponent(USERNAME)}/collection`;
+    document.getElementById("see-collection").href = `/user/${encodeURIComponent(USERNAME)}/collection`;
     document.getElementById("collection").classList.remove("d-none");
 }
 
