@@ -179,9 +179,11 @@ const MAX_TAGS = 5;      // as many as /api/games/catalog takes
 let filtersOpen = false;
 
 function extraFilters() {
-    // the consoles tab has no game filters (category, tags, PEGI)
-    if (onHardwareTab()) return [["store", catalogStore]];
-    return [["store", catalogStore], ["genre", catalogGenre], ["tags", catalogTag], ["pegi", catalogPegi]];
+    // the platform too (user, 2026-10-13: a refresh, as after a merge, stays on it); the consoles tab has no
+    // game filters (category, tags, PEGI)
+    const platform = ["platform", document.getElementById("consoleFilter").value];
+    if (onHardwareTab()) return [platform, ["store", catalogStore]];
+    return [platform, ["store", catalogStore], ["genre", catalogGenre], ["tags", catalogTag], ["pegi", catalogPegi]];
 }
 
 // Consoles (user, 2026-10-07): their own tab
@@ -216,7 +218,7 @@ async function showCatalogPage(page) {
     document.getElementById("front").scrollIntoView({ block: "start" });
 }
 
-// /?tab=catalog&page=3&store=cstech&genre=rpg or /?q=zelda&page=2: page, store and category only when not the default
+// /?tab=catalog&page=3&platform=PS5&store=cstech&genre=rpg or /?q=zelda&page=2: each only when not the default
 function listUrl(params, page = 1) {
     const query = new URLSearchParams(params);
     if (page > 1) query.set("page", page);
@@ -590,7 +592,7 @@ async function selectFrontTab(tab) {
     // Address bar: /?tab=… (+ &page=… on catalogue pages), not while a search is on screen
     if (!document.getElementById("q").value.trim()) {
         // page and store filter only belong to the catalogue tabs
-        setPageUrl(config.paged ? listUrl({ tab }, frontData[tab]?.page || 1) : `/?tab=${tab}`);
+        setPageUrl(listUrl({ tab }, config.paged ? frontData[tab]?.page || 1 : 1));
     }
     renderFront();
 }
@@ -854,7 +856,7 @@ async function search(page = 1) {
         currentData = null;
         document.getElementById("results").innerHTML = "";
         document.getElementById("empty").classList.add("d-none");
-        setPageUrl(FRONT_TABS[frontTab].paged ? listUrl({ tab: frontTab }) : `/?tab=${frontTab}`);
+        setPageUrl(listUrl({ tab: frontTab }));
         showFront(true);
         frontSectionHead();
         return;
@@ -899,7 +901,9 @@ function renderSearch() {
 document.getElementById("consoleFilter").addEventListener("change", () => {
     if (hasSearched) return search(1);
     // Platform-aware tabs ask the server again; the others filter what they already have
-    FRONT_TABS[frontTab].platformAware ? selectFrontTab(frontTab) : renderFront();
+    if (FRONT_TABS[frontTab].platformAware) return selectFrontTab(frontTab);
+    renderFront();
+    setPageUrl(listUrl({ tab: frontTab }));
 });
 
 // Platforms, store names, categories and tags come from the API, so new ones appear without editing this page
@@ -915,6 +919,9 @@ async function loadFilters() {
         tags = tagList;
         const select = document.getElementById("consoleFilter");
         platforms.forEach(p => select.add(new Option(p.name, p.code)));
+        // /?…&platform=PS5: the platform the address names, when it's one of ours
+        const fromUrl = startParams.get("platform");
+        if (platforms.some(p => p.code === fromUrl)) select.value = fromUrl;
         renderPlatformPicker(platforms);
         storeList.forEach(s => stores[s.slug] = s);
         renderStoreStatus(storeList);
