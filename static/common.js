@@ -283,3 +283,22 @@ async function showPendingRatings() {
     const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl");
     container?.querySelector(":scope > div")?.after(banner);
 }
+
+// --- Back to the top (user, 2026-10-13) ---------------------------------------------------------
+// A round button at the bottom right once the visitor has scrolled more than a screen and a half
+whenReady(() => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-primary shadow back-to-top";
+    button.setAttribute("aria-label", t("back_to_top"));
+    button.title = t("back_to_top");
+    button.textContent = "↑";
+    button.onclick = () => {
+        const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        scrollTo({ top: 0, behavior: still ? "auto" : "smooth" });
+    };
+    document.body.appendChild(button);
+    const update = () => button.classList.toggle("shown", scrollY > innerHeight * 1.5);
+    addEventListener("scroll", update, { passive: true });
+    update();
+});

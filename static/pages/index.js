@@ -219,7 +219,7 @@ function listUrl(params, page = 1) {
     return `/?${query}`;
 }
 
-// « Anterior  1 … 4 5 [6] 7 8 … 75  Seguinte »  (solid buttons, current page in blue)
+// « Anterior  1 … 4 5 [6] 7 8 … 75  Seguinte »  Ir para a página [  ] de 75  (solid buttons, current page in blue)
 function pagination(page, pages, showPage) {
     const nav = document.createElement("nav");
     nav.className = "d-flex flex-wrap justify-content-center gap-1 mt-4";
@@ -252,6 +252,25 @@ function pagination(page, pages, showPage) {
         nav.appendChild(button(String(p), p, { current: p === page }));
     });
     nav.appendChild(button(t("next"), page + 1, { disabled: page === pages }));
+
+    // any page by its number (user, 2026-10-13: not only one by one)
+    const jump = document.createElement("form");
+    jump.className = "d-flex align-items-center gap-1 ms-sm-2";
+    jump.noValidate = true;
+    jump.innerHTML = `
+        <label class="small text-body-secondary text-nowrap" for="page-jump">${esc(t("go_to_page"))}</label>
+        <input id="page-jump" type="number" inputmode="numeric" min="1" max="${pages}" class="form-control form-control-sm"
+               style="width: 4.5rem;" placeholder="${page}">
+        <span class="small text-body-secondary text-nowrap">${esc(t("page_of", { pages }))}</span>
+        <button type="submit" class="btn btn-sm btn-secondary">${esc(t("go"))}</button>`;
+    jump.onsubmit = event => {
+        event.preventDefault();
+        const wanted = Math.round(Number(jump.querySelector("input").value));
+        if (!wanted) return;
+        const target = Math.min(Math.max(wanted, 1), pages);
+        if (target !== page) showPage(target);
+    };
+    nav.appendChild(jump);
     return nav;
 }
 

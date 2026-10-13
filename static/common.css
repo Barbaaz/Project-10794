@@ -205,3 +205,11 @@ img.store-photo { object-fit: contain !important; background: #fff !important; p
 /* profile pictures (user, 2026-10-12): round; without one, 👤 in a circle */
 .avatar { border-radius: 50%; object-fit: cover; flex-shrink: 0; vertical-align: middle; }
 .avatar-none { display: inline-flex; align-items: center; justify-content: center; background: var(--bs-secondary-bg); }
+
+/* Back to the top (common.js): hidden until the page is scrolled down; out of the tab order while hidden */
+.back-to-top { position: fixed; right: 1rem; bottom: 1rem; z-index: 1030; width: 2.75rem; height: 2.75rem; padding: 0;
+               border-radius: 50%; font-size: 1.25rem; line-height: 1; opacity: 0; visibility: hidden;
+               transform: translateY(.5rem); transition: opacity .2s, transform .2s, visibility .2s; }
+.back-to-top.shown { opacity: 1; visibility: visible; transform: none; }
+@media (prefers-reduced-motion: reduce) { .back-to-top { transition: none; } }
+@media print { .back-to-top { display: none; } }
