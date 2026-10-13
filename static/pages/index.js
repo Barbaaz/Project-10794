@@ -41,7 +41,8 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
     const col = document.createElement("div");
     col.className = "col";
     col.innerHTML = `
-        <div class="h-100 game-card d-flex flex-column">
+        <div class="h-100 game-card d-flex flex-column${isStaff() && mergePick().edition_id === group.edition_id ? " merge-picked" : ""}"
+             data-edition-id="${group.edition_id}">
             <div class="position-relative">
                 <a href="${gameUrl}" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(group.cover || best?.image || group.image || "")}"
                     class="${coverClass(group.cover || best?.image || group.image)}" alt="" loading="lazy"></a>
@@ -58,8 +59,12 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
                 ${extraLine === null ? "" : `<div class="small card-extra">${extraLine}</div>`}
                 <div class="mt-auto pt-2">${lead}${used ? usedLine(group) : ""}${none}</div>
             </div>
+            ${isStaff() ? `<button type="button" class="btn btn-sm admin-card-btn" aria-label="${esc(t("admin_card_menu"))}"
+                                   title="${esc(t("admin_card_menu"))}" aria-haspopup="menu" aria-expanded="false">${icon("more")}</button>` : ""}
         </div>`;
     col.querySelector(".fav-btn").onclick = e => toggleCardMenu(e.currentTarget, group);
+    const adminButton = col.querySelector(".admin-card-btn");
+    if (adminButton) adminButton.onclick = e => toggleCardMenu(e.currentTarget, group, fillAdminMenu);
     col.querySelectorAll("[data-platform-index]").forEach(chip => chip.onclick = () => {
         const all = platformsOf(group);
         const i = Number(chip.dataset.platformIndex);
@@ -219,7 +224,8 @@ function listUrl(params, page = 1) {
     return `/?${query}`;
 }
 
-// « Anterior  1 … 4 5 [6] 7 8 … 75  Seguinte »  Ir para a página [  ] de 75  (solid buttons, current page in blue)
+// « Anterior  1 … 4 5 [6] 7 8 … 75  Seguinte »  (solid buttons, current page in blue). Each "…" is a button
+// too: pressed, it turns into a box the size of a page button to type any page in (user, 2026-10-13)
 function pagination(page, pages, showPage) {
     const nav = document.createElement("nav");
     nav.className = "d-flex flex-wrap justify-content-center gap-1 mt-4";
@@ -240,37 +246,42 @@ function pagination(page, pages, showPage) {
         if (!disabled && !current) b.onclick = () => showPage(target);
         return b;
     };
+    const gap = () => {
+        const b = button("…");
+        const label = t("go_to_page", { pages });
+        b.title = label;
+        b.setAttribute("aria-label", label);
+        b.onclick = () => {
+            const box = document.createElement("input");
+            box.type = "text";
+            box.inputMode = "numeric";
+            box.className = "form-control form-control-sm page-jump";
+            box.setAttribute("aria-label", label);
+            box.placeholder = "#";
+            const back = () => box.isConnected && box.replaceWith(b);
+            box.onkeydown = event => {
+                if (event.key === "Escape") { back(); b.focus(); }
+                if (event.key !== "Enter") return;
+                const wanted = Math.round(Number(box.value));
+                if (wanted >= 1) {
+                    const target = Math.min(wanted, pages);
+                    if (target !== page) showPage(target);
+                    else back();
+                }
+            };
+            box.onblur = () => { if (!box.value.trim()) back(); };
+            b.replaceWith(box);
+            box.focus();
+        };
+        return b;
+    };
 
     nav.appendChild(button(t("previous"), page - 1, { disabled: page === 1 }));
     numbers.forEach((p, i) => {
-        if (i > 0 && p - numbers[i - 1] > 1) {
-            const gap = document.createElement("span");
-            gap.className = "px-1 align-self-center text-body-secondary";
-            gap.textContent = "…";
-            nav.appendChild(gap);
-        }
+        if (i > 0 && p - numbers[i - 1] > 1) nav.appendChild(gap());
         nav.appendChild(button(String(p), p, { current: p === page }));
     });
     nav.appendChild(button(t("next"), page + 1, { disabled: page === pages }));
-
-    // any page by its number (user, 2026-10-13: not only one by one)
-    const jump = document.createElement("form");
-    jump.className = "d-flex align-items-center gap-1 ms-sm-2";
-    jump.noValidate = true;
-    jump.innerHTML = `
-        <label class="small text-body-secondary text-nowrap" for="page-jump">${esc(t("go_to_page"))}</label>
-        <input id="page-jump" type="number" inputmode="numeric" min="1" max="${pages}" class="form-control form-control-sm"
-               style="width: 4.5rem;" placeholder="${page}">
-        <span class="small text-body-secondary text-nowrap">${esc(t("page_of", { pages }))}</span>
-        <button type="submit" class="btn btn-sm btn-secondary">${esc(t("go"))}</button>`;
-    jump.onsubmit = event => {
-        event.preventDefault();
-        const wanted = Math.round(Number(jump.querySelector("input").value));
-        if (!wanted) return;
-        const target = Math.min(Math.max(wanted, 1), pages);
-        if (target !== page) showPage(target);
-    };
-    nav.appendChild(jump);
     return nav;
 }
 
@@ -1017,17 +1028,126 @@ function starButton(group) {
 // One menu open at a time; Esc, a click elsewhere or Tab closes it
 let cardMenu = null;    // {menu, button, group}
 
-function toggleCardMenu(button, group) {
+function toggleCardMenu(button, group, fill = () => fillCardMenu("wishlist")) {
     const wasOpen = cardMenu?.button === button;
     closeCardMenu();
     if (wasOpen) return;
     const menu = document.createElement("div");
-    menu.className = "dropdown-menu show card-menu shadow";
+    menu.className = `dropdown-menu show card-menu shadow${fill === fillAdminMenu ? " admin-menu" : ""}`;
     menu.setAttribute("role", "menu");
     button.after(menu);
     button.setAttribute("aria-expanded", "true");
     cardMenu = { menu, button, group };
-    fillCardMenu("wishlist");
+    fill();
+}
+
+// --- Staff: the "..." menu at a card's bottom right (user, 2026-10-13): pick two cards, merge them in a window ---
+// The first card picked waits in this tab (sessionStorage) while the moderator browses or searches for the second
+const MERGE_PICK = "merge-pick";
+
+function isStaff() {
+    return ["moderator", "admin"].includes(currentUser?.role);
+}
+
+function mergePick() {
+    return savedJSON(MERGE_PICK, {}, "sessionStorage");
+}
+
+function fillAdminMenu() {
+    const { menu, group } = cardMenu;
+    const picked = mergePick();
+    const label = picked.edition_id === group.edition_id ? "merge_unpick" : picked.edition_id ? "merge_with_picked" : "merge_pick";
+    menu.innerHTML = `
+        <button type="button" class="dropdown-item" role="menuitem" data-pick>${esc(t(label))}</button>
+        <a class="dropdown-item" role="menuitem" href="/admin">${esc(t("mod_title"))}</a>`;
+    menu.querySelector("[data-pick]").onclick = () => {
+        closeCardMenu();
+        pickForMerge(group);
+    };
+    menu.querySelector("[data-pick]").focus();
+}
+
+// What the merge window shows of a card (the platform it shows now)
+function mergeCard(group) {
+    const [title, edition] = splitEdition(localName(group));
+    return { edition_id: group.edition_id, game_id: group.game_id, title, edition: edition || "Standard",
+             platform: group.platform_name, console: group.console,
+             cover: group.cover || group.offers?.[0]?.image || group.image || "" };
+}
+
+function pickForMerge(group) {
+    const picked = mergePick();
+    if (picked.edition_id === group.edition_id) forget(MERGE_PICK, "sessionStorage");
+    else if (!picked.edition_id) save(MERGE_PICK, mergeCard(group), "sessionStorage");
+    else return openMerge(picked, mergeCard(group));
+    showMergeBar();
+}
+
+// The picked card outlined, and a bar at the bottom saying which it is (with "Cancelar")
+function showMergeBar() {
+    document.getElementById("merge-bar")?.remove();
+    document.querySelectorAll(".game-card.merge-picked").forEach(c => c.classList.remove("merge-picked"));
+    const picked = mergePick();
+    if (!picked.edition_id || !isStaff()) return;
+    document.querySelectorAll(`.game-card[data-edition-id="${picked.edition_id}"]`).forEach(c => c.classList.add("merge-picked"));
+    const bar = document.createElement("div");
+    bar.id = "merge-bar";
+    bar.className = "merge-bar shadow";
+    bar.setAttribute("role", "status");
+    bar.innerHTML = `<span class="small">${esc(t("merge_bar", { name: `${picked.title} · ${picked.edition} (${picked.platform || ""})` }))}</span>
+        <button type="button" class="btn btn-sm btn-secondary">${esc(t("merge_cancel"))}</button>`;
+    bar.querySelector("button").onclick = () => {
+        forget(MERGE_PICK, "sessionStorage");
+        showMergeBar();
+    };
+    document.body.appendChild(bar);
+}
+
+// The window: both cards, whose name stays and which edition stays (match_service.merge_cards)
+function openMerge(a, b) {
+    const dialog = document.getElementById("merge-dialog");
+    const body = dialog.querySelector("[data-body]");
+    const side = c => `
+        <div class="merge-side">
+            <img src="${esc(c.cover)}" class="${coverClass(c.cover)}" alt="">
+            <div class="small min-w-0"><strong>${esc(c.title)}</strong><div>${esc(c.edition)}</div>
+                <div class="text-body-secondary">${esc(c.platform || "")} · #${c.game_id}</div></div>
+        </div>`;
+    const radios = (name, options) => options.map(([value, label], i) => `
+        <div class="form-check small"><input class="form-check-input" type="radio" name="${name}" id="${name}-${i}" value="${value}"
+            ${i === 0 ? "checked" : ""}><label class="form-check-label" for="${name}-${i}">${esc(label)}</label></div>`).join("");
+    const sameGame = a.game_id === b.game_id;
+    body.innerHTML = `
+        <div class="merge-pair">${side(a)}<span class="merge-plus" aria-hidden="true">+</span>${side(b)}</div>
+        ${a.console !== b.console ? `<p class="small text-danger mt-3 mb-0">${esc(t("merge_other_platform"))}</p>` : `
+            ${sameGame ? "" : `<fieldset class="mt-3"><legend class="small fw-semibold mb-1">${esc(t("merge_keep_name"))}</legend>
+                ${radios("merge-name", [[a.game_id, a.title], [b.game_id, b.title]])}</fieldset>`}
+            <fieldset class="mt-2"><legend class="small fw-semibold mb-1">${esc(t("merge_keep_edition"))}</legend>
+                ${radios("merge-edition", [[a.edition_id, `${a.edition} · ${a.title}`], [b.edition_id, `${b.edition} · ${b.title}`]])}</fieldset>
+            <p class="small text-body-secondary mt-2 mb-2">${esc(t("merge_explain"))}</p>
+            <button type="button" class="btn btn-danger btn-sm" data-go>${esc(t("merge_go"))}</button>`}
+        <div class="small mt-2" data-message role="status"></div>`;
+    const go = body.querySelector("[data-go]");
+    if (go) go.onclick = async () => {
+        const keep = Number(body.querySelector("[name=merge-edition]:checked").value);
+        const other = keep === a.edition_id ? b.edition_id : a.edition_id;
+        const name = body.querySelector("[name=merge-name]:checked");
+        go.disabled = true;
+        const { ok, data: answer } = await api("/api/mod/merge-cards", {
+            body: { keep_edition_id: keep, other_edition_id: other, ...(name ? { title_game_id: Number(name.value) } : {}) } });
+        go.disabled = false;
+        const message = body.querySelector("[data-message]");
+        message.className = `small mt-2 ${ok ? "text-success" : "text-danger"}`;
+        message.textContent = ok ? t("merge_done") : t(`error_${answer?.error || "unknown"}`);
+        if (ok) {
+            forget(MERGE_PICK, "sessionStorage");
+            setTimeout(() => location.reload(), 900);
+        }
+    };
+    dialog.querySelectorAll("[data-close]").forEach(button => button.onclick = () => dialog.close());
+    dialog.onclick = event => { if (event.target === dialog) dialog.close(); };
+    dialog.showModal();
+    go?.focus();
 }
 
 function fillCardMenu(focusKind) {
@@ -1098,6 +1218,7 @@ applyI18n();
 // /?q=zelda opens with that search, so searches can be bookmarked or shared
 (async () => {
     await renderAccountArea();
+    showMergeBar();
     await loadCollectionIds();
     await loadFilters();
     const params = new URLSearchParams(location.search);

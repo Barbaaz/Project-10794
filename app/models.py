@@ -27,6 +27,11 @@ MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "m
                  "collection_items", "game_reviews", "duplicate_dismissals", "steam_skips",
                  "psn_skips", "follows", "igdb_addons"}
 
+# The header bell's notifications (collection_service.good_deals): on at all; which wish deals count (a real
+# discount, the historical low, cheaper than when added); the smallest discount / drop, in %, that counts
+NOTIFY_DEFAULTS = {"bell": True, "sale": True, "low": True, "drop": True, "min_discount": 0}
+MIN_DISCOUNTS = (0, 10, 20, 30, 50)
+
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
 ROLES = ("user", "moderator", "admin")
 
@@ -178,6 +183,8 @@ class User(Base):
     avatar_key: Mapped[str | None] = mapped_column(String(80))      # the profile picture (photo_storage)
     # the profile's showcase sections, in order, comma-separated (collection_service.SHOWCASE; None: all)
     profile_sections: Mapped[str | None] = mapped_column(String(100))
+    # what the header's bell shows (user, 2026-10-13: not to be bombarded), JSON over NOTIFY_DEFAULTS
+    notify_json: Mapped[str | None] = mapped_column(UnicodeText)
     # the gamer names and channels on the profile, JSON {kind: name} (gaming_accounts; None: none)
     accounts_json: Mapped[str | None] = mapped_column(UnicodeText)
     last_login_at = mapped_column(DateTime)
@@ -188,6 +195,11 @@ class User(Base):
     def avatar(self):
         """The profile picture's address, or None."""
         return f"/media/{self.avatar_key}" if self.avatar_key else None
+
+    @property
+    def notify(self):
+        """The bell's settings: NOTIFY_DEFAULTS with the user's choices over them."""
+        return {**NOTIFY_DEFAULTS, **(json.loads(self.notify_json) if self.notify_json else {})}
 
     @property
     def accounts(self):

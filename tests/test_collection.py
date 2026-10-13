@@ -149,6 +149,19 @@ def test_a_wish_remembers_its_price(market, monkeypatch):
     # what the header's 🔔 panel shows: the game to link, its price and why it's a deal
     deal = deals["items"][0]
     assert (deal["game_id"], deal["best_price"], deal["on_sale"]) == (market["game"], 44.99, False)
+    assert deal["reason"] == "drop"
+
+    # the bell's settings (user, 2026-10-13: not to be bombarded): 15 € off 59.99 is a 25 % drop
+    notify = lambda **changes: client.put("/api/collection/settings", json={"notify": changes}, headers=HEADERS)
+    count = lambda: client.get("/api/collection/deals").get_json()["count"]
+    assert notify(min_discount=30).get_json()["notify"]["min_discount"] == 30 and count() == 0
+    assert notify(min_discount=20).status_code == 200 and count() == 1
+    assert notify(drop=False).status_code == 200 and count() == 0
+    notify(drop=True)
+    assert notify(bell=False).status_code == 200 and client.get("/api/collection/deals").get_json() == {"count": 0, "items": [], "off": True}
+    assert notify(min_discount=15).get_json()["error"] == "notify_invalid"
+    assert notify(sound=True).get_json()["error"] == "notify_invalid"
+    assert client.get("/api/collection/settings").get_json()["notify"] == {"bell": False, "sale": True, "low": True, "drop": True, "min_discount": 20}
 
     # bought: no longer a wish, no wish price
     client.patch(f"/api/collection/{wish}", json={"kind": "owned"}, headers=HEADERS)
@@ -263,3 +276,11 @@ def test_a_wish_on_sale_has_its_discount(market, monkeypatch):
     add(client, market["edition"], kind="wishlist")
     item = mine(client)["items"][0]
     assert (item["on_sale"], item["discount"], item["sale_price"], item["best_price"]) == (True, 33.3, 39.99, 35.0)
+
+
+def test_the_wishlist_has_its_own_page(web_client):
+    """User, 2026-10-13: the collection and the wishlist are two pages; old ?tab=wishlist links (e-mails) go on working."""
+    assert 'data-kind="owned"' in web_client.get("/collection").get_data(as_text=True)
+    assert 'data-kind="wishlist"' in web_client.get("/wishlist").get_data(as_text=True)
+    old = web_client.get("/collection?tab=wishlist")
+    assert (old.status_code, old.headers["Location"]) == (301, "/wishlist")

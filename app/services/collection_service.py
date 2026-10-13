@@ -8,13 +8,14 @@ status, hours, and what the owned games are worth today. Private unless the user
 public (it then shows on their profile). When games / editions are merged, items follow
 (pipeline/rematch.py).
 """
+import json
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import delete, func, select
 
 from app.models import (
-    COLLECTION_KINDS, FORMATS, NOW, PLAY_STATUSES, CollectionItem, Game, GameEdition, GameReview, Listing, Platform,
+    COLLECTION_KINDS, FORMATS, MIN_DISCOUNTS, NOTIFY_DEFAULTS, NOW, PLAY_STATUSES, CollectionItem, Game, GameEdition, GameReview, Listing, Platform,
     PsnSkip, SteamSkip, User, fields,
 )
 from db import session
@@ -92,13 +93,35 @@ def good_deals(user_id):
     """{count, items}: the wishes that are a good deal now (on sale, at the historical low, cheaper than
     when added), for the header's notifications (user, 2026-10-13): what and why, cheapest first."""
     with session() as s:
+        notify = s.get(User, user_id).notify
         rows = [fields(i, "id", "kind", "edition_id", "game_id", "wish_price") for i in s.scalars(
             select(CollectionItem).where(CollectionItem.user_id == user_id, CollectionItem.kind == "wishlist"))]
-    deals = [r for r in with_prices(rows) if r["good_deal"]] if rows else []
+    if not notify["bell"]:
+        return {"count": 0, "items": [], "off": True}
+    deals = []
+    for r in (with_prices(rows) if rows else []):
+        r["reason"] = deal_reason(r, notify)
+        if r["reason"]:
+            deals.append(r)
     deals.sort(key=lambda r: (r["best_price"] is None, r["best_price"] or 0, r["id"]))
     keys = ("id", "game_id", "edition_id", "name", "name_en", "platform", "image", "best_price", "best_store",
-            "price_drop", "on_sale", "discount", "at_historical_low")
+            "price_drop", "on_sale", "discount", "at_historical_low", "reason")
     return {"count": len(deals), "items": [{k: r[k] for k in keys} for r in deals]}
+
+
+def deal_reason(row, notify):
+    """Why a wish is in the bell, by the user's settings (user, 2026-10-13: not to be bombarded): "sale" (a real
+    discount of at least min_discount %), "low" (the historical low), "drop" (that much below the price when
+    added), or None."""
+    least = notify["min_discount"]
+    if notify["sale"] and row["on_sale"] and (row["discount"] or 0) >= least:
+        return "sale"
+    if notify["low"] and row["at_historical_low"]:
+        return "low"
+    wished = row.get("wish_price")
+    if notify["drop"] and row["price_drop"] and wished and 100 * row["price_drop"] / wished >= least:
+        return "drop"
+    return None
 
 
 def item_ids(user_id):
@@ -283,11 +306,12 @@ def settings(user_id):
     """{public, wish_alerts, lang}: the collection's and the e-mails' settings, for the settings page."""
     with session() as s:
         user = s.get(User, user_id)
-        return {"public": user.collection_public, "wish_alerts": user.wish_alerts, "lang": user.lang}
+        return {"public": user.collection_public, "wish_alerts": user.wish_alerts, "lang": user.lang, "notify": user.notify}
 
 
 def set_settings(user_id, changes):
-    """{public?, wish_alerts?, lang?}: show the collection on the profile; wishlist e-mails, in this language."""
+    """{public?, wish_alerts?, lang?, notify?}: show the collection on the profile; wishlist e-mails, in this
+    language; what the header's bell shows (NOTIFY_DEFAULTS' keys: on / off, min_discount one of MIN_DISCOUNTS)."""
     from app.services.auth_service import LANGS
     with session() as s:
         user = s.get(User, user_id)
@@ -297,7 +321,20 @@ def set_settings(user_id, changes):
             user.wish_alerts = bool(changes["wish_alerts"])
         if changes.get("lang") in LANGS:
             user.lang = changes["lang"]
-        return {"public": user.collection_public, "wish_alerts": user.wish_alerts, "lang": user.lang}
+        if isinstance(changes.get("notify"), dict):
+            notify = user.notify
+            for key, value in changes["notify"].items():
+                if key == "min_discount":
+                    if value not in MIN_DISCOUNTS or isinstance(value, bool):
+                        raise CollectionError("notify_invalid")
+                    notify[key] = value
+                elif key in NOTIFY_DEFAULTS and isinstance(value, bool):
+                    notify[key] = value
+                else:
+                    raise CollectionError("notify_invalid")
+            changed = {k: v for k, v in notify.items() if v != NOTIFY_DEFAULTS[k]}
+            user.notify_json = json.dumps(changed) if changed else None
+        return {"public": user.collection_public, "wish_alerts": user.wish_alerts, "lang": user.lang, "notify": user.notify}
 
 
 def public_collection(username):

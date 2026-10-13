@@ -111,6 +111,15 @@ def merge_games():
     return jsonify(match_service.merge_games(current_user()["id"], data.get("from_id"), data.get("into_id")))
 
 
+@bp.post("/mod/merge-cards")
+@moderator_required
+def merge_cards():
+    """{keep_edition_id, other_edition_id, title_game_id?}: two front-page cards made one (match_service.merge_cards)"""
+    data = body()
+    return jsonify(match_service.merge_cards(current_user()["id"], data.get("keep_edition_id"),
+                                             data.get("other_edition_id"), data.get("title_game_id")))
+
+
 @bp.post("/mod/duplicates/dismiss")
 @moderator_required
 def dismiss_duplicate():
