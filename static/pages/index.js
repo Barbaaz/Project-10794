@@ -1025,12 +1025,16 @@ function loadWishlist() {
 }
 
 // The card's star: ★ = on the wishlist; a small 📚 under it = in the collection
+// The card's round button (user, 2026-10-13: one clear sign, no emoji): a tick on blue when the user owns the
+// edition, a gold star when they want it, else an empty star; the state is also said in words for screen readers
 function starButton(group) {
     const mine = collectionIds[group.edition_id] || {};
-    return `${mine.wishlist ? "★" : "☆"}${mine.owned ? `<span class="fav-mark" aria-hidden="true">📚</span>` : ""}`;
+    if (mine.owned) return `<span class="fav-owned">${icon("check", 15)}</span><span class="visually-hidden">${esc(t("card_state_owned"))}</span>`;
+    if (mine.wishlist) return `<span class="fav-wished">${icon("star", 15, { filled: true })}</span><span class="visually-hidden">${esc(t("card_state_wish"))}</span>`;
+    return icon("star", 15);
 }
 
-// The star opens a menu for the card's edition: ⭐ Quero, 📚 Tenho, each on / off, and 🏷️ Vender
+// The star opens a menu for the card's edition: Quero, Tenho, each on / off, and Vender
 // (the sell form on this edition, without going through the game page).
 // One menu open at a time; Esc, a click elsewhere or Tab closes it
 let cardMenu = null;    // {menu, button, group}

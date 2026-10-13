@@ -61,10 +61,12 @@
         .badge-pre { background: #14171f; color: #fff; }
         .fav-btn {
             position: absolute; top: .4rem; right: .4rem; width: 1.75rem; height: 1.75rem; padding: 0;
-            border-radius: 50%; line-height: 1; font-size: 1.05rem;
+            border-radius: 50%; line-height: 1; display: flex; align-items: center; justify-content: center;
         }
-        /* 📚 / ⭐ under the star: the edition is in the user's collection / wishlist */
-        .fav-mark { position: absolute; right: -.3rem; bottom: -.3rem; font-size: .65rem; line-height: 1; }
+        /* owned: the whole round button blue with a white tick; wished: a gold star (index.js starButton) */
+        .fav-btn .fav-owned { position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center;
+                              justify-content: center; background: var(--brand-btn); color: #fff; }
+        .fav-btn .fav-wished { color: #e0a100; display: flex; }
         /* The star's menu (favourite, collection, wishlist), inside the cover so the card doesn't clip it */
         .card-menu { top: 2.4rem; right: .4rem; min-width: 9rem; font-size: .85rem; z-index: 5; }
         .card-menu .check { display: inline-block; width: 1.1rem; }
