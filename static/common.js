@@ -50,13 +50,16 @@ const ICONS = {
     globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
     lock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
     gamepad: '<line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.59l-.92 8.31A3 3 0 0 0 4.77 20.2a3 3 0 0 0 2.73-1.75L8.6 16h6.8l1.1 2.45a3 3 0 0 0 5.72-1.55l-.92-8.31A4 4 0 0 0 17.32 5z"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
     moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
     more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
 };
 
-function icon(name, size = 18) {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" class="svg-icon">${ICONS[name]}</svg>`;
+// filled: the shape painted in too (a wished game's star)
+function icon(name, size = 18, { filled = false } = {}) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${filled ? "currentColor" : "none"}"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"
+        class="svg-icon">${ICONS[name]}</svg>`;
 }
 
 // A user's picture (their profile picture, else a drawn figure), `size` px round
