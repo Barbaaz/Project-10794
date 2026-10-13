@@ -5,6 +5,8 @@ wishlist, reports they made and, for staff, their moderation actions. Never the 
 nothing that names who reported them. Photos are listed by address (listing photos are public,
 chat photos open for the two sides while logged in).
 """
+import json
+
 from sqlalchemy import or_, select
 
 from app.models import (
@@ -63,7 +65,8 @@ def export_user(user_id):
             for r in s.scalars(select(Rating).where(column == user_id).order_by(Rating.id))]
 
         collection = [fields(i, "id", "kind", "format", "status", "hours", "achievements", "achievements_total", "platinum",
-                             "favourite_rank", "notes", "wish_price", "created_at", "updated_at", **_game(i.game, i.edition))
+                             "favourite_rank", "notes", "wish_price", "created_at", "updated_at",
+                             dlc_owned_igdb_ids=json.loads(i.dlc_owned) if i.dlc_owned else [], **_game(i.game, i.edition))
                       for i in s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                                          .order_by(CollectionItem.id))]
 

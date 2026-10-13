@@ -47,7 +47,8 @@ def collection(user_id):
         items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                           .order_by(CollectionItem.kind, CollectionItem.updated_at.desc(), CollectionItem.id.desc())).all()
         rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "achievements", "achievements_total",
-                       "platinum", "psn_id", "favourite_rank", "wish_price", "edition_id", "game_id", "created_at", "updated_at") for i in items]
+                       "platinum", "psn_id", "favourite_rank", "wish_price", "edition_id", "game_id", "created_at", "updated_at",
+                       "dlc_owned") for i in items]
         public, alerts, sections = user.collection_public, user.wish_alerts, sections_of(user.profile_sections)
         # the user's review score of each game (one per game, as on the game page); a hidden one can't change
         reviews = {game_id: (score, hidden) for game_id, score, hidden in s.execute(
@@ -58,6 +59,8 @@ def collection(user_id):
         r["score"], r["score_locked"] = reviews.get(r["game_id"], (None, False))
         r["steam_app_id"] = steam.get(r["game_id"])          # "Ver na Steam" (a PC game)
     rows = with_prices(rows)                       # stats() needs the prices
+    from app.services.dlc_service import counts     # dlc_service uses this module
+    rows = counts(rows)                            # "DLC 2/5" (the add-on lists kept from IGDB)
     return {"items": rows, "stats": stats(rows), "public": public, "wish_alerts": alerts, "profile_sections": sections}
 
 
@@ -306,7 +309,7 @@ def public_collection(username):
         user_id = user.id
     data = collection(user_id)
     keep = ("kind", "status", "format", "edition_id", "game_id", "name", "name_en", "platform", "platform_name", "image",
-            "best_price", "used", "hours", "achievements", "achievements_total", "platinum")
+            "best_price", "used", "hours", "achievements", "achievements_total", "platinum", "dlc")
     return {"items": [{k: r[k] for k in keep} for r in data["items"]], "stats": data["stats"],
             "showcase": showcase(data["items"], data["profile_sections"])}
 

@@ -2,7 +2,7 @@
 from flask import Blueprint, abort, jsonify, request
 
 from app.routes.auth import current_user, login_required
-from app.services import collection_service, psn_service, steam_service, wish_alert_service
+from app.services import collection_service, dlc_service, psn_service, steam_service, wish_alert_service
 from app.services.collection_service import CollectionError
 from app.services.psn_service import PsnError
 from app.services.steam_service import SteamError
@@ -107,6 +107,20 @@ def update(item_id):
     data = body()
     changes = {k: data[k] for k in (*EDITABLE, "kind", "edition_id", "new_edition") if k in data}
     return jsonify(id=collection_service.update(current_user()["id"], item_id, changes))
+
+
+@bp.get("/collection/<int:item_id>/dlc")
+@login_required
+def dlc(item_id):
+    """{addons: [{igdb_id, name, type, cover, year}], owned: [igdb ids], no_igdb?}: the game's DLC from IGDB"""
+    return jsonify(dlc_service.item_dlc(current_user()["id"], item_id))
+
+
+@bp.put("/collection/<int:item_id>/dlc")
+@login_required
+def set_dlc(item_id):
+    """{owned: [igdb ids]} → {owned, total}: the DLC the user owns"""
+    return jsonify(dlc_service.set_owned(current_user()["id"], item_id, body().get("owned")))
 
 
 @bp.delete("/collection/<int:item_id>")
