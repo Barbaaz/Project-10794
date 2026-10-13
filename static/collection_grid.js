@@ -103,13 +103,14 @@ function coverBadges(item) {
     return status || platinum ? `<div class="cover-badges">${status || "<span></span>"}${platinum}</div>` : "";
 }
 
-// A card's facts in fixed rows, so the cards' rows line up: the format; hours, trophies, score (the status
+// A card's facts in fixed rows, so the cards' rows line up: the format; hours, trophies, DLC, score (the status
 // and the platinum are on the cover)
 function factRows(item) {
     const first = `<span>${esc(t(`format_${item.format || "physical"}`))}</span>`;
     const second = [
         item.hours ? `<span>⏱ ${fmtNumber(item.hours)} h</span>` : "",
         item.achievements_total ? `<span>🏆 ${item.achievements ?? 0}/${item.achievements_total}</span>` : "",
+        item.dlc?.total ? `<span>${esc(t("collection_dlc_count", item.dlc))}</span>` : "",
         item.score ? `<span>★ ${item.score}/10</span>` : "",
     ].join("");
     return `<div class="item-facts small">${first}</div><div class="item-facts small">${second}</div>`;

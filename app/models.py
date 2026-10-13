@@ -25,7 +25,7 @@ NOW = func.utcnow()      # the database's clock, in UTC (database/schema.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages", "message_photos",
                  "user_ratings", "reports", "moderation_log", "match_overrides",
                  "collection_items", "game_reviews", "duplicate_dismissals", "steam_skips",
-                 "psn_skips", "follows"}
+                 "psn_skips", "follows", "igdb_addons"}
 
 # user: buys and sells; moderator: also handles reports; admin: also names / removes moderators
 ROLES = ("user", "moderator", "admin")
@@ -438,11 +438,22 @@ class CollectionItem(Base):
     alert_checked_at = mapped_column(DateTime)
     alert_used = mapped_column(Boolean)
     favourite_rank: Mapped[int | None] = mapped_column(SmallInteger)   # 1-10: the profile's top 10 (owned)       # a user was selling a copy at the last check (None: not checked)
+    # the game's DLC / expansions the user owns: JSON list of IGDB ids, from IgdbAddons' list (dlc_service)
+    dlc_owned: Mapped[str | None] = mapped_column(UnicodeText)
     created_at = created_at()
     updated_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 
     game: Mapped[Game] = relationship(lazy="joined")
     edition: Mapped[GameEdition] = relationship(lazy="joined")
+
+
+class IgdbAddons(Base):
+    """An IGDB game's DLC and expansions as IGDB lists them (dlc_service), kept for a while:
+    JSON [{igdb_id, name, type: dlc | expansion | standalone, cover, year}]; [] when it has none."""
+    __tablename__ = "igdb_addons"
+    igdb_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    addons: Mapped[str] = mapped_column(UnicodeText)
+    fetched_at = mapped_column(DateTime, server_default=NOW, nullable=False)
 
 
 # --- players' reviews of games ------------------------------------------------------------

@@ -165,6 +165,7 @@ function ownedControls(item) {
             ${choices("score", [{ value: "", label: "—" }, ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))],
                       item.score ? String(item.score) : "", t("collection_your_score"))}
             <div class="small text-body-secondary mt-1">${esc(t(item.score_locked ? "collection_score_locked" : "collection_score_hint"))}</div>`)}
+        ${item.kind === "owned" ? section(t("collection_dlc"), `<div data-dlc class="small text-body-secondary">${esc(t("dlc_loading"))}</div>`) : ""}
         ${section(t("collection_notes"), `
             <textarea class="form-control form-control-sm" rows="2" maxlength="1000" data-field="notes"
                       aria-label="${esc(t("collection_notes"))}">${esc(item.notes || "")}</textarea>`)}`;
@@ -384,6 +385,38 @@ function openEditor(id) {
     body.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
     dialog.showModal();
     loadEditionChange(item);
+    loadDlc(item, body, done);
+}
+
+// The game's DLC and expansions from IGDB (dlc_service), ticked as owned; each tick is saved at once
+async function loadDlc(item, body, done) {
+    const box = body.querySelector("[data-dlc]");
+    if (!box) return;
+    const response = await fetch(`/api/collection/${item.id}/dlc`).catch(() => null);
+    const answer = response?.ok ? await response.json() : null;
+    if (!answer) return box.textContent = t("error_igdb_unavailable");
+    if (!answer.addons.length) return box.textContent = t(answer.no_igdb ? "dlc_no_igdb" : "dlc_none");
+    const owned = new Set(answer.owned);
+    box.className = "";
+    box.innerHTML = `
+        <div class="dlc-list">${answer.addons.map(a => `
+            <label class="dlc-row">
+                <input type="checkbox" class="form-check-input flex-none" value="${a.igdb_id}" ${owned.has(a.igdb_id) ? "checked" : ""}>
+                ${a.cover ? `<img src="${esc(a.cover)}" alt="" loading="lazy">` : `<span class="dlc-cover-none"></span>`}
+                <span class="min-w-0"><span class="d-block">${esc(a.name)}</span>
+                    <span class="small text-body-secondary">${esc(t(`dlc_type_${a.type}`))}${a.year ? ` · ${a.year}` : ""}</span></span>
+            </label>`).join("")}</div>
+        <div class="small text-body-secondary mt-1">${esc(t("dlc_source"))}</div>`;
+    box.querySelectorAll("input").forEach(input => input.onchange = async () => {
+        const chosen = [...box.querySelectorAll("input:checked")].map(i => Number(i.value));
+        const { ok, data: result } = await api(`/api/collection/${item.id}/dlc`, { method: "PUT", body: { owned: chosen } });
+        if (!ok) {
+            input.checked = !input.checked;
+            return done(t(`error_${result?.error || "unknown"}`));
+        }
+        item.dlc = { owned: result.owned, total: result.total };
+        done(true);
+    });
 }
 
 // The item's edition in the edit window: one we know is saved when picked, a named one with "Mudar"
