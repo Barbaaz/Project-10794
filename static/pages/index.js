@@ -58,8 +58,12 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
                 ${extraLine === null ? "" : `<div class="small card-extra">${extraLine}</div>`}
                 <div class="mt-auto pt-2">${lead}${used ? usedLine(group) : ""}${none}</div>
             </div>
+            ${isStaff() ? `<button type="button" class="btn btn-sm admin-card-btn" aria-label="${esc(t("admin_card_menu"))}"
+                                   title="${esc(t("admin_card_menu"))}" aria-haspopup="menu" aria-expanded="false">${icon("more")}</button>` : ""}
         </div>`;
     col.querySelector(".fav-btn").onclick = e => toggleCardMenu(e.currentTarget, group);
+    const adminButton = col.querySelector(".admin-card-btn");
+    if (adminButton) adminButton.onclick = e => toggleCardMenu(e.currentTarget, group, fillAdminMenu);
     col.querySelectorAll("[data-platform-index]").forEach(chip => chip.onclick = () => {
         const all = platformsOf(group);
         const i = Number(chip.dataset.platformIndex);
@@ -219,7 +223,8 @@ function listUrl(params, page = 1) {
     return `/?${query}`;
 }
 
-// « Anterior  1 … 4 5 [6] 7 8 … 75  Seguinte »  Ir para a página [  ] de 75  (solid buttons, current page in blue)
+// « Anterior  1 … 4 5 [6] 7 8 … 75  Seguinte »  (solid buttons, current page in blue). Each "…" is a button
+// too: pressed, it turns into a box the size of a page button to type any page in (user, 2026-10-13)
 function pagination(page, pages, showPage) {
     const nav = document.createElement("nav");
     nav.className = "d-flex flex-wrap justify-content-center gap-1 mt-4";
@@ -240,37 +245,42 @@ function pagination(page, pages, showPage) {
         if (!disabled && !current) b.onclick = () => showPage(target);
         return b;
     };
+    const gap = () => {
+        const b = button("…");
+        const label = t("go_to_page", { pages });
+        b.title = label;
+        b.setAttribute("aria-label", label);
+        b.onclick = () => {
+            const box = document.createElement("input");
+            box.type = "text";
+            box.inputMode = "numeric";
+            box.className = "form-control form-control-sm page-jump";
+            box.setAttribute("aria-label", label);
+            box.placeholder = "#";
+            const back = () => box.isConnected && box.replaceWith(b);
+            box.onkeydown = event => {
+                if (event.key === "Escape") { back(); b.focus(); }
+                if (event.key !== "Enter") return;
+                const wanted = Math.round(Number(box.value));
+                if (wanted >= 1) {
+                    const target = Math.min(wanted, pages);
+                    if (target !== page) showPage(target);
+                    else back();
+                }
+            };
+            box.onblur = () => { if (!box.value.trim()) back(); };
+            b.replaceWith(box);
+            box.focus();
+        };
+        return b;
+    };
 
     nav.appendChild(button(t("previous"), page - 1, { disabled: page === 1 }));
     numbers.forEach((p, i) => {
-        if (i > 0 && p - numbers[i - 1] > 1) {
-            const gap = document.createElement("span");
-            gap.className = "px-1 align-self-center text-body-secondary";
-            gap.textContent = "…";
-            nav.appendChild(gap);
-        }
+        if (i > 0 && p - numbers[i - 1] > 1) nav.appendChild(gap());
         nav.appendChild(button(String(p), p, { current: p === page }));
     });
     nav.appendChild(button(t("next"), page + 1, { disabled: page === pages }));
-
-    // any page by its number (user, 2026-10-13: not only one by one)
-    const jump = document.createElement("form");
-    jump.className = "d-flex align-items-center gap-1 ms-sm-2";
-    jump.noValidate = true;
-    jump.innerHTML = `
-        <label class="small text-body-secondary text-nowrap" for="page-jump">${esc(t("go_to_page"))}</label>
-        <input id="page-jump" type="number" inputmode="numeric" min="1" max="${pages}" class="form-control form-control-sm"
-               style="width: 4.5rem;" placeholder="${page}">
-        <span class="small text-body-secondary text-nowrap">${esc(t("page_of", { pages }))}</span>
-        <button type="submit" class="btn btn-sm btn-secondary">${esc(t("go"))}</button>`;
-    jump.onsubmit = event => {
-        event.preventDefault();
-        const wanted = Math.round(Number(jump.querySelector("input").value));
-        if (!wanted) return;
-        const target = Math.min(Math.max(wanted, 1), pages);
-        if (target !== page) showPage(target);
-    };
-    nav.appendChild(jump);
     return nav;
 }
 
@@ -1017,17 +1027,98 @@ function starButton(group) {
 // One menu open at a time; Esc, a click elsewhere or Tab closes it
 let cardMenu = null;    // {menu, button, group}
 
-function toggleCardMenu(button, group) {
+function toggleCardMenu(button, group, fill = () => fillCardMenu("wishlist")) {
     const wasOpen = cardMenu?.button === button;
     closeCardMenu();
     if (wasOpen) return;
     const menu = document.createElement("div");
-    menu.className = "dropdown-menu show card-menu shadow";
+    menu.className = `dropdown-menu show card-menu shadow${fill === fillAdminMenu ? " admin-menu" : ""}`;
     menu.setAttribute("role", "menu");
     button.after(menu);
     button.setAttribute("aria-expanded", "true");
     cardMenu = { menu, button, group };
-    fillCardMenu("wishlist");
+    fill();
+}
+
+// --- Staff: the "..." menu at a card's bottom right (user, 2026-10-13: merge duplicates the matching missed) ---
+function isStaff() {
+    return ["moderator", "admin"].includes(currentUser?.role);
+}
+
+function fillAdminMenu() {
+    const { menu, group } = cardMenu;
+    menu.innerHTML = `
+        <button type="button" class="dropdown-item" role="menuitem" data-merge>${esc(t("merge_with_other"))}</button>
+        <a class="dropdown-item" role="menuitem" href="/admin">${esc(t("mod_title"))}</a>`;
+    menu.querySelector("[data-merge]").onclick = () => {
+        closeCardMenu();
+        openMerge(group);
+    };
+    menu.querySelector("[data-merge]").focus();
+}
+
+// Merge this card's game (on the platform it shows) with another on that platform (match_service.merge_games):
+// the stores' products, listings and collections go to the game whose name stays
+function openMerge(group) {
+    const dialog = document.getElementById("merge-dialog");
+    const self = { id: group.game_id, name: localName(group), platform: group.platform_name, code: group.console };
+    let other = null;
+    const body = dialog.querySelector("[data-body]");
+    body.innerHTML = `
+        <p class="small mb-2">${esc(t("merge_this"))} <strong>${esc(self.name)}</strong>
+            <span class="text-body-secondary">· ${esc(self.platform || "")} · #${self.id}</span></p>
+        <label class="form-label small mb-1" for="merge-search">${esc(t("merge_search", { platform: self.platform || "" }))}</label>
+        <input id="merge-search" class="form-control form-control-sm" autocomplete="off" value="${esc(group.name.split(" — ")[0])}">
+        <div class="list-group mt-2 merge-results" data-results></div>
+        <div class="mt-3 d-none" data-choice>
+            <div class="small fw-semibold mb-1">${esc(t("merge_keep_name"))}</div>
+            <div data-names></div>
+            <p class="small text-body-secondary mt-2 mb-2">${esc(t("merge_explain"))}</p>
+            <button type="button" class="btn btn-danger btn-sm" data-go>${esc(t("merge_go"))}</button>
+        </div>
+        <div class="small mt-2" data-message role="status"></div>`;
+    const results = body.querySelector("[data-results]"), choice = body.querySelector("[data-choice]");
+    const message = body.querySelector("[data-message]");
+    const search = async () => {
+        const q = body.querySelector("#merge-search").value.trim();
+        if (q.length < 2) return results.innerHTML = "";
+        const answer = await fetch(`/api/games?q=${encodeURIComponent(q)}&platform=${encodeURIComponent(self.code)}&per_page=10`)
+            .then(r => r.ok ? r.json() : { games: [] }).catch(() => ({ games: [] }));
+        const games = answer.games.filter(g => g.id !== self.id);
+        results.innerHTML = games.length ? games.map(g => `
+            <button type="button" class="list-group-item list-group-item-action d-flex gap-2 align-items-center small" data-id="${g.id}">
+                <img src="${esc(g.image || "")}" class="${coverClass(g.image)}" alt="">
+                <span class="flex-grow-1">${esc(g.title)} <span class="text-body-secondary">#${g.id}</span></span>
+                ${g.best_price != null ? `<span>${eur.format(g.best_price)}</span>` : ""}
+            </button>`).join("") : `<div class="small text-body-secondary px-1">${esc(t("merge_none"))}</div>`;
+        results.querySelectorAll("[data-id]").forEach(b => b.onclick = () => {
+            other = games.find(g => String(g.id) === b.dataset.id);
+            results.querySelectorAll("[data-id]").forEach(x => x.classList.toggle("active", x === b));
+            body.querySelector("[data-names]").innerHTML = [[self.id, self.name], [other.id, other.title]].map(([id, name], i) => `
+                <div class="form-check small"><input class="form-check-input" type="radio" name="merge-keep" id="merge-keep-${id}"
+                    value="${id}" ${i === 0 ? "checked" : ""}><label class="form-check-label" for="merge-keep-${id}">${esc(name)}
+                    <span class="text-body-secondary">#${id}</span></label></div>`).join("");
+            choice.classList.remove("d-none");
+            message.textContent = "";
+        });
+    };
+    let timer = null;
+    body.querySelector("#merge-search").oninput = () => { clearTimeout(timer); timer = setTimeout(search, 300); };
+    body.querySelector("[data-go]").onclick = async () => {
+        const into = Number(body.querySelector("[name=merge-keep]:checked").value);
+        const from = into === self.id ? other.id : self.id;
+        const button = body.querySelector("[data-go]");
+        button.disabled = true;
+        const { ok, data: answer } = await api("/api/mod/duplicates/merge", { body: { from_id: from, into_id: into } });
+        button.disabled = false;
+        message.className = `small mt-2 ${ok ? "text-success" : "text-danger"}`;
+        message.textContent = ok ? t("merge_done") : t(`error_${answer?.error || "unknown"}`);
+        if (ok) setTimeout(() => location.reload(), 900);
+    };
+    dialog.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
+    dialog.onclick = event => { if (event.target === dialog) dialog.close(); };
+    dialog.showModal();
+    search();
 }
 
 function fillCardMenu(focusKind) {

@@ -45,6 +45,8 @@ const ICONS = {
     tag: '<path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/>',
     library: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
     user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
 };
 
 function icon(name, size = 18) {
@@ -107,7 +109,8 @@ async function api(path, { method = "POST", body } = {}) {
 }
 
 // The account part of the header (the same on every page): "Entrar" when logged out; logged in,
-// Vender / Coleção (named from large width up, icons on a phone), the inbox (messages) and the bell (notifications) and the account
+// Vender / Coleção (named from large width up, icons on a phone), then the inbox (messages) and the bell
+// (notifications) side by side and the account
 // menu (my account, profile, moderation, language and theme on a phone, log out).
 // After logging in / out, the page reloads so everything shows the right state.
 let currentUser = null;
@@ -129,8 +132,8 @@ async function renderAccountArea() {
            title="${esc(label)}" aria-label="${esc(label)}"><span class="icon">${icon}</span>${iconOnly ? "" : `<span class="d-none d-lg-inline">${esc(label)}</span>`}</a>`;
     box.innerHTML = `
         ${navButton("/sell", icon("tag"), t("nav_sell"))}
-        ${navButton("/messages", icon("inbox"), t("messages"), 'id="messages-link"', true)}
         ${navButton("/collection", icon("library"), t("nav_collection"), 'id="collection-link"')}
+        ${navButton("/messages", icon("inbox"), t("messages"), 'id="messages-link"', true)}
         <div class="notifications position-relative">
             <button type="button" class="btn btn-sm header-link icon-only position-relative" id="notifications-btn" aria-expanded="false"
                     aria-controls="notifications-panel" title="${esc(t("notifications"))}" aria-label="${esc(t("notifications"))}"><span class="icon">${icon("bell")}</span></button>
@@ -147,7 +150,7 @@ async function renderAccountArea() {
                 <div class="d-sm-none">
                     <hr class="dropdown-divider">
                     <button type="button" class="dropdown-item" role="menuitem" data-switch-lang>${t("lang_other")}</button>
-                    <button type="button" class="dropdown-item" role="menuitem" data-toggle-dark>🌙 ${t("dark_mode")}</button>
+                    <button type="button" class="dropdown-item" role="menuitem" data-toggle-dark>${icon("moon", 16)} ${t("dark_mode")}</button>
                 </div>
                 <hr class="dropdown-divider">
                 <button type="button" class="dropdown-item" role="menuitem" id="logout-btn">${t("log_out")}</button>

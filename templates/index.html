@@ -68,6 +68,20 @@
         /* The star's menu (favourite, collection, wishlist), inside the cover so the card doesn't clip it */
         .card-menu { top: 2.4rem; right: .4rem; min-width: 9rem; font-size: .85rem; z-index: 5; }
         .card-menu .check { display: inline-block; width: 1.1rem; }
+        /* A "…" of the page buttons once pressed: a box the size of a page button (index.js pagination) */
+        .page-jump { width: 3.2rem; text-align: center; padding-left: .25rem; padding-right: .25rem; }
+        /* Staff: the "..." at a card's bottom right and its menu, opening upwards (index.js fillAdminMenu) */
+        .game-card { position: relative; }
+        .admin-card-btn { position: absolute; right: 0; bottom: 0; padding: .15rem .35rem; color: var(--bs-secondary-color); }
+        .admin-card-btn:hover, .admin-card-btn[aria-expanded="true"] { color: var(--bs-emphasis-color); background: var(--bs-secondary-bg); }
+        .card-menu.admin-menu { top: auto; bottom: 2rem; right: 0; min-width: 12rem; }
+        .merge-dialog { width: min(32rem, calc(100vw - 2rem)); border: 0; border-radius: .75rem; padding: 1rem;
+                        background: var(--bs-body-bg); color: var(--bs-body-color); box-shadow: 0 .5rem 2rem rgb(0 0 0 / .3); }
+        .merge-dialog::backdrop { background: rgb(0 0 0 / .45); }
+        .merge-results { max-height: 18rem; overflow-y: auto; }
+        .merge-results img { width: 30px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .2rem; flex: none; }
+        .merge-results img.store-photo { padding: 1px; }
+        .merge-results .active .text-body-secondary { color: inherit !important; opacity: .8; }
         /* The page is as wide as the mock-up's shop (four big covers a row) */
         .front-wrap { max-width: 1240px; }
         /* The sections' tabs: a white band under the header, edge to edge (the shadow / clip pair
@@ -160,6 +174,15 @@
     <div id="results"></div>
 
     <!-- When each store's prices were last updated; ⚠ when a run failed or a store is out of date -->
+    <!-- Staff: merge a card's game with another (index.js openMerge) -->
+    <dialog id="merge-dialog" class="merge-dialog" aria-labelledby="merge-title">
+        <div class="d-flex align-items-start gap-2 mb-2">
+            <h2 id="merge-title" class="h5 mb-0 flex-grow-1" data-i18n="merge_title"></h2>
+            <button type="button" class="btn-close" data-close data-i18n-aria-label="merge_close"></button>
+        </div>
+        <div data-body></div>
+    </dialog>
+
     <footer class="small text-body-secondary border-top mt-5 pt-3">
         <div id="store-status"></div>
         <!-- IGDB's terms ask for a visible credit where its data is shown -->
