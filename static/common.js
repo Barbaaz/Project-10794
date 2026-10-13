@@ -38,10 +38,24 @@ function coverClass(url) {
     return url && !url.includes("images.igdb.com") ? "store-photo" : "";
 }
 
-// A user's picture (their profile picture, else 👤), `size` px round
+// Line icons drawn in the text's colour (user, 2026-10-13: no emojis on the site); shapes after Lucide (ISC)
+const ICONS = {
+    bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+    tag: '<path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/>',
+    library: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
+    user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+};
+
+function icon(name, size = 18) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" class="svg-icon">${ICONS[name]}</svg>`;
+}
+
+// A user's picture (their profile picture, else a drawn figure), `size` px round
 function avatarImage(url, size = 32) {
     return url ? `<img src="${esc(url)}" alt="" class="avatar" width="${size}" height="${size}">`
-               : `<span class="avatar avatar-none" style="width: ${size}px; height: ${size}px; font-size: ${Math.round(size * .55)}px;">👤</span>`;
+               : `<span class="avatar avatar-none" style="width: ${size}px; height: ${size}px; ">${icon("user", Math.round(size * .55))}</span>`;
 }
 
 function userLabel(username) {
@@ -93,7 +107,7 @@ async function api(path, { method = "POST", body } = {}) {
 }
 
 // The account part of the header (the same on every page): "Entrar" when logged out; logged in,
-// Vender / Mensagens / Coleção (named from large width up, icons on a phone) and the account
+// Vender / Coleção (named from large width up, icons on a phone), the inbox (messages) and the bell (notifications) and the account
 // menu (my account, profile, moderation, language and theme on a phone, log out).
 // After logging in / out, the page reloads so everything shows the right state.
 let currentUser = null;
@@ -110,16 +124,21 @@ async function renderAccountArea() {
     }
     const staff = ["moderator", "admin"].includes(currentUser.role);
     const name = currentUser.username || currentUser.display_name;
-    const navButton = (href, icon, label, extra = "") => `
-        <a href="${href}" class="btn btn-sm header-link position-relative" ${extra}
-           title="${esc(label)}" aria-label="${esc(label)}"><span class="icon">${icon}</span><span class="d-none d-lg-inline">${esc(label)}</span></a>`;
+    const navButton = (href, icon, label, extra = "", iconOnly = false) => `
+        <a href="${href}" class="btn btn-sm header-link position-relative${iconOnly ? " icon-only" : ""}" ${extra}
+           title="${esc(label)}" aria-label="${esc(label)}"><span class="icon">${icon}</span>${iconOnly ? "" : `<span class="d-none d-lg-inline">${esc(label)}</span>`}</a>`;
     box.innerHTML = `
-        ${navButton("/sell", "🏷️", t("nav_sell"))}
-        ${navButton("/messages", "💬", t("messages"), 'id="messages-link"')}
-        ${navButton("/collection", "📚", t("nav_collection"), 'id="collection-link"')}
+        ${navButton("/sell", icon("tag"), t("nav_sell"))}
+        ${navButton("/messages", icon("inbox"), t("messages"), 'id="messages-link"', true)}
+        ${navButton("/collection", icon("library"), t("nav_collection"), 'id="collection-link"')}
+        <div class="notifications position-relative">
+            <button type="button" class="btn btn-sm header-link icon-only position-relative" id="notifications-btn" aria-expanded="false"
+                    aria-controls="notifications-panel" title="${esc(t("notifications"))}" aria-label="${esc(t("notifications"))}"><span class="icon">${icon("bell")}</span></button>
+            <div class="dropdown-menu shadow notifications-panel" id="notifications-panel"></div>
+        </div>
         <div class="account-menu position-relative">
             <button type="button" class="btn btn-sm header-link" id="account-menu-btn" aria-haspopup="menu" aria-expanded="false"
-                    aria-controls="account-menu" title="${esc(t("account_menu"))}"><span class="icon">${currentUser.avatar ? avatarImage(currentUser.avatar, 22) : "👤"}</span><span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
+                    aria-controls="account-menu" title="${esc(t("account_menu"))}"><span class="icon">${currentUser.avatar ? avatarImage(currentUser.avatar, 22) : icon("user")}</span><span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
             <div class="dropdown-menu shadow" id="account-menu" role="menu">
                 <span class="dropdown-header">@${esc(name)}</span>
                 <a class="dropdown-item" role="menuitem" href="/account">⚙️ ${t("settings_title")}</a>
@@ -136,7 +155,7 @@ async function renderAccountArea() {
         </div>`;
     showUnreadCount();
     showPendingRatings();
-    showWishlistDeals();
+    showNotifications();
     bindAccountMenu(box);
     box.querySelector("#logout-btn").onclick = async () => {
         await api("/api/auth/logout");
@@ -174,7 +193,7 @@ function bindAccountMenu(box) {
     });
 }
 
-// The number of unread messages on the 💬 button (the messages page calls it again as it reads)
+// The number of unread messages on the inbox button (the messages page calls it again as it reads)
 async function showUnreadCount() {
     const link = document.getElementById("messages-link");
     if (!link) return;
@@ -186,16 +205,73 @@ async function showUnreadCount() {
     }
 }
 
-// Wishes that are a good deal now (on sale, at the historical low, cheaper than when added) on the 📚 button
-async function showWishlistDeals() {
-    const link = document.getElementById("collection-link");
-    if (!link) return;
-    const { count } = await fetch("/api/collection/deals").then(r => r.ok ? r.json() : { count: 0 }).catch(() => ({ count: 0 }));
-    if (!count) return;
-    link.href = "/collection?tab=wishlist";
-    link.insertAdjacentHTML("beforeend", `<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-success">${count}</span>`);
-    link.title = t("wishlist_deals", { count });
-    link.setAttribute("aria-label", `${t("collection_title")} (${t("wishlist_deals", { count })})`);
+// --- Notifications (user, 2026-10-13): the bell button lists what's waiting for the user ---------
+// Wishes that are a good deal now (on sale, at the historical low, cheaper than when added; collection_service.good_deals)
+// and trades to rate. The number counts the deals not seen yet (this browser remembers which, by price)
+// plus the ratings to give; opening the panel marks the deals seen.
+const SEEN_DEALS = "seen-deals";
+
+async function showNotifications() {
+    const button = document.getElementById("notifications-btn");
+    const panel = document.getElementById("notifications-panel");
+    if (!button) return;
+    const [deals, ratings] = await Promise.all([
+        fetch("/api/collection/deals").then(r => r.ok ? r.json() : { items: [] }).catch(() => ({ items: [] })),
+        fetch("/api/ratings/pending").then(r => r.ok ? r.json() : []).catch(() => []),
+    ]);
+    const key = d => `${d.id}:${d.best_price}`;
+    const seen = new Set(savedJSON(SEEN_DEALS, []));
+    const fresh = deals.items.filter(d => !seen.has(key(d)));
+    const count = fresh.length + ratings.length;
+
+    const why = d => d.on_sale && d.discount ? `−${d.discount}%`
+        : d.at_historical_low ? t("low_badge")
+        : d.price_drop ? t("notif_price_drop", { amount: eur.format(d.price_drop) }) : "";
+    const deal = d => `
+        <a class="dropdown-item notif-item d-flex gap-2 align-items-center" href="/game/${d.game_id}">
+            <img src="${esc(d.image || "")}" class="${coverClass(d.image)}" alt="">
+            <span class="flex-grow-1 min-w-0">
+                <span class="d-block text-truncate fw-semibold">${esc(localName(d) || "")}</span>
+                <span class="d-block small text-body-secondary text-truncate">${esc(d.platform || "")}
+                    ${d.best_price != null ? ` · <strong class="text-body">${eur.format(d.best_price)}</strong>` : ""}
+                    ${why(d) ? ` · <span class="text-success">${esc(why(d))}</span>` : ""}</span>
+            </span>
+            ${seen.has(key(d)) ? "" : `<span class="badge text-bg-primary">${esc(t("notif_new"))}</span>`}
+        </a>`;
+    const rating = p => `
+        <a class="dropdown-item small text-wrap" href="/messages?c=${p.conversation_id}">${esc(t("rate_link", { user: userLabel(p.other_username), game: p.title }))}</a>`;
+    panel.innerHTML = `
+        <h2 class="dropdown-header h6 mb-0">${esc(t("notifications"))}</h2>
+        ${ratings.length ? `<div class="dropdown-header small pt-0">${esc(t("notif_ratings"))}</div>${ratings.map(rating).join("")}` : ""}
+        ${deals.items.length ? `<div class="dropdown-header small pt-2">${esc(t("notif_deals"))}</div>
+            <div class="notif-list">${deals.items.map(deal).join("")}</div>
+            <hr class="dropdown-divider"><a class="dropdown-item small" href="/collection?tab=wishlist">${esc(t("notif_see_wishlist"))}</a>` : ""}
+        ${count || deals.items.length ? "" : `<p class="px-3 py-2 mb-0 small text-body-secondary">${esc(t("notif_none"))}</p>`}`;
+
+    button.querySelector(".badge")?.remove();
+    if (count) {
+        button.insertAdjacentHTML("beforeend", `<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger">${count}</span>`);
+        button.setAttribute("aria-label", `${t("notifications")} (${t("notif_count", { count })})`);
+    }
+    const setOpen = (open, focus) => {
+        panel.classList.toggle("show", open);
+        button.setAttribute("aria-expanded", open);
+        if (open) {
+            panel.style.top = `${button.getBoundingClientRect().bottom + 4}px`;     // phones: fixed under the button (common.css)
+            // seen: the deals' badge goes; the ratings stay counted until given
+            save(SEEN_DEALS, deals.items.map(key));
+            button.querySelector(".badge")?.remove();
+            if (ratings.length) button.insertAdjacentHTML("beforeend",
+                `<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger">${ratings.length}</span>`);
+            button.setAttribute("aria-label", ratings.length ? `${t("notifications")} (${t("notif_count", { count: ratings.length })})` : t("notifications"));
+        }
+        if (!open && focus) button.focus();
+    };
+    button.onclick = () => setOpen(!panel.classList.contains("show"));
+    // the click's path as it happened: opening removes the badge, which may be what was clicked
+    document.addEventListener("click", e => { if (!e.composedPath().includes(button.parentElement)) setOpen(false); });
+    panel.addEventListener("keydown", e => { if (e.key === "Escape") setOpen(false, true); });
+    button.addEventListener("keydown", e => { if (e.key === "Escape") setOpen(false); });
 }
 
 // --- The app on a phone (static/sw.js, static/manifest.webmanifest) ---------------------------

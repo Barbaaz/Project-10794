@@ -3,7 +3,7 @@ A user's game collection: editions they own (physical / digital, play status, ho
 achievements, notes) and a wishlist. Each item shows the edition's current prices (stores, used
 copies, a real discount, the historical low); a wish also remembers the price it was added at, so
 a drop shows. A wish on sale, at its historical low or cheaper than when added is a good deal
-(counted on the 📚 header button). Statistics: per platform and
+(counted in the header's notifications). Statistics: per platform and
 status, hours, and what the owned games are worth today. Private unless the user makes it
 public (it then shows on their profile). When games / editions are merged, items follow
 (pipeline/rematch.py).
@@ -87,12 +87,15 @@ def with_prices(rows):
 
 def good_deals(user_id):
     """{count, items}: the wishes that are a good deal now (on sale, at the historical low, cheaper than
-    when added), for the 📚 header button."""
+    when added), for the header's notifications (user, 2026-10-13): what and why, cheapest first."""
     with session() as s:
         rows = [fields(i, "id", "kind", "edition_id", "game_id", "wish_price") for i in s.scalars(
             select(CollectionItem).where(CollectionItem.user_id == user_id, CollectionItem.kind == "wishlist"))]
     deals = [r for r in with_prices(rows) if r["good_deal"]] if rows else []
-    return {"count": len(deals), "items": [{k: r[k] for k in ("id", "name", "best_price", "price_drop")} for r in deals]}
+    deals.sort(key=lambda r: (r["best_price"] is None, r["best_price"] or 0, r["id"]))
+    keys = ("id", "game_id", "edition_id", "name", "name_en", "platform", "image", "best_price", "best_store",
+            "price_drop", "on_sale", "discount", "at_historical_low")
+    return {"count": len(deals), "items": [{k: r[k] for k in keys} for r in deals]}
 
 
 def item_ids(user_id):
