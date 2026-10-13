@@ -172,6 +172,15 @@ def test_edition_names_in_english():
     assert edition_en("Deluxe Edition") == "Deluxe Edition"
 
 
+def test_every_edition_card_shows_the_igdb_cover():
+    """The same kind of picture on every card (2026-10-13): special editions too; none without one"""
+    from app.services.common import card_cover
+    cover = "https://images.igdb.com/igdb/image/upload/t_cover_big_2x/co1abc.jpg"
+    for key in ("", "|hits", "deluxe", "collectors|steelbook"):
+        assert card_cover({"cover_image_id": "co1abc", "edition_key": key}) == cover
+    assert card_cover({"cover_image_id": None, "edition_key": "deluxe"}) is None
+
+
 def test_possible_duplicates_merged_or_dismissed(mod):
     client, c = mod["client"], mod["db"]
     # the same game under another name (another store, another language), linked to the same IGDB entry

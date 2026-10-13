@@ -43,11 +43,10 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
     col.innerHTML = `
         <div class="h-100 game-card d-flex flex-column">
             <div class="position-relative">
-                <a href="${gameUrl}" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(group.cover || best?.image || group.image || "")}"
-                    class="${group.cover ? "" : "store-photo"}" alt="" loading="lazy"></a>
+                <a href="${gameUrl}" class="cover-link" tabindex="-1" aria-hidden="true">${coverImage(group.cover, best?.image || group.image)}</a>
                 ${coverBadge}
-                ${group.at_historical_low ? `<span class="badge low-price-badge"
-                    title="${esc(t("low_badge_hint"))}">${t("low_badge")}</span>` : ""}
+                ${coverFoot(group.at_historical_low ? `<span class="badge low-price-badge"
+                    title="${esc(t("low_badge_hint"))}">${t("low_badge")}</span>` : "", group.cover && edition)}
                 <button type="button" class="btn btn-light fav-btn shadow-sm" data-edition="${group.edition_id}"
                     aria-label="${t("card_menu")}" aria-haspopup="menu" aria-expanded="false">${starButton(group)}</button>
             </div>
@@ -69,6 +68,21 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
         card.querySelector(`[data-platform-index="${i}"]`)?.focus();
     });
     return col;
+}
+
+// The card's picture (user, 2026-10-13: the same on every card): the game's IGDB cover, which has the
+// card's shape; else a store's photo (square, a 3D box shot...) whole, on a blurred copy of itself
+function coverImage(cover, photo) {
+    if (cover) return `<img src="${esc(cover)}" alt="" loading="lazy">`;
+    return `<img src="${esc(photo || "")}" class="cover-backdrop" alt="" loading="lazy">`
+        + `<img src="${esc(photo || "")}" class="framed-photo" alt="" loading="lazy">`;
+}
+
+// The cover's bottom row: the historical low on the left, a special edition's name on the right (the
+// IGDB cover is the game's, so the card says which edition it is); they wrap on a narrow card
+function coverFoot(lowBadge, edition) {
+    const tag = edition ? `<span class="badge edition-badge" title="${esc(edition)}">${esc(edition)}</span>` : "";
+    return lowBadge || tag ? `<div class="cover-foot">${lowBadge}${tag}</div>` : "";
 }
 
 // The card's platforms in a fixed order (the cheapest first, as the catalogue sent them)
@@ -132,12 +146,14 @@ function marketCard(group) {
         </a>`;
     const more = group.listings.length > 1
         ? `<a href="/game/${group.game_id}#market" class="used-line">${t("sellers_count", { count: group.listings.length })}</a>` : "";
-    const cover = group.image || first.photos[0]?.thumb_url || "";
     const col = document.createElement("div");
     col.className = "col";
     col.innerHTML = `
         <div class="h-100 game-card d-flex flex-column">
-            <a href="/game/${group.game_id}#market" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(cover)}" alt="" loading="lazy"></a>
+            <div class="position-relative">
+                <a href="/game/${group.game_id}#market" class="cover-link" tabindex="-1" aria-hidden="true">${coverImage(group.cover, group.image || first.photos[0]?.thumb_url)}</a>
+                ${coverFoot("", group.cover && edition)}
+            </div>
             <div class="card-text d-flex flex-column flex-grow-1">
                 <div class="card-platform">${esc(group.platform_name)}</div>
                 <a href="/game/${group.game_id}#market" class="link-body-emphasis text-decoration-none game-title"

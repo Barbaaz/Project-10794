@@ -18,13 +18,25 @@
 
     <style>
         /* Cards without a box: the cover carries them (rounded), then platform, name and prices */
-        .game-card .cover-link { display: block; overflow: hidden; border-radius: .75rem; background: var(--bs-secondary-bg); }
+        .game-card .cover-link { display: block; position: relative; overflow: hidden; border-radius: .75rem; background: var(--bs-secondary-bg); }
         .game-card img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; transition: transform .3s ease; }
-        /* A store's photo (square, a 3D box shot...) is shown whole on white, not cropped to the card;
-           the game's IGDB cover already has the card's shape */
-        .game-card img.store-photo { object-fit: contain; background: #fff; }
+        /* A store's photo (square, a 3D box shot...) is shown whole, not cropped to the card, on a
+           blurred, darkened copy of itself that fills the card (index.js coverImage); the game's IGDB
+           cover already has the card's shape. Not common.css's store-photo: that one is on white */
+        .game-card img.cover-backdrop { position: absolute; inset: 0; height: 100%; filter: blur(16px) brightness(.6); transform: scale(1.2); }
+        .game-card img.framed-photo { position: relative; display: block; object-fit: contain; padding: 8%; }
         .game-card:hover img { transform: scale(1.03); }
-        @media (prefers-reduced-motion: reduce) { .game-card img { transition: none; } .game-card:hover img { transform: none; } }
+        .game-card:hover img.cover-backdrop { transform: scale(1.24); }
+        @media (prefers-reduced-motion: reduce) {
+            .game-card img { transition: none; } .game-card:hover img { transform: none; }
+            .game-card:hover img.cover-backdrop { transform: scale(1.2); }
+        }
+        /* The cover's bottom row (index.js coverFoot): the historical low left, a special edition right */
+        .cover-foot { position: absolute; left: .5rem; right: .5rem; bottom: .5rem; display: flex; flex-wrap: wrap-reverse;
+                      justify-content: space-between; align-items: flex-end; gap: .3rem; pointer-events: none; }
+        .cover-foot .badge { pointer-events: auto; }
+        .edition-badge { margin-left: auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: .72rem;
+                         border-radius: .4rem; background: rgb(20 23 31 / .88); color: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .35); }
         .game-card .card-text { padding-top: .65rem; font-size: .9rem; }
         /* Every card has the same layout: platform 1 line, title always 2 lines tall,
            extra line (release date, historical low...) 2 lines; longer text ends in "…" */
@@ -95,7 +107,7 @@
         .release-item img { border-radius: .4rem !important; }
         .discount-badge { position: absolute; top: .5rem; left: .5rem; font-size: .78rem; font-weight: 800; border-radius: .4rem;
                           box-shadow: 0 1px 3px rgb(0 0 0 / .2); }
-        .low-price-badge { position: absolute; bottom: .5rem; left: .5rem; font-size: .75rem; border-radius: .4rem;
+        .low-price-badge { font-size: .75rem; border-radius: .4rem;
                            background: var(--save-bg); color: var(--save); }
         .release-date { width: 3.2rem; }
         .release-item img { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: #000; }

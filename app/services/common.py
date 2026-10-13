@@ -43,10 +43,11 @@ IGDB_COVER = "https://images.igdb.com/igdb/image/upload/t_cover_big_2x/{}.jpg"
 def card_cover(row):
     """
     The card's picture when it should be the game's IGDB cover: flat box art in the card's own 3:4
-    shape (the stores' photos are square, 3D box shots or small). Only for the standard edition
-    (also "· PlayStation Hits"): a special edition shows its own box, from the store.
+    shape (the stores' photos are square, 3D box shots or small). Every edition (user, 2026-10-13: the
+    same kind of picture on every card): a special edition's card says which it is on the cover, and
+    its own box is on the game page.
     """
-    if row.get("cover_image_id") and row["edition_key"].split("|")[0] == "":
+    if row.get("cover_image_id"):
         return IGDB_COVER.format(row["cover_image_id"])
     return None
 

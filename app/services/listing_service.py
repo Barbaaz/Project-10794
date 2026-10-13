@@ -133,7 +133,8 @@ def browse(platform=None, sort="newest", page=1, per_page=48, kind=None):
                                       .order_by(Listing.price, Listing.created_at, Listing.id)).unique().all()) if ids else []
     groups = [card_group({"edition_id": edition.id, "game_id": game.id, "title": game.title,
                           "edition_key": edition.edition_key, "edition": edition.name,
-                          "console": platform_.code, "platform_name": platform_.name, "kind": game.kind},
+                          "console": platform_.code, "platform_name": platform_.name, "kind": game.kind,
+                          "cover_image_id": game.cover_image_id},
                          [], image=game.image_url, listings=[l for l in listings if l["edition_id"] == edition.id])
               for edition, game, platform_ in rows]
     return page_result(page, per_page, total, groups=groups)
