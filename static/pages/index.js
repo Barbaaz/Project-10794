@@ -44,7 +44,7 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
         <div class="h-100 game-card d-flex flex-column">
             <div class="position-relative">
                 <a href="${gameUrl}" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(group.cover || best?.image || group.image || "")}"
-                    class="${group.cover ? "" : "store-photo"}" alt="" loading="lazy"></a>
+                    class="${coverClass(group.cover || best?.image || group.image)}" alt="" loading="lazy"></a>
                 ${coverBadge}
                 ${group.at_historical_low ? `<span class="badge low-price-badge"
                     title="${esc(t("low_badge_hint"))}">${t("low_badge")}</span>` : ""}

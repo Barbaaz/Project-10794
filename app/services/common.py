@@ -40,15 +40,28 @@ EDITION_CARD_COLUMNS = """
 IGDB_COVER = "https://images.igdb.com/igdb/image/upload/t_cover_big_2x/{}.jpg"
 
 
-def card_cover(row):
-    """
-    The card's picture when it should be the game's IGDB cover: flat box art in the card's own 3:4
-    shape (the stores' photos are square, 3D box shots or small). Only for the standard edition
-    (also "· PlayStation Hits"): a special edition shows its own box, from the store.
-    """
-    if row.get("cover_image_id") and row["edition_key"].split("|")[0] == "":
-        return IGDB_COVER.format(row["cover_image_id"])
+# Whose photo a card shows, best first (user, 2026-10-13): these stores' pictures, then IGDB's cover
+PICTURE_STORES = ("gaming_replay", "mega-mania", "cstech", "press_start")
+
+
+def store_picture(offers):
+    """The photo of the first store in PICTURE_STORES that has one among these offers, or None."""
+    for store in PICTURE_STORES:
+        for offer in offers:
+            if offer.get("store") == store and offer.get("image"):
+                return offer["image"]
     return None
+
+
+def card_cover(row, offers=()):
+    """
+    The card's picture: the edition's photo from the stores in PICTURE_STORES' order, else the game's
+    IGDB cover; None leaves it to the page (another store's photo, the game's own).
+    """
+    picture = store_picture(offers)
+    if picture:
+        return picture
+    return IGDB_COVER.format(row["cover_image_id"]) if row.get("cover_image_id") else None
 
 # Portuguese edition words in English, for the English page ("Edição Especial" → "Special Edition")
 EDITION_WORDS_EN = [(re.compile(rf"\b{pt}\b", re.IGNORECASE), en) for pt, en in [
@@ -130,7 +143,7 @@ def card_group(row, offers, **extra):
         "game_id": row["game_id"],
         "name": card_name(better_title(row), row["edition_key"], row["edition"]),
         "name_en": card_name(title_en(row), row["edition_key"], edition_en(row["edition"])),
-        "cover": card_cover(row),
+        "cover": card_cover(row, offers),
         "console": row["console"],
         "platform_name": row["platform_name"],
         "kind": row.get("kind", "game"),        # game / console (core/hardware.py)
