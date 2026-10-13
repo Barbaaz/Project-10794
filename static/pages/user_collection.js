@@ -44,7 +44,7 @@ async function load() {
     const data = await response.json();
     items = data.items.filter(i => i.kind === "owned");
     const who = userLabel(USERNAME);
-    document.title = `${t("user_collection_title", { user: who })} · SaveGame`;
+    document.title = `${t("user_collection_title", { user: who })} · SaveOnGames`;
     document.getElementById("title").innerHTML = esc(t("user_collection_title", { user: "\u0000" })).replace("\u0000",
         `<a href="/user/${encodeURIComponent(USERNAME)}">${esc(who)}</a>`);
     document.getElementById("summary").textContent = t("profile_collection_summary",

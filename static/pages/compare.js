@@ -72,7 +72,7 @@ async function load() {
     }
     data = answer;
     const them = userLabel(data.them.username);
-    document.title = `${t("compare_collections")} · ${them} · SaveGame`;
+    document.title = `${t("compare_collections")} · ${them} · SaveOnGames`;
     document.getElementById("title").innerHTML = esc(t("compare_title", { user: "\u0000" })).replace("\u0000",
         `<a href="/user/${encodeURIComponent(data.them.username)}">${esc(them)}</a>`);
     document.getElementById("head-me").textContent = t("compare_you");

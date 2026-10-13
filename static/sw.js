@@ -14,7 +14,8 @@
 // v3: page scripts in files (static/pages/); saved pages from before had them inline
 // v4: the new look (2026-10-10) and its font
 // v5: the site's name, SaveGame (2026-10-12): the saved offline page had the old one
-const VERSION = "v5";
+// v6: renamed SaveOnGames (2026-10-13)
+const VERSION = "v6";
 const CACHE = `site-${VERSION}`;
 const SLOW_MS = 6000;      // past this, a saved copy is shown while the network keeps trying
 const CDN = "https://cdn.jsdelivr.net";       // Bootstrap, Chart.js: fixed versions in their URLs

@@ -65,4 +65,4 @@ def run_summary(failed, warnings):
         parts.append(f"Falhou: {', '.join(failed)}")
     if warnings:
         parts.append(f"Com problemas (produtos em falta): {', '.join(warnings)}")
-    return "SaveGame", " · ".join(parts) + ". Ver logs\\scraper-<data>.log"
+    return "SaveOnGames", " · ".join(parts) + ". Ver logs\\scraper-<data>.log"

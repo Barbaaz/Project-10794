@@ -36,7 +36,7 @@ async function load() {
 }
 
 function render() {
-    document.title = `${localName(game, "title")} (${game.platform}) · SaveGame`;
+    document.title = `${localName(game, "title")} (${game.platform}) · SaveOnGames`;
     document.getElementById("title").textContent = localName(game, "title");
     document.getElementById("platform").textContent = game.platform_name;
 

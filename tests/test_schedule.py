@@ -65,9 +65,9 @@ def test_run_problems_are_emailed(monkeypatch):
     monkeypatch.setattr(config, "ALERT_EMAIL", "admin@example.invalid")
     monkeypatch.setattr(notify.mail_service, "send", lambda *a: sent.append(a))
     monkeypatch.setattr(notify, "toast", lambda *a: None)
-    notify.notify("SaveGame", "Falhou: cstech")
-    assert sent == [("admin@example.invalid", "SaveGame", "Falhou: cstech")]
+    notify.notify("SaveOnGames", "Falhou: cstech")
+    assert sent == [("admin@example.invalid", "SaveOnGames", "Falhou: cstech")]
 
     monkeypatch.setattr(config, "ALERT_EMAIL", "")
-    notify.notify("SaveGame", "Falhou: cstech")
+    notify.notify("SaveOnGames", "Falhou: cstech")
     assert len(sent) == 1
