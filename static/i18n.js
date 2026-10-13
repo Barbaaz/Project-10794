@@ -767,6 +767,10 @@ const STRINGS = {
         sort_price_desc: "Preço: mais caro primeiro",
         pages: "Páginas",
         previous: "« Anterior",
+        go_to_page: "Ir para a página",
+        page_of: "de {pages}",
+        go: "Ir",
+        back_to_top: "Voltar ao topo",
         next: "Seguinte »",
 
         // alerts & store status
@@ -1645,6 +1649,10 @@ const STRINGS = {
         sort_price_desc: "Price: highest first",
         pages: "Pages",
         previous: "« Previous",
+        go_to_page: "Go to page",
+        page_of: "of {pages}",
+        go: "Go",
+        back_to_top: "Back to the top",
         next: "Next »",
 
         restock_one: "A game on your wishlist is back in stock",
