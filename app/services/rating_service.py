@@ -10,6 +10,7 @@ from datetime import timedelta
 from sqlalchemy import Numeric, and_, case, cast, exists, func, or_, select
 
 from app.models import NOW, Conversation, Rating, User, fields
+from app.services import gaming_accounts
 from db import session
 
 OVERDUE_DAYS = 14
@@ -149,7 +150,8 @@ def profile(username):
         user = s.scalars(select(User).where(User.named(username), User.is_active)).first()
         if not user:
             return None
-        result = fields(user, "id", "username", "display_name", "location", "avatar", "created_at")
+        result = fields(user, "id", "username", "display_name", "location", "avatar", "created_at",
+                        accounts=gaming_accounts.shown(user.accounts))
         ratings = s.scalars(select(Rating).where(Rating.rated_id == user.id, ~Rating.hidden)
                             .order_by(Rating.created_at.desc())).all()
         result["ratings"] = [

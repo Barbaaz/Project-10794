@@ -263,6 +263,42 @@ def test_editing_the_profile(market):
     assert edit(location="Faro").status_code == 401
 
 
+def test_gaming_accounts_on_the_profile(market):
+    """User, 2026-10-13: gamer names and channels on the profile, typed or pasted as links; links only to
+    the services' own pages; empty takes one off; gone with the account."""
+    from helpers import HEADERS, sign_up
+    client = market["client"]
+    user_id = sign_up(client, "gamer_tags")["id"]
+    edit = lambda **fields: client.patch("/api/auth/profile", json=fields, headers=HEADERS)
+    mine = edit(psn="Gamer_Tags", xbox="Gamer Tags#1234", steam="https://steamcommunity.com/id/gamertags/",
+                nintendo="1234 5678 9012", epic="Gamer Tags", youtube="https://www.youtube.com/@GamerTags?si=x",
+                twitch="twitch.tv/gamer_tags").get_json()
+    assert mine["accounts"] == {"psn": "Gamer_Tags", "xbox": "Gamer Tags#1234", "steam": "id/gamertags",
+                                "nintendo": "SW-1234-5678-9012", "epic": "Gamer Tags", "youtube": "@GamerTags",
+                                "twitch": "gamer_tags"}
+    shown = {a["kind"]: (a["name"], a["url"]) for a in client.get("/api/users/gamer_tags").get_json()["accounts"]}
+    assert shown["psn"] == ("Gamer_Tags", None)
+    assert shown["steam"] == ("gamertags", "https://steamcommunity.com/id/gamertags")
+    assert shown["youtube"] == ("@GamerTags", "https://www.youtube.com/@GamerTags")
+    assert shown["twitch"] == ("gamer_tags", "https://www.twitch.tv/gamer_tags")
+
+    # a number-only page shows the service's name; other changes leave the accounts as they were
+    assert edit(steam="steamcommunity.com/profiles/76561197960287930", location="Porto").get_json()["accounts"]["steam"] \
+        == "profiles/76561197960287930"
+    steam = [a for a in client.get("/api/users/gamer_tags").get_json()["accounts"] if a["kind"] == "steam"][0]
+    assert steam == {"kind": "steam", "name": None, "url": "https://steamcommunity.com/profiles/76561197960287930"}
+    assert len(edit(display_name="Gamer").get_json()["accounts"]) == 7
+
+    # nothing that isn't the service's name: no other site, no script
+    for kind, text in (("twitch", "https://evil.example/x"), ("youtube", "javascript:alert(1)"), ("psn", "a"),
+                       ("steam", "https://evil.example/id/x"), ("nintendo", "12345"), ("epic", "<b>x</b>")):
+        assert edit(**{kind: text}).get_json()["error"] == f"{kind}_invalid", kind
+    assert edit(psn="", twitch=None).get_json()["accounts"].keys() == {"xbox", "steam", "nintendo", "epic", "youtube"}
+
+    client.post("/api/auth/delete", json={"password": "segredo123"}, headers=HEADERS)
+    assert market["db"].execute("SELECT accounts_json FROM users WHERE id = ?", user_id).fetchone()[0] is None
+
+
 def test_a_profile_picture(market):
     """User, 2026-10-12: a profile picture, made a square without metadata; replaced, removed, and gone with
     the account; a moderator can remove it."""

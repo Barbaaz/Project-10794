@@ -53,7 +53,17 @@ handleForm("profile-form", "/api/auth/profile", { method: "PATCH", done: (messag
     message.className = "alert alert-success py-2";
     message.textContent = t("profile_saved");
     showAccount(user);
+    fillAccounts(user);
 } });
+
+// The gamer names and channels as they're kept (gaming_accounts), back in the boxes the way they can be typed
+function fillAccounts(user) {
+    const form = document.getElementById("profile-form");
+    const typed = (kind, value) =>
+        kind === "steam" ? (value.startsWith("id/") ? value.slice(3) : `https://steamcommunity.com/${value}`)
+        : kind === "youtube" && value.startsWith("channel/") ? `https://www.youtube.com/${value}` : value;
+    form.querySelectorAll("fieldset input").forEach(input => input.value = typed(input.name, user.accounts?.[input.name] || ""));
+}
 handleForm("delete-form", "/api/auth/delete", { done: () => location.assign("/") });
 // the button (and Enter in the password box) only works once the box is ticked
 const deleteConfirm = document.getElementById("delete-confirm");
@@ -111,6 +121,7 @@ async function load() {
     const form = document.getElementById("profile-form");
     form.display_name.value = user.display_name || "";
     form.location.value = user.location || "";
+    fillAccounts(user);
     document.getElementById("profile-view").href = `/user/${encodeURIComponent(user.username)}`;
     if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
     loadSettings(user);

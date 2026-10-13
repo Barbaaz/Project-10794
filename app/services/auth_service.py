@@ -6,6 +6,7 @@ request_password_reset). Google / Microsoft sign-in
 come later and create accounts without a password (password_hash None).
 """
 import hashlib
+import json
 import hmac
 import logging
 import re
@@ -42,7 +43,7 @@ _failures_lock = threading.Lock()   # the server answers several requests at onc
 
 # What a user sees about their own account (never the password hash). Other people see less:
 # never the email (see the marketplace's seller info)
-OWN_FIELDS = ("id", "username", "display_name", "email", "location", "avatar", "role", "created_at")
+OWN_FIELDS = ("id", "username", "display_name", "email", "location", "accounts", "avatar", "role", "created_at")
 
 
 class AccountError(Exception):
@@ -87,8 +88,10 @@ MAX_LOCATION = 100
 
 
 def update_profile(user_id, changes):
-    """{display_name?, location?}: what the profile shows besides the username (user, 2026-10-12: there was
-    no way to change them). An empty display name is the username; an empty location, none."""
+    """{display_name?, location?, accounts?}: what the profile shows besides the username (user, 2026-10-12:
+    there was no way to change them). An empty display name is the username; an empty location, none.
+    accounts: {kind: typed name or link} of the gamer names and channels (gaming_accounts), "" takes one off."""
+    from app.services import gaming_accounts         # it uses this module's AccountError
     with session() as s:
         user = s.get(User, user_id)
         if "display_name" in changes:
@@ -101,6 +104,9 @@ def update_profile(user_id, changes):
             if len(location) > MAX_LOCATION:
                 raise AccountError("location_long")
             user.location = location or None
+        if changes.get("accounts"):
+            accounts = gaming_accounts.cleaned(changes["accounts"], user.accounts)
+            user.accounts_json = json.dumps(accounts) if accounts else None
     return get_user(user_id)
 
 
@@ -216,7 +222,7 @@ def delete_account(user_id, password, ip="?"):
         s.execute(delete(Follow).where(or_(Follow.follower_id == user_id, Follow.followed_id == user_id)))
 
         logins = {(user.username or "").lower(), user.email}
-        user.username = user.password_hash = user.location = user.steam_id = None
+        user.username = user.password_hash = user.location = user.steam_id = user.accounts_json = None
         user.psn_account_id = user.psn_online_id = None
         if user.avatar_key:
             photo_keys.append(user.avatar_key)

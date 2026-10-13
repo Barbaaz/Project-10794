@@ -6,6 +6,23 @@ function stars(n) {
     return `<span class="text-warning" aria-label="${esc(t("stars_n", { n }))}">${"★".repeat(n)}${"☆".repeat(5 - n)}</span>`;
 }
 
+// The services' own names: the same in both languages
+const SERVICES = { psn: "PSN", xbox: "Xbox", steam: "Steam", nintendo: "Nintendo Switch", epic: "Epic Games",
+                   youtube: "YouTube", twitch: "Twitch" };
+
+// The gamer names and channels (gaming_accounts.shown): a link to the service's page where it has one
+function showAccounts(accounts) {
+    const box = document.getElementById("gaming-accounts");
+    box.innerHTML = accounts.map(a => {
+        const text = `<strong>${esc(SERVICES[a.kind])}</strong>${a.name ? ` ${esc(a.name)}` : ""}`;
+        return a.url
+            ? `<a role="listitem" class="badge rounded-pill bg-body-secondary text-body border text-decoration-none fw-normal"
+                  href="${esc(a.url)}" target="_blank" rel="noopener noreferrer nofollow ugc">${text} ↗</a>`
+            : `<span role="listitem" class="badge rounded-pill bg-body-secondary text-body border fw-normal user-select-all">${text}</span>`;
+    }).join("");
+    box.classList.toggle("d-none", !accounts.length);
+}
+
 async function load() {
     await renderAccountArea();
     const response = await fetch(`/api/users/${encodeURIComponent(USERNAME)}`);
@@ -25,6 +42,7 @@ async function load() {
     const where = document.getElementById("location");
     where.textContent = user.location ? `📍 ${user.location}` : "";
     where.classList.toggle("d-none", !user.location);
+    showAccounts(user.accounts);
     const mine = currentUser && currentUser.id === user.id;     // the person can answer their ratings
     document.getElementById("edit-profile").classList.toggle("d-none", !mine);
     document.getElementById("report-user").innerHTML = mine ? "" : reportButton("user", user.id);

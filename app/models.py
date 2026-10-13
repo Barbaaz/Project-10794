@@ -10,6 +10,8 @@ The price analysis queries (the current_offers view, windows, "latest price per 
 stay SQL: they're reports that read better as SQL.
 Times are UTC, without a time zone, set by the database (utcnow(), database/schema.sql).
 """
+import json
+
 from sqlalchemy import (
     BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Unicode, UnicodeText,
     UniqueConstraint, false, func, text, true,
@@ -176,6 +178,8 @@ class User(Base):
     avatar_key: Mapped[str | None] = mapped_column(String(80))      # the profile picture (photo_storage)
     # the profile's showcase sections, in order, comma-separated (collection_service.SHOWCASE; None: all)
     profile_sections: Mapped[str | None] = mapped_column(String(100))
+    # the gamer names and channels on the profile, JSON {kind: name} (gaming_accounts; None: none)
+    accounts_json: Mapped[str | None] = mapped_column(UnicodeText)
     last_login_at = mapped_column(DateTime)
     created_at = created_at()
     deleted_at = mapped_column(DateTime)      # the user deleted their account: anonymised (auth_service.delete_account)
@@ -184,6 +188,11 @@ class User(Base):
     def avatar(self):
         """The profile picture's address, or None."""
         return f"/media/{self.avatar_key}" if self.avatar_key else None
+
+    @property
+    def accounts(self):
+        """{kind: name}: the gamer names and channels the user shows (gaming_accounts)."""
+        return json.loads(self.accounts_json) if self.accounts_json else {}
 
     @property
     def is_moderator(self):

@@ -158,6 +158,48 @@
                                    data-i18n-placeholder="profile_location_placeholder" aria-describedby="profile-location-help">
                             <div id="profile-location-help" class="form-text" data-i18n="profile_location_help"></div>
                         </div>
+                        <!-- gamer names and channels (gaming_accounts): a name or a pasted link; empty takes one off -->
+                        <fieldset class="mb-3">
+                            <legend class="h6 mb-1" data-i18n="gaming_accounts"></legend>
+                            <p id="gaming-accounts-help" class="form-text mt-0 mb-2" data-i18n="gaming_accounts_help"></p>
+                            <div class="row g-2">
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-0" for="account-psn" data-i18n="account_psn"></label>
+                                <input id="account-psn" name="psn" class="form-control form-control-sm" autocomplete="off" spellcheck="false"
+                                       maxlength="100" data-i18n-placeholder="account_psn_placeholder">
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-0" for="account-xbox" data-i18n="account_xbox"></label>
+                                <input id="account-xbox" name="xbox" class="form-control form-control-sm" autocomplete="off" spellcheck="false"
+                                       maxlength="100" data-i18n-placeholder="account_xbox_placeholder">
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-0" for="account-steam" data-i18n="account_steam"></label>
+                                <input id="account-steam" name="steam" class="form-control form-control-sm" autocomplete="off" spellcheck="false"
+                                       maxlength="100" data-i18n-placeholder="account_steam_placeholder">
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-0" for="account-nintendo" data-i18n="account_nintendo"></label>
+                                <input id="account-nintendo" name="nintendo" class="form-control form-control-sm" autocomplete="off" spellcheck="false"
+                                       maxlength="100" data-i18n-placeholder="account_nintendo_placeholder">
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-0" for="account-epic" data-i18n="account_epic"></label>
+                                <input id="account-epic" name="epic" class="form-control form-control-sm" autocomplete="off" spellcheck="false"
+                                       maxlength="100" data-i18n-placeholder="account_epic_placeholder">
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-0" for="account-youtube" data-i18n="account_youtube"></label>
+                                <input id="account-youtube" name="youtube" class="form-control form-control-sm" autocomplete="off" spellcheck="false"
+                                       maxlength="100" data-i18n-placeholder="account_youtube_placeholder">
+                            </div>
+                            <div class="col-12 col-sm-6">
+                                <label class="form-label small mb-0" for="account-twitch" data-i18n="account_twitch"></label>
+                                <input id="account-twitch" name="twitch" class="form-control form-control-sm" autocomplete="off" spellcheck="false"
+                                       maxlength="100" data-i18n-placeholder="account_twitch_placeholder">
+                            </div>
+                            </div>
+                        </fieldset>
                         <div class="alert alert-danger d-none py-2" role="alert"></div>
                         <div class="d-flex flex-wrap align-items-center gap-2">
                             <button type="submit" class="btn btn-primary" data-i18n="profile_save"></button>

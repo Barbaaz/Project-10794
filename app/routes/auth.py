@@ -9,7 +9,7 @@ from functools import wraps
 
 from flask import Blueprint, Response, abort, g, jsonify, request, session
 
-from app.services import auth_service, export_service
+from app.services import auth_service, export_service, gaming_accounts
 from app.services.auth_service import AccountError
 from app.services.photo_storage import PhotoError
 
@@ -132,11 +132,14 @@ def change_password():
 @bp.patch("/profile")
 @login_required
 def update_profile():
-    """{display_name?, location?}: the profile's name and location → the account"""
+    """{display_name?, location?, psn?, xbox?, steam?…}: the profile's name, location, gamer names and
+    channels (gaming_accounts.KINDS) → the account"""
     data = request.get_json(silent=True) or {}
+    texts = {k: v for k, v in data.items() if v is None or isinstance(v, str)}
+    changes = {k: texts[k] for k in ("display_name", "location") if k in texts}
+    changes["accounts"] = {k: texts[k] for k in gaming_accounts.KINDS if k in texts}
     try:
-        return jsonify(auth_service.update_profile(current_user()["id"], {k: data[k] for k in ("display_name", "location")
-                                                                          if k in data and (data[k] is None or isinstance(data[k], str))}))
+        return jsonify(auth_service.update_profile(current_user()["id"], changes))
     except AccountError as e:
         return account_error(e)
 
