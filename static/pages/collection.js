@@ -563,9 +563,19 @@ function importer(key, field, options = () => ({})) {
         const result = element("result"), list = element("missing");
         const buttons = document.querySelectorAll(`#${key}-form button, #${key}-refresh`);
         buttons.forEach(b => b.disabled = true);
-        result.textContent = t("steam_importing");
+        // a few hundred games take a minute or two: a moving bar and the seconds so far, so it doesn't look stuck
+        const started = Date.now();
+        const tick = () => result.textContent = t("import_waiting", { seconds: Math.round((Date.now() - started) / 1000) });
+        tick();
+        const timer = setInterval(tick, 1000);
+        element("progress").classList.remove("d-none");
         list.innerHTML = "";
-        const { ok, data: answer } = await api(`/api/collection/${key}`, { body: { ...options(), ...(profile ? { [field]: profile } : {}) } });
+        const { ok, data: answer } = await api(`/api/collection/${key}`, { body: { ...options(), ...(profile ? { [field]: profile } : {}) } })
+            .catch(() => ({ ok: false, data: null }))        // the connection dropped: the usual error
+            .finally(() => {
+                clearInterval(timer);
+                element("progress").classList.add("d-none");
+            });
         buttons.forEach(b => b.disabled = false);
         if (!ok) return result.textContent = t(`error_${answer?.error || "unknown"}`);
         result.textContent = t(`${key}_imported`, { total: answer.total, added: answer.added, updated: answer.updated })
