@@ -636,7 +636,7 @@ async function fillCollectionButtons() {
         box.innerHTML = ["owned", "wishlist"].map(kind => `
             <button type="button" class="btn btn-sm ${mine[kind] ? "btn-primary" : "btn-secondary"}" data-kind="${kind}"
                     aria-pressed="${!!mine[kind]}">${t(mine[kind] ? `collection_in_${kind}` : `collection_add_${kind}`)}</button>`).join("")
-            + (mine.owned || mine.wishlist ? `<a href="/collection${mine.owned ? "" : "?tab=wishlist"}" class="btn btn-sm btn-link">${t("collection_open")}</a>` : "");
+            + (mine.owned || mine.wishlist ? `<a href="${mine.owned ? "/collection" : "/wishlist"}" class="btn btn-sm btn-link">${t("collection_open")}</a>` : "");
         box.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => toggleCollection(Number(box.dataset.collection), b.dataset.kind));
     });
 }

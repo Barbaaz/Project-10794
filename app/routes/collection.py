@@ -139,9 +139,10 @@ def get_settings():
 @bp.put("/collection/settings")
 @login_required
 def settings():
-    """{public?, wish_alerts?, lang?}: show the collection on the user's profile; wishlist alerts by e-mail"""
+    """{public?, wish_alerts?, lang?, notify?}: show the collection on the user's profile; wishlist alerts by
+    e-mail; what the header's bell shows"""
     data = body()
-    changes = {k: data[k] for k in ("public", "wish_alerts", "lang") if k in data}
+    changes = {k: data[k] for k in ("public", "wish_alerts", "lang", "notify") if k in data}
     return jsonify(collection_service.set_settings(current_user()["id"], changes))
 
 

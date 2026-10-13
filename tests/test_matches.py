@@ -201,6 +201,26 @@ def test_possible_duplicates_merged_or_dismissed(mod):
         c.execute("DELETE FROM duplicate_dismissals")
 
 
+def test_two_cards_merged_keeping_a_name_and_an_edition(mod):
+    """User, 2026-10-13: a moderator ticks two cards and merges them, choosing the name and the edition that stay."""
+    client, c = mod["client"], mod["db"]
+    process_products("press_start", [product("Sombra Quest - Deluxe Edition PS5", 4), product("Sombra Quest PS5", 5)],
+                     full_catalog=False)
+    shadow_standard = where(mod, 3)
+    sombra_deluxe, sombra = where(mod, 4), c.execute("SELECT game_id FROM store_products WHERE url = 'https://match.test/4'").fetchone()[0]
+    post = lambda data: client.post("/api/mod/merge-cards", headers=HEADERS, json=data)
+    assert post({"keep_edition_id": shadow_standard, "other_edition_id": shadow_standard}).status_code == 404
+    assert post({"keep_edition_id": shadow_standard, "other_edition_id": sombra_deluxe, "title_game_id": 1}).get_json()["error"] == "ids_invalid"
+
+    merged = post({"keep_edition_id": shadow_standard, "other_edition_id": sombra_deluxe, "title_game_id": sombra}).get_json()
+    game_id = merged["game_id"]
+    assert merged["edition_id"] == shadow_standard
+    assert where(mod, 4) == shadow_standard                       # the other card's edition went into the kept one
+    assert c.execute("SELECT game_id FROM store_products WHERE url = 'https://match.test/5'").fetchone()[0] == game_id
+    assert c.execute("SELECT title FROM games WHERE id = ?", game_id).fetchone()[0] == "Sombra Quest"
+    assert c.execute("SELECT COUNT(*) FROM games WHERE id = ?", sombra).fetchone()[0] == 0
+
+
 def test_move_errors_and_access(mod):
     client = mod["client"]
     post = lambda data: client.post("/api/mod/matches", headers=HEADERS, json=data)

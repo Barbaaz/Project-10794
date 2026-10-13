@@ -78,10 +78,17 @@
         .merge-dialog { width: min(32rem, calc(100vw - 2rem)); border: 0; border-radius: .75rem; padding: 1rem;
                         background: var(--bs-body-bg); color: var(--bs-body-color); box-shadow: 0 .5rem 2rem rgb(0 0 0 / .3); }
         .merge-dialog::backdrop { background: rgb(0 0 0 / .45); }
-        .merge-results { max-height: 18rem; overflow-y: auto; }
-        .merge-results img { width: 30px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .2rem; flex: none; }
-        .merge-results img.store-photo { padding: 1px; }
-        .merge-results .active .text-body-secondary { color: inherit !important; opacity: .8; }
+        .merge-pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: .5rem; align-items: start; }
+        .merge-side { display: flex; gap: .5rem; min-width: 0; }
+        .merge-side img { width: 48px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .3rem; flex: none; background: var(--bs-secondary-bg); }
+        .merge-side img.store-photo { padding: 2px; }
+        .merge-plus { align-self: center; font-weight: 700; color: var(--bs-secondary-color); }
+        .min-w-0 { min-width: 0; }
+        /* the first card picked to merge, and the bar that says so */
+        .game-card.merge-picked { outline: 3px solid var(--bs-primary); outline-offset: 4px; border-radius: .75rem; }
+        .merge-bar { position: fixed; left: 1rem; right: 1rem; bottom: 1rem; z-index: 1040; width: fit-content; margin-inline: auto;
+                     display: flex; align-items: center; gap: .75rem; padding: .5rem .5rem .5rem 1rem; border-radius: 1rem;
+                     background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); }
         /* The page is as wide as the mock-up's shop (four big covers a row) */
         .front-wrap { max-width: 1240px; }
         /* The sections' tabs: a white band under the header, edge to edge (the shadow / clip pair

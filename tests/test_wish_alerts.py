@@ -72,10 +72,11 @@ def test_english_and_switched_off(market, store):
     wish(client, market["edition"])
     sign_up(client, "quiet")
     wish(client, market["edition"])
+    bell = {"bell": True, "sale": True, "low": True, "drop": True, "min_discount": 0}      # the header bell's, untouched
     assert client.put("/api/collection/settings", json={"wish_alerts": False}, headers=HEADERS).get_json() == \
-        {"public": False, "wish_alerts": False, "lang": "pt"}
+        {"public": False, "wish_alerts": False, "lang": "pt", "notify": bell}
     assert client.get("/api/collection").get_json()["wish_alerts"] is False
-    assert client.get("/api/collection/settings").get_json() == {"public": False, "wish_alerts": False, "lang": "pt"}
+    assert client.get("/api/collection/settings").get_json() == {"public": False, "wish_alerts": False, "lang": "pt", "notify": bell}
 
     prices[market["edition"]] = 20.00
     wish_alert_service.check_all()

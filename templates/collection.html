@@ -30,7 +30,7 @@
         .settings-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: .5rem; }
         .setting-row { display: flex; align-items: flex-start; gap: .75rem; padding: .75rem .9rem; border: 1px solid var(--bs-border-color);
                        border-radius: .75rem; background: var(--bs-body-bg); }
-        .setting-icon { font-size: 1.25rem; line-height: 1.2; }
+        .setting-icon { font-size: 1.25rem; line-height: 1.2; color: var(--bs-primary); }
         .setting-row .form-switch .form-check-input { width: 2.5em; height: 1.35em; margin-top: .1rem; cursor: pointer; }
         @media (max-width: 575.98px) {      /* two a row: a last one alone takes the row */
             .stat-row > .stat-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
@@ -74,17 +74,18 @@
         .choice:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
     </style>
 </head>
-<body class="bg-body-tertiary">
+<body class="bg-body-tertiary" data-kind="{{ kind }}">
 
 {% include "_header.html" %}
 
 <div class="container pb-4" style="max-width: 1320px;">
 
-    <h1 class="h3 mb-3" data-i18n="collection_title"></h1>
+    <h1 class="h3 mb-3" data-i18n="{{ 'wishlist_title' if kind == 'wishlist' else 'collection_title' }}"></h1>
     <!-- Who sees the collection, and the wishlist e-mails (user, 2026-10-12: reworked): one row each, what it
          means in a line, the switch on the right; a public collection's page and its link (collection.js renderSharing) -->
     <div class="settings-panel mb-3">
-        <div class="setting-row">
+        <!-- the collection: who sees it; the wishlist: its e-mails -->
+        <div class="setting-row{{ ' d-none' if kind == 'wishlist' }}">
             <span id="public-icon" class="setting-icon" aria-hidden="true"></span>
             <div class="flex-grow-1 min-w-0">
                 <label class="fw-semibold small d-block" for="public-switch" id="public-title"></label>
@@ -97,8 +98,8 @@
             <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="public-switch"
                  aria-describedby="public-text"></div>
         </div>
-        <div class="setting-row">
-            <span class="setting-icon" aria-hidden="true">🔔</span>
+        <div class="setting-row{{ ' d-none' if kind == 'owned' }}">
+            <span id="alerts-icon" class="setting-icon" aria-hidden="true"></span>
             <div class="flex-grow-1 min-w-0">
                 <label class="fw-semibold small d-block" for="alerts-switch" data-i18n="collection_alerts_title"></label>
                 <div id="alerts-hint" class="small text-body-secondary" data-i18n="collection_wish_alerts_hint"></div>
@@ -115,13 +116,9 @@
         <!-- Statistics -->
         <div id="stats" class="mb-4"></div>
 
-        <!-- The tabs, and the buttons that open "add a game" and the Steam / PSN imports (user, 2026-10-11:
-             buttons, not panels above the grid) -->
+        <!-- The buttons that open "add a game" and the Steam / PSN imports (user, 2026-10-11: buttons, not
+             panels above the grid) -->
         <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <ul class="nav nav-pills" role="tablist">
-                <li class="nav-item" role="presentation"><button class="nav-link active" data-kind="owned" role="tab"></button></li>
-                <li class="nav-item" role="presentation"><button class="nav-link" data-kind="wishlist" role="tab"></button></li>
-            </ul>
             <div class="d-flex flex-wrap gap-2 ms-auto">
                 <button type="button" id="open-steam" class="btn btn-sm btn-secondary" aria-haspopup="dialog" data-i18n="steam_import"></button>
                 <button type="button" id="open-psn" class="btn btn-sm btn-secondary" aria-haspopup="dialog" data-i18n="psn_import"></button>

@@ -148,8 +148,17 @@ def compare_page(username):
 
 @app.route("/collection")
 def collection_page():
-    """The user's game collection and wishlist (the page sends logged-out visitors to /account)."""
-    return render_template("collection.html")
+    """The games the user owns (the page sends logged-out visitors to /account). The wishlist has its own
+    page (user, 2026-10-13); the old ?tab=wishlist links (wishlist e-mails) go there."""
+    if request.args.get("tab") == "wishlist":
+        return redirect("/wishlist", 301)
+    return render_template("collection.html", kind="owned")
+
+
+@app.route("/wishlist")
+def wishlist_page():
+    """The user's wishlist: the collection page's grid with the wished games (collection.js)."""
+    return render_template("collection.html", kind="wishlist")
 
 
 @app.route("/admin")

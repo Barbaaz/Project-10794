@@ -133,11 +133,14 @@ h4, h5, h6, .h4, .h5, .h6 { font-weight: 700; letter-spacing: -0.01em; }
 @media (min-width: 992px) {
     .header-link { --bs-btn-bg: transparent; --bs-btn-color: var(--bs-body-color); --bs-btn-padding-x: .55rem; font-size: .92rem; }
     .header-link .icon { display: none; }
-    /* The bell and the inbox stay icons at every width (user, 2026-10-13); their names are in title / aria-label */
+    /* The star, the inbox and the bell stay icons at every width (user, 2026-10-13); their names are in title / aria-label */
     .header-link.icon-only .icon { display: inline; }
 }
 @media (max-width: 575.98px) {
     .site-brand-link { font-size: 1.05rem; }
+    /* six icon buttons beside the name on a 390 px phone */
+    .site-header .header-link { --bs-btn-padding-x: .42rem; }
+    .site-header .header-row { column-gap: .75rem; }
     .logged-in .site-header .header-setting { display: none !important; }
 }
 

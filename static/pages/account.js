@@ -166,12 +166,32 @@ async function loadSettings(user) {
     document.getElementById("settings-alerts").onchange = e => save({ wish_alerts: e.target.checked }, () => e.target.checked = !e.target.checked);
     document.getElementById("settings-lang").onchange = e => save({ lang: e.target.value }, () => e.target.value = settings.lang);
 
+    // the header's bell: on / off, which deals count, the smallest discount; each saved as it changes
+    const bell = settings.notify;
+    const showBell = () => {
+        document.getElementById("bell-on").checked = bell.bell;
+        document.querySelectorAll("[data-bell]").forEach(box => box.checked = bell[box.dataset.bell]);
+        document.getElementById("bell-min").value = String(bell.min_discount);
+        document.querySelectorAll("#bell-kinds input, #bell-kinds select").forEach(el => el.disabled = !bell.bell);
+    };
+    const saveBell = async (key, value) => {
+        const before = bell[key];
+        bell[key] = value;
+        showBell();
+        await save({ notify: { [key]: value } }, () => { bell[key] = before; showBell(); });
+        showNotifications();          // the header's bell counts again
+    };
+    document.getElementById("bell-on").onchange = e => saveBell("bell", e.target.checked);
+    document.querySelectorAll("[data-bell]").forEach(box => box.onchange = () => saveBell(box.dataset.bell, box.checked));
+    document.getElementById("bell-min").onchange = e => saveBell("min_discount", Number(e.target.value));
+    showBell();
+
     const [steam, psn] = await Promise.all(["steam", "psn"].map(key =>
         fetch(`/api/collection/${key}`).then(r => r.ok ? r.json() : {}).catch(() => ({}))));
     const when = at => at ? new Date(at).toLocaleString(LOCALE, { dateStyle: "short", timeStyle: "short" }) : "";
-    const row = (icon, name, profile, who) => `
+    const row = (symbol, name, profile, who) => `
         <div class="connection">
-            <span aria-hidden="true">${icon}</span>
+            <span aria-hidden="true" class="text-primary">${symbol}</span>
             <div class="flex-grow-1 min-w-0"><div class="fw-semibold small">${esc(name)}</div>
                 <div class="small text-body-secondary text-truncate">${profile
                     ? esc(`${who} · ${t("steam_last_import", { date: when(profile.imported_at) })}`)
@@ -179,7 +199,7 @@ async function loadSettings(user) {
             <a href="/collection" class="btn btn-sm btn-secondary">${esc(t(profile ? "settings_refresh" : "settings_import"))}</a>
         </div>`;
     document.getElementById("settings-connections").innerHTML =
-        row("🎮", "Steam", steam.profile, steam.profile?.steam_id) + row("🎮", "PlayStation Network", psn.profile, psn.profile?.online_id);
+        row(icon("gamepad", 20), "Steam", steam.profile, steam.profile?.steam_id) + row(icon("gamepad", 20), "PlayStation Network", psn.profile, psn.profile?.online_id);
 }
 
 // The section in view is the one marked in the menu

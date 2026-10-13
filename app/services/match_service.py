@@ -237,6 +237,37 @@ def merge_games(moderator_id, from_id, into_id):
     return {"game_id": into_id}
 
 
+def merge_cards(moderator_id, keep_edition_id, other_edition_id, title_game_id=None):
+    """
+    Two cards a moderator picked as the same thing (user, 2026-10-13, from the front page's "..." menu):
+    the other card's game is merged into the kept card's game (merge_games: every store product, by
+    edition key), then what was the other card's edition goes into the kept edition. title_game_id: the
+    game whose title stays (the other one's: the kept game is renamed). Returns {game_id, edition_id}.
+    """
+    keep_edition_id, other_edition_id = _id(keep_edition_id), _id(other_edition_id)
+    with session() as s:
+        keep, other = s.get(GameEdition, keep_edition_id), s.get(GameEdition, other_edition_id)
+        if not keep or not other or keep.id == other.id:
+            raise ModerationError("not_found", 404)
+        if keep.game.platform_id != other.game.platform_id:
+            raise ModerationError("platform_invalid")
+        game_id, other_game_id, other_key = keep.game_id, other.game_id, other.edition_key
+        other_title = other.game.title
+    if title_game_id is not None and _id(title_game_id) not in (game_id, other_game_id):
+        raise ModerationError("ids_invalid")
+    if other_game_id != game_id:
+        merge_games(moderator_id, other_game_id, game_id)
+    with session() as s:            # the other card's edition, now on the kept game (the same one when the keys match)
+        moved = s.scalars(select(GameEdition).where(GameEdition.game_id == game_id, GameEdition.edition_key == other_key)).first()
+        product_ids = list(s.scalars(select(StoreProduct.id).where(StoreProduct.edition_id == moved.id)))             if moved and moved.id != keep_edition_id else []
+    for start in range(0, len(product_ids), MAX_PRODUCTS):
+        move(moderator_id, product_ids[start:start + MAX_PRODUCTS], edition_id=keep_edition_id)
+    if title_game_id is not None and _id(title_game_id) == other_game_id and other_game_id != game_id:
+        set_title(moderator_id, game_id, other_title)
+    clear_cache()
+    return {"game_id": game_id, "edition_id": keep_edition_id}
+
+
 def dismiss_duplicate(moderator_id, game_a, game_b):
     """Two games that only look like duplicates: they leave the list."""
     a, b = sorted((_id(game_a), _id(game_b)))

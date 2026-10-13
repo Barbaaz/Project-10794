@@ -17,7 +17,7 @@ from app.services.chat_service import message_dicts
 from app.services.photo_storage import storage
 from db import session
 
-ACCOUNT_FIELDS = ("id", "username", "display_name", "email", "location", "accounts", "role", "lang", "collection_public",
+ACCOUNT_FIELDS = ("id", "username", "display_name", "email", "location", "accounts", "notify", "role", "lang", "collection_public",
                   "wish_alerts", "profile_sections", "avatar", "steam_id", "steam_imported_at", "psn_online_id", "psn_imported_at",
                   "created_at", "last_login_at")
 

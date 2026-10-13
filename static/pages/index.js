@@ -41,7 +41,8 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
     const col = document.createElement("div");
     col.className = "col";
     col.innerHTML = `
-        <div class="h-100 game-card d-flex flex-column">
+        <div class="h-100 game-card d-flex flex-column${isStaff() && mergePick().edition_id === group.edition_id ? " merge-picked" : ""}"
+             data-edition-id="${group.edition_id}">
             <div class="position-relative">
                 <a href="${gameUrl}" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(group.cover || best?.image || group.image || "")}"
                     class="${coverClass(group.cover || best?.image || group.image)}" alt="" loading="lazy"></a>
@@ -1040,85 +1041,113 @@ function toggleCardMenu(button, group, fill = () => fillCardMenu("wishlist")) {
     fill();
 }
 
-// --- Staff: the "..." menu at a card's bottom right (user, 2026-10-13: merge duplicates the matching missed) ---
+// --- Staff: the "..." menu at a card's bottom right (user, 2026-10-13): pick two cards, merge them in a window ---
+// The first card picked waits in this tab (sessionStorage) while the moderator browses or searches for the second
+const MERGE_PICK = "merge-pick";
+
 function isStaff() {
     return ["moderator", "admin"].includes(currentUser?.role);
 }
 
-function fillAdminMenu() {
-    const { menu, group } = cardMenu;
-    menu.innerHTML = `
-        <button type="button" class="dropdown-item" role="menuitem" data-merge>${esc(t("merge_with_other"))}</button>
-        <a class="dropdown-item" role="menuitem" href="/admin">${esc(t("mod_title"))}</a>`;
-    menu.querySelector("[data-merge]").onclick = () => {
-        closeCardMenu();
-        openMerge(group);
-    };
-    menu.querySelector("[data-merge]").focus();
+function mergePick() {
+    return savedJSON(MERGE_PICK, {}, "sessionStorage");
 }
 
-// Merge this card's game (on the platform it shows) with another on that platform (match_service.merge_games):
-// the stores' products, listings and collections go to the game whose name stays
-function openMerge(group) {
-    const dialog = document.getElementById("merge-dialog");
-    const self = { id: group.game_id, name: localName(group), platform: group.platform_name, code: group.console };
-    let other = null;
-    const body = dialog.querySelector("[data-body]");
-    body.innerHTML = `
-        <p class="small mb-2">${esc(t("merge_this"))} <strong>${esc(self.name)}</strong>
-            <span class="text-body-secondary">· ${esc(self.platform || "")} · #${self.id}</span></p>
-        <label class="form-label small mb-1" for="merge-search">${esc(t("merge_search", { platform: self.platform || "" }))}</label>
-        <input id="merge-search" class="form-control form-control-sm" autocomplete="off" value="${esc(group.name.split(" — ")[0])}">
-        <div class="list-group mt-2 merge-results" data-results></div>
-        <div class="mt-3 d-none" data-choice>
-            <div class="small fw-semibold mb-1">${esc(t("merge_keep_name"))}</div>
-            <div data-names></div>
-            <p class="small text-body-secondary mt-2 mb-2">${esc(t("merge_explain"))}</p>
-            <button type="button" class="btn btn-danger btn-sm" data-go>${esc(t("merge_go"))}</button>
-        </div>
-        <div class="small mt-2" data-message role="status"></div>`;
-    const results = body.querySelector("[data-results]"), choice = body.querySelector("[data-choice]");
-    const message = body.querySelector("[data-message]");
-    const search = async () => {
-        const q = body.querySelector("#merge-search").value.trim();
-        if (q.length < 2) return results.innerHTML = "";
-        const answer = await fetch(`/api/games?q=${encodeURIComponent(q)}&platform=${encodeURIComponent(self.code)}&per_page=10`)
-            .then(r => r.ok ? r.json() : { games: [] }).catch(() => ({ games: [] }));
-        const games = answer.games.filter(g => g.id !== self.id);
-        results.innerHTML = games.length ? games.map(g => `
-            <button type="button" class="list-group-item list-group-item-action d-flex gap-2 align-items-center small" data-id="${g.id}">
-                <img src="${esc(g.image || "")}" class="${coverClass(g.image)}" alt="">
-                <span class="flex-grow-1">${esc(g.title)} <span class="text-body-secondary">#${g.id}</span></span>
-                ${g.best_price != null ? `<span>${eur.format(g.best_price)}</span>` : ""}
-            </button>`).join("") : `<div class="small text-body-secondary px-1">${esc(t("merge_none"))}</div>`;
-        results.querySelectorAll("[data-id]").forEach(b => b.onclick = () => {
-            other = games.find(g => String(g.id) === b.dataset.id);
-            results.querySelectorAll("[data-id]").forEach(x => x.classList.toggle("active", x === b));
-            body.querySelector("[data-names]").innerHTML = [[self.id, self.name], [other.id, other.title]].map(([id, name], i) => `
-                <div class="form-check small"><input class="form-check-input" type="radio" name="merge-keep" id="merge-keep-${id}"
-                    value="${id}" ${i === 0 ? "checked" : ""}><label class="form-check-label" for="merge-keep-${id}">${esc(name)}
-                    <span class="text-body-secondary">#${id}</span></label></div>`).join("");
-            choice.classList.remove("d-none");
-            message.textContent = "";
-        });
+function fillAdminMenu() {
+    const { menu, group } = cardMenu;
+    const picked = mergePick();
+    const label = picked.edition_id === group.edition_id ? "merge_unpick" : picked.edition_id ? "merge_with_picked" : "merge_pick";
+    menu.innerHTML = `
+        <button type="button" class="dropdown-item" role="menuitem" data-pick>${esc(t(label))}</button>
+        <a class="dropdown-item" role="menuitem" href="/admin">${esc(t("mod_title"))}</a>`;
+    menu.querySelector("[data-pick]").onclick = () => {
+        closeCardMenu();
+        pickForMerge(group);
     };
-    let timer = null;
-    body.querySelector("#merge-search").oninput = () => { clearTimeout(timer); timer = setTimeout(search, 300); };
-    body.querySelector("[data-go]").onclick = async () => {
-        const into = Number(body.querySelector("[name=merge-keep]:checked").value);
-        const from = into === self.id ? other.id : self.id;
-        const button = body.querySelector("[data-go]");
-        button.disabled = true;
-        const { ok, data: answer } = await api("/api/mod/duplicates/merge", { body: { from_id: from, into_id: into } });
-        button.disabled = false;
+    menu.querySelector("[data-pick]").focus();
+}
+
+// What the merge window shows of a card (the platform it shows now)
+function mergeCard(group) {
+    const [title, edition] = splitEdition(localName(group));
+    return { edition_id: group.edition_id, game_id: group.game_id, title, edition: edition || "Standard",
+             platform: group.platform_name, console: group.console,
+             cover: group.cover || group.offers?.[0]?.image || group.image || "" };
+}
+
+function pickForMerge(group) {
+    const picked = mergePick();
+    if (picked.edition_id === group.edition_id) forget(MERGE_PICK, "sessionStorage");
+    else if (!picked.edition_id) save(MERGE_PICK, mergeCard(group), "sessionStorage");
+    else return openMerge(picked, mergeCard(group));
+    showMergeBar();
+}
+
+// The picked card outlined, and a bar at the bottom saying which it is (with "Cancelar")
+function showMergeBar() {
+    document.getElementById("merge-bar")?.remove();
+    document.querySelectorAll(".game-card.merge-picked").forEach(c => c.classList.remove("merge-picked"));
+    const picked = mergePick();
+    if (!picked.edition_id || !isStaff()) return;
+    document.querySelectorAll(`.game-card[data-edition-id="${picked.edition_id}"]`).forEach(c => c.classList.add("merge-picked"));
+    const bar = document.createElement("div");
+    bar.id = "merge-bar";
+    bar.className = "merge-bar shadow";
+    bar.setAttribute("role", "status");
+    bar.innerHTML = `<span class="small">${esc(t("merge_bar", { name: `${picked.title} · ${picked.edition} (${picked.platform || ""})` }))}</span>
+        <button type="button" class="btn btn-sm btn-secondary">${esc(t("merge_cancel"))}</button>`;
+    bar.querySelector("button").onclick = () => {
+        forget(MERGE_PICK, "sessionStorage");
+        showMergeBar();
+    };
+    document.body.appendChild(bar);
+}
+
+// The window: both cards, whose name stays and which edition stays (match_service.merge_cards)
+function openMerge(a, b) {
+    const dialog = document.getElementById("merge-dialog");
+    const body = dialog.querySelector("[data-body]");
+    const side = c => `
+        <div class="merge-side">
+            <img src="${esc(c.cover)}" class="${coverClass(c.cover)}" alt="">
+            <div class="small min-w-0"><strong>${esc(c.title)}</strong><div>${esc(c.edition)}</div>
+                <div class="text-body-secondary">${esc(c.platform || "")} · #${c.game_id}</div></div>
+        </div>`;
+    const radios = (name, options) => options.map(([value, label], i) => `
+        <div class="form-check small"><input class="form-check-input" type="radio" name="${name}" id="${name}-${i}" value="${value}"
+            ${i === 0 ? "checked" : ""}><label class="form-check-label" for="${name}-${i}">${esc(label)}</label></div>`).join("");
+    const sameGame = a.game_id === b.game_id;
+    body.innerHTML = `
+        <div class="merge-pair">${side(a)}<span class="merge-plus" aria-hidden="true">+</span>${side(b)}</div>
+        ${a.console !== b.console ? `<p class="small text-danger mt-3 mb-0">${esc(t("merge_other_platform"))}</p>` : `
+            ${sameGame ? "" : `<fieldset class="mt-3"><legend class="small fw-semibold mb-1">${esc(t("merge_keep_name"))}</legend>
+                ${radios("merge-name", [[a.game_id, a.title], [b.game_id, b.title]])}</fieldset>`}
+            <fieldset class="mt-2"><legend class="small fw-semibold mb-1">${esc(t("merge_keep_edition"))}</legend>
+                ${radios("merge-edition", [[a.edition_id, `${a.edition} · ${a.title}`], [b.edition_id, `${b.edition} · ${b.title}`]])}</fieldset>
+            <p class="small text-body-secondary mt-2 mb-2">${esc(t("merge_explain"))}</p>
+            <button type="button" class="btn btn-danger btn-sm" data-go>${esc(t("merge_go"))}</button>`}
+        <div class="small mt-2" data-message role="status"></div>`;
+    const go = body.querySelector("[data-go]");
+    if (go) go.onclick = async () => {
+        const keep = Number(body.querySelector("[name=merge-edition]:checked").value);
+        const other = keep === a.edition_id ? b.edition_id : a.edition_id;
+        const name = body.querySelector("[name=merge-name]:checked");
+        go.disabled = true;
+        const { ok, data: answer } = await api("/api/mod/merge-cards", {
+            body: { keep_edition_id: keep, other_edition_id: other, ...(name ? { title_game_id: Number(name.value) } : {}) } });
+        go.disabled = false;
+        const message = body.querySelector("[data-message]");
         message.className = `small mt-2 ${ok ? "text-success" : "text-danger"}`;
         message.textContent = ok ? t("merge_done") : t(`error_${answer?.error || "unknown"}`);
-        if (ok) setTimeout(() => location.reload(), 900);
+        if (ok) {
+            forget(MERGE_PICK, "sessionStorage");
+            setTimeout(() => location.reload(), 900);
+        }
     };
-    dialog.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
+    dialog.querySelectorAll("[data-close]").forEach(button => button.onclick = () => dialog.close());
     dialog.onclick = event => { if (event.target === dialog) dialog.close(); };
     dialog.showModal();
-    search();
+    go?.focus();
 }
 
 function fillCardMenu(focusKind) {
@@ -1189,6 +1218,7 @@ applyI18n();
 // /?q=zelda opens with that search, so searches can be bookmarked or shared
 (async () => {
     await renderAccountArea();
+    showMergeBar();
     await loadCollectionIds();
     await loadFilters();
     const params = new URLSearchParams(location.search);

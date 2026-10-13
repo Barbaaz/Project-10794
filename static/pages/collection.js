@@ -1,7 +1,9 @@
 // The collection page (templates/collection.html). A file, not inline: the site's CSP only runs scripts from files.
 const STATUSES = ["finished", "playing", "backlog", "paused", "dropped", "owned"];
 let data = null;
-let kind = new URLSearchParams(location.search).get("tab") === "wishlist" ? "wishlist" : "owned";
+// which page: /collection (owned) or /wishlist (user, 2026-10-13: two pages, not two tabs)
+const kind = document.body.dataset.kind === "wishlist" ? "wishlist" : "owned";
+document.getElementById("alerts-icon").innerHTML = icon("bell", 20);
 
 function showMessage(ok, text) {
     const box = document.getElementById("message");
@@ -44,6 +46,7 @@ const MAX_PLATFORM_SLOTS = 5;
 
 // Only the figures there is something to show for (an empty collection shows the two counts)
 function renderStats() {
+    if (kind !== "owned") return document.getElementById("stats").classList.add("d-none");   // the owned games' figures
     const s = data.stats;
     const owned = data.items.filter(i => i.kind === "owned");
     const played = owned.filter(i => i.hours).length;
@@ -72,13 +75,10 @@ function renderStats() {
     box.querySelectorAll("[data-stat-filter]").forEach(b => b.onclick = () => {
         const group = b.dataset.statFilter, only = b.getAttribute("aria-pressed") !== "true";
         chosen.owned[group] = new Set(only ? [b.dataset.value] : []);    // that one alone, or none again
-        if (kind !== "owned") document.querySelector('[data-kind="owned"]').click();
         renderItems();
         renderStats();
         document.getElementById("items").scrollIntoView({ behavior: "smooth", block: "start" });
     });
-    document.querySelector('[data-kind="owned"]').textContent = `${t("collection_tab_owned")} (${s.owned})`;
-    document.querySelector('[data-kind="wishlist"]').textContent = `${t("collection_tab_wishlist")} (${s.wishlist})`;
 }
 
 // What it costs now, one fact per line so the cards line up: best store price and store, else "Ver na
@@ -246,13 +246,9 @@ function sortOptions() {
 }
 
 function renderItems() {
-    document.querySelectorAll("[data-kind]").forEach(b => {
-        b.classList.toggle("active", b.dataset.kind === kind);
-        b.setAttribute("aria-selected", b.dataset.kind === kind);
-    });
     const addTitle = t(kind === "owned" ? "collection_add_game_owned" : "collection_add_game_wish");
     document.getElementById("add-game-title").textContent = addTitle;
-    document.getElementById("open-add").textContent = addTitle;
+    document.getElementById("open-add").innerHTML = `${icon("plus", 16)} ${esc(addTitle)}`;
     document.getElementById("open-steam").classList.toggle("d-none", kind !== "owned");
     document.getElementById("open-psn").classList.toggle("d-none", kind !== "owned");
     sortOptions();
@@ -475,7 +471,7 @@ function recount() {
 // Who sees the collection: private, or public with its page and its link to share
 function renderSharing() {
     const open = data.public, page = `/user/${encodeURIComponent(currentUser.username)}/collection`;
-    document.getElementById("public-icon").textContent = open ? "🌐" : "🔒";
+    document.getElementById("public-icon").innerHTML = icon(open ? "globe" : "lock", 20);
     document.getElementById("public-title").textContent = t(open ? "collection_public_on" : "collection_public_off");
     document.getElementById("public-text").textContent = t(open ? "collection_public_on_text" : "collection_public_off_text");
     document.getElementById("public-actions").classList.toggle("d-none", !open);
@@ -659,11 +655,6 @@ async function start() {
     if (!currentUser) return location.replace(`/account?next=${encodeURIComponent(location.pathname + location.search)}`);
     document.getElementById("sort").onchange = event => { sortBy[kind] = event.target.value; renderItems(); };
     document.getElementById("filter-text").oninput = renderItems;
-    document.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => {
-        kind = b.dataset.kind;
-        history.replaceState(null, "", kind === "wishlist" ? "?tab=wishlist" : location.pathname);
-        renderItems();
-    });
     document.getElementById("public-switch").onchange = async e => {
         const { ok } = await api("/api/collection/settings", { method: "PUT", body: { public: e.target.checked } });
         if (ok) { data.public = e.target.checked; renderSharing(); }

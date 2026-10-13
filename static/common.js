@@ -45,6 +45,11 @@ const ICONS = {
     tag: '<path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/>',
     library: '<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>',
     user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+    star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+    globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+    lock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    gamepad: '<line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.59l-.92 8.31A3 3 0 0 0 4.77 20.2a3 3 0 0 0 2.73-1.75L8.6 16h6.8l1.1 2.45a3 3 0 0 0 5.72-1.55l-.92-8.31A4 4 0 0 0 17.32 5z"/>',
     moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
     more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
 };
@@ -109,8 +114,8 @@ async function api(path, { method = "POST", body } = {}) {
 }
 
 // The account part of the header (the same on every page): "Entrar" when logged out; logged in,
-// Vender / Coleção (named from large width up, icons on a phone), then the inbox (messages) and the bell
-// (notifications) side by side and the account
+// Vender / Coleção (named from large width up, icons on a phone), then the star (wishlist), the inbox
+// (messages) and the bell (notifications) side by side and the account
 // menu (my account, profile, moderation, language and theme on a phone, log out).
 // After logging in / out, the page reloads so everything shows the right state.
 let currentUser = null;
@@ -133,6 +138,7 @@ async function renderAccountArea() {
     box.innerHTML = `
         ${navButton("/sell", icon("tag"), t("nav_sell"))}
         ${navButton("/collection", icon("library"), t("nav_collection"), 'id="collection-link"')}
+        ${navButton("/wishlist", icon("star"), t("nav_wishlist"), 'id="wishlist-link"', true)}
         ${navButton("/messages", icon("inbox"), t("messages"), 'id="messages-link"', true)}
         <div class="notifications position-relative">
             <button type="button" class="btn btn-sm header-link icon-only position-relative" id="notifications-btn" aria-expanded="false"
@@ -227,15 +233,16 @@ async function showNotifications() {
     const fresh = deals.items.filter(d => !seen.has(key(d)));
     const count = fresh.length + ratings.length;
 
-    const why = d => d.on_sale && d.discount ? `−${d.discount}%`
-        : d.at_historical_low ? t("low_badge")
-        : d.price_drop ? t("notif_price_drop", { amount: eur.format(d.price_drop) }) : "";
+    // why it's there (collection_service.deal_reason, by the user's settings)
+    const why = d => d.reason === "sale" ? `−${d.discount}%`
+        : d.reason === "low" ? t("notif_low")
+        : d.reason === "drop" ? t("notif_price_drop", { amount: eur.format(d.price_drop) }) : "";
     const deal = d => `
         <a class="dropdown-item notif-item d-flex gap-2 align-items-center" href="/game/${d.game_id}">
             <img src="${esc(d.image || "")}" class="${coverClass(d.image)}" alt="">
-            <span class="flex-grow-1 min-w-0">
-                <span class="d-block text-truncate fw-semibold">${esc(localName(d) || "")}</span>
-                <span class="d-block small text-body-secondary text-truncate">${esc(d.platform || "")}
+            <span class="flex-grow-1 min-w-0 text-wrap">
+                <span class="d-block fw-semibold">${esc(localName(d) || "")}</span>
+                <span class="d-block small text-body-secondary">${esc(d.platform || "")}
                     ${d.best_price != null ? ` · <strong class="text-body">${eur.format(d.best_price)}</strong>` : ""}
                     ${why(d) ? ` · <span class="text-success">${esc(why(d))}</span>` : ""}</span>
             </span>
@@ -248,8 +255,9 @@ async function showNotifications() {
         ${ratings.length ? `<div class="dropdown-header small pt-0">${esc(t("notif_ratings"))}</div>${ratings.map(rating).join("")}` : ""}
         ${deals.items.length ? `<div class="dropdown-header small pt-2">${esc(t("notif_deals"))}</div>
             <div class="notif-list">${deals.items.map(deal).join("")}</div>
-            <hr class="dropdown-divider"><a class="dropdown-item small" href="/collection?tab=wishlist">${esc(t("notif_see_wishlist"))}</a>` : ""}
-        ${count || deals.items.length ? "" : `<p class="px-3 py-2 mb-0 small text-body-secondary">${esc(t("notif_none"))}</p>`}`;
+            <hr class="dropdown-divider"><a class="dropdown-item small" href="/wishlist">${esc(t("notif_see_wishlist"))}</a>` : ""}
+        ${count || deals.items.length ? "" : `<p class="px-3 py-2 mb-0 small text-body-secondary text-wrap">${esc(t(deals.off ? "notif_off" : "notif_none"))}</p>`}
+        <a class="dropdown-item small text-body-secondary" href="/account#notifications">${esc(t("notif_settings"))}</a>`;
 
     button.querySelector(".badge")?.remove();
     if (count) {

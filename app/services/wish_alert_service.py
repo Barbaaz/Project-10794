@@ -173,7 +173,7 @@ def message(user_id, name, lang, changed):
         detail = words[reason].format(price=money(price, lang), old=money(item["old"], lang),
                                       store=item["best_store"])
         lines.append(f"- {title}{platform}: {detail}\n  {config.SITE_URL}/game/{item['game_id']}")
-    lines.append(words["footer"].format(wishlist=f"{config.SITE_URL}/collection?tab=wishlist", off=off_link(user_id)))
+    lines.append(words["footer"].format(wishlist=f"{config.SITE_URL}/wishlist", off=off_link(user_id)))
     return subject, "\n".join(lines)
 
 
