@@ -40,6 +40,11 @@ def test_sign_up_logs_in(client, test_db):
     ({"username": "ana silva"}, "username_invalid"),          # no spaces
     ({"email": "not-an-email"}, "email_invalid"),
     ({"password": "1234567"}, "password_short"),
+    ({"password": "password"}, "password_common"),            # among the most used (NCSC list)
+    ({"password": "12345678"}, "password_common"),
+    ({"password": "Benfica1"}, "password_common"),            # in any case
+    ({"username": "marta_silva", "password": "Marta_Silva"}, "password_common"),     # the username
+    ({"email": "joao.pereira@example.pt", "password": "joao.pereira"}, "password_common"),   # the e-mail's name
 ])
 def test_sign_up_rules(client, fields, error):
     response = register(client, **fields)
@@ -130,6 +135,7 @@ def test_forgotten_password(client, mails):
     token = reset_token(mail)
 
     assert post(client, "reset", token=token, password="curta").get_json()["error"] == "password_short"
+    assert post(client, "reset", token=token, password="qwertyuiop").get_json()["error"] == "password_common"
     assert post(client, "reset", token=token + "x", password="nova-senha-1").get_json()["error"] == "reset_invalid"
     assert post(client, "reset", token=token, password="nova-senha-1").get_json()["username"] == "ana_92"
     assert client.get("/api/auth/me").get_json()["username"] == "ana_92"   # logged in
@@ -163,6 +169,7 @@ def test_changing_the_password_while_logged_in(client):
     post(other, "login", login="ana_92", password="segredo123")
 
     assert post(client, "password", current="segredo123", password="curta").get_json()["error"] == "password_short"
+    assert post(client, "password", current="segredo123", password="iloveyou").get_json()["error"] == "password_common"
     response = post(client, "password", current="errada-123", password="nova-senha-1")
     assert (response.status_code, response.get_json()["error"]) == (400, "password_wrong")
     assert post(client, "password", current="segredo123", password="nova-senha-1").get_json()["username"] == "ana_92"

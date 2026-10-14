@@ -89,6 +89,8 @@ def test_create_listing(market):
     ({}, 2, "photo_count"),                                   # at least 3 photos
     ({}, 11, "photo_count"),                                  # at most 10
     ({"price": "0"}, 3, "price_invalid"),
+    ({"price": "-5"}, 3, "price_invalid"),
+    ({"price": "-0,50"}, 3, "price_invalid"),
     ({"price": "abc"}, 3, "price_invalid"),
     ({"condition": "broken"}, 3, "condition_invalid"),
     ({"description": "x" * 2001}, 3, "description_long"),

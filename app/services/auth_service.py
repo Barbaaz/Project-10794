@@ -5,6 +5,8 @@ through a signed link sent by e-mail (no table: the link names the user and expi
 request_password_reset). Google / Microsoft sign-in
 come later and create accounts without a password (password_hash None).
 """
+import functools
+import gzip
 import hashlib
 import json
 import hmac
@@ -12,6 +14,7 @@ import logging
 import re
 import threading
 import time
+from pathlib import Path
 
 from sqlalchemy import delete, or_, select
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -28,6 +31,9 @@ USERNAME = re.compile(r"^[A-Za-z0-9_.-]{3,30}$")
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD = 8
 MAX_PASSWORD = 200        # longer isn't a real password: refused before hashing it
+# Passwords too common to keep anyone out (user, 2026-10-14): the UK NCSC's 100,000 most used
+# (from Have I Been Pwned, via SecLists, MIT), those of 8+ characters, in lower case, plus a few Portuguese ones
+COMMON_PASSWORDS = Path(__file__).resolve().parent.parent / "data" / "common_passwords.txt.gz"
 MAX_LOGIN = 255           # a username or email (emails are at most 255)
 LANGS = ("pt", "en")      # the page's languages; the user's is kept for e-mails (wishlist alerts)
 
@@ -67,7 +73,7 @@ def register(username, email, password, display_name=None, lang=None, ip=None):
         raise AccountError("username_invalid")
     if not EMAIL.match(email) or len(email) > 255:
         raise AccountError("email_invalid")
-    _check_password(password)
+    _check_password(password, username, email)
     if len(display_name) > 100:
         raise AccountError("display_name_long")
 
@@ -167,6 +173,7 @@ def change_password(user_id, current, new, ip="?"):
     with session() as s:
         user = s.get(User, user_id)
         _check_current_password(user, current, ip)
+        _check_password(new, user.username, user.email)
         user.password_hash = generate_password_hash(new)
     return get_user(user_id)
 
@@ -308,6 +315,7 @@ def reset_password(token, password):
         user = s.get(User, data.get("id"))
         if not user or not user.is_active or _password_mark(user) != data.get("mark"):
             raise AccountError("reset_invalid")
+        _check_password(password, user.username, user.email)      # the link still works for a better one
         user.password_hash = generate_password_hash(password)
         user_id, logins = user.id, {user.username.lower(), user.email}
     with _failures_lock:
@@ -345,11 +353,22 @@ def _session_mark(user):
                     hashlib.sha256).hexdigest()[:32]
 
 
-def _check_password(password):
+def _check_password(password, *names):
+    """Long enough, not one of the common passwords, not the user's own username / email (names)."""
     if len(password or "") < MIN_PASSWORD:
         raise AccountError("password_short")
     if len(password) > MAX_PASSWORD:
         raise AccountError("password_long")
+    typed = password.strip().lower()
+    own = {n.lower() for n in names if n} | {n.split("@")[0].lower() for n in names if n and "@" in n}
+    if typed in _common_passwords() or typed in own:
+        raise AccountError("password_common")
+
+
+@functools.cache
+def _common_passwords():
+    with gzip.open(COMMON_PASSWORDS, "rt", encoding="utf-8") as f:
+        return frozenset(f.read().split())
 
 
 def _locked(key, limit=MAX_FAILURES, seconds=LOCK_SECONDS):

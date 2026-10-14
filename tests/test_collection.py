@@ -1,4 +1,6 @@
 """A user's game collection and wishlist (on a throwaway database)."""
+import pytest
+
 from helpers import HEADERS, new_listing, sign_up
 
 
@@ -73,13 +75,32 @@ def test_checks(market):
     assert add(client, market["edition"], kind="stolen").get_json()["error"] == "kind_invalid"
     assert add(client, 999999).status_code == 404
     for fields, error in [({"status": "bored"}, "play_status_invalid"), ({"format": "cassette"}, "format_invalid"),
-                          ({"hours": "-1"}, "hours_invalid"), ({"hours": "lots"}, "hours_invalid"),
+                          ({"hours": "-1"}, "hours_invalid"), ({"hours": "-0,5"}, "hours_invalid"), ({"hours": "lots"}, "hours_invalid"),
+                          ({"achievements": -1}, "achievements_invalid"), ({"achievements_total": -3}, "achievements_invalid"),
+                          ({"achievements": -2, "achievements_total": -1}, "achievements_invalid"),
                           ({"notes": "x" * 1001}, "notes_long")]:
         assert add(client, market["edition"], **fields).get_json()["error"] == error, fields
     item = add(client, market["edition"]).get_json()["id"]
     sign_up(client, "someone_else")
     assert client.patch(f"/api/collection/{item}", json={"hours": 1}, headers=HEADERS).status_code == 404
     assert client.delete(f"/api/collection/{item}", headers=HEADERS).status_code == 404
+
+
+def test_database_refuses_negatives(market):
+    """Whatever writes the collection (imports, later code), the database itself keeps it from going below 0."""
+    from sqlalchemy.exc import IntegrityError
+    from app.models import CollectionItem
+    from db import session
+    client = market["client"]
+    sign_up(client, "negative")
+    item_id = add(client, market["edition"]).get_json()["id"]
+    for change in ({"hours": -1}, {"achievements": -1}, {"achievements_total": -1},
+                   {"achievements": 5, "achievements_total": 3}, {"wish_price": -1}):
+        with pytest.raises(IntegrityError):
+            with session() as s:
+                item = s.get(CollectionItem, item_id)
+                for key, value in change.items():
+                    setattr(item, key, value)
 
 
 def test_private_unless_made_public(market):
@@ -118,6 +139,9 @@ def test_achievements(market):
     patch = lambda data: client.patch(f"/api/collection/{item}", json=data, headers=HEADERS)
     assert patch({"achievements": 41}).get_json()["error"] == "achievements_invalid"     # more than the total
     assert patch({"achievements_total": "x"}).get_json()["error"] == "achievements_invalid"
+    assert patch({"achievements": -1}).get_json()["error"] == "achievements_invalid"       # never below 0
+    assert patch({"achievements_total": -40}).get_json()["error"] == "achievements_invalid"
+    assert patch({"hours": -2}).get_json()["error"] == "hours_invalid"
     assert patch({"achievements": 40}).status_code == 200
     assert mine(client)["stats"]["achievements"] == 40
 

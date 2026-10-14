@@ -33,7 +33,7 @@ def test_both_sides_rate_after_a_purchase(market):
 def test_rating_rules(market):
     client = market["client"]
     conversation_id = completed_purchase(market)
-    for stars in (0, 6, "x"):
+    for stars in (0, -1, -5, 6, "x"):
         assert rate(client, conversation_id, stars).get_json()["error"] == "stars_invalid"
     assert rate(client, conversation_id, 3, "x" * 501).get_json()["error"] == "comment_long"
     sign_up(client, "stranger")
