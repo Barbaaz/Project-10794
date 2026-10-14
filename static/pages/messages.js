@@ -195,6 +195,7 @@ function renderChosenPhotos() {
     box.querySelector("#clear-photos")?.addEventListener("click", () => { chosenPhotos = []; renderChosenPhotos(); });
 }
 
+document.getElementById("attach-photos").innerHTML = icon("camera");
 document.getElementById("attach-photos").onclick = () => document.getElementById("chat-photos").click();
 document.getElementById("chat-photos").addEventListener("change", e => {
     chosenPhotos = [...chosenPhotos, ...e.target.files];

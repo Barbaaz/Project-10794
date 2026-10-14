@@ -53,6 +53,22 @@ const ICONS = {
     check: '<path d="M20 6 9 17l-5-5"/>',
     moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
     more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+    settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+    shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+    offline: '<path d="M12 20h.01"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 4.17-2.65"/><path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"/><path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"/><path d="M5 13a10 10 0 0 1 5.24-2.76"/><path d="m2 2 20 20"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+    camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+    trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    hourglass: '<path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/>',
+    play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+    pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    pin: '<path d="M20 10c0 4.99-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+    calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+    pencil: '<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>',
 };
 
 // filled: the shape painted in too (a wished game's star)
@@ -153,9 +169,9 @@ async function renderAccountArea() {
                     aria-controls="account-menu" title="${esc(t("account_menu"))}"><span class="icon">${currentUser.avatar ? avatarImage(currentUser.avatar, 22) : icon("user")}</span><span class="d-none d-sm-inline ms-1">${esc(name)}</span> ▾</button>
             <div class="dropdown-menu shadow" id="account-menu" role="menu">
                 <span class="dropdown-header">@${esc(name)}</span>
-                <a class="dropdown-item" role="menuitem" href="/account">⚙️ ${t("settings_title")}</a>
+                <a class="dropdown-item" role="menuitem" href="/account">${icon("settings", 16)} ${t("settings_title")}</a>
                 <a class="dropdown-item" role="menuitem" href="/user/${encodeURIComponent(currentUser.username || "")}">${t("my_profile")}</a>
-                ${staff ? `<a class="dropdown-item" role="menuitem" href="/admin">🛡️ ${t("mod_title")}</a>` : ""}
+                ${staff ? `<a class="dropdown-item" role="menuitem" href="/admin">${icon("shield", 16)} ${t("mod_title")}</a>` : ""}
                 <div class="d-sm-none">
                     <hr class="dropdown-divider">
                     <button type="button" class="dropdown-item" role="menuitem" data-switch-lang>${t("lang_other")}</button>
@@ -314,7 +330,7 @@ function showSavedNotice(savedAt) {
     notice.dataset.savedAt = savedAt || "";
     notice.className = "alert alert-warning py-2 small d-flex flex-wrap align-items-center gap-2";
     notice.setAttribute("role", "status");
-    notice.innerHTML = `<span>📡 ${esc(t("offline_notice", { time: when }))}</span>
+    notice.innerHTML = `<span>${icon("offline", 16)} ${esc(t("offline_notice", { time: when }))}</span>
         <button type="button" class="btn btn-sm btn-warning ms-auto">${esc(t("offline_retry"))}</button>`;
     notice.querySelector("button").onclick = () => location.reload();
     const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl");
@@ -340,7 +356,7 @@ function showInstallButton() {
     button.id = "install-btn";
     button.className = "btn btn-sm btn-success";
     // only the icon on a phone's narrow header
-    button.innerHTML = `📲<span class="d-none d-md-inline"> ${esc(t("install_app"))}</span>`;
+    button.innerHTML = `${icon("download", 16)}<span class="d-none d-md-inline"> ${esc(t("install_app"))}</span>`;
     button.title = t("install_app_title");
     button.setAttribute("aria-label", t("install_app_title"));
     button.onclick = async () => {

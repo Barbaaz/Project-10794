@@ -358,7 +358,7 @@ function renderEdition(edition, i) {
     const low = edition.lowest_price;
     panel.innerHTML = `
         <h2 class="visually-hidden">${esc(localName(edition))}</h2>
-        ${edition.digital_code ? `<span class="badge text-bg-warning mb-2" title="${t("digital_code_hint")}">${t("digital_code")}</span>` : ""}
+        ${edition.digital_code ? `<span class="badge text-bg-warning mb-2" title="${t("digital_code_hint")}">${icon("alert", 13)} ${t("digital_code")}</span>` : ""}
         ${offersTable(edition)}
         ${low ? `<div class="small text-body-secondary mt-2">${t("historical_low")} <strong class="text-body">${eur.format(low.price)}</strong>
             · ${fmtDate(low.date)} · ${esc(storeName(low.store))}</div>` : ""}
@@ -711,7 +711,7 @@ function reviewItem(r) {
         ${r.body ? clampedText(r.body, 5) : ""}
         <div class="small text-body-secondary mt-1">
             ${userLink(r.username)}
-            ${r.owner ? `<span class="badge bg-body-secondary text-body border" title="${esc(t("review_owner_hint"))}">📚 ${esc(t("review_owner"))}</span>` : ""}
+            ${r.owner ? `<span class="badge bg-body-secondary text-body border" title="${esc(t("review_owner_hint"))}">${icon("library", 13)} ${esc(t("review_owner"))}</span>` : ""}
             · ${fmtDate(r.created_at)}${r.edited ? ` (${esc(t("review_edited"))})` : ""}
             ${r.mine ? "" : `· ${reportButton("review", r.id)}`}
         </div>

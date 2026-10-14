@@ -40,7 +40,7 @@ async function load() {
 
     document.getElementById("avatar").innerHTML = avatarImage(user.avatar, 72);
     const where = document.getElementById("location");
-    where.textContent = user.location ? `📍 ${user.location}` : "";
+    where.innerHTML = user.location ? `${icon("pin", 16)} ${esc(user.location)}` : "";
     where.classList.toggle("d-none", !user.location);
     showAccounts(user.accounts);
     const mine = currentUser && currentUser.id === user.id;     // the person can answer their ratings
@@ -157,7 +157,7 @@ function showShowcase(sections) {
         favourites: `#${i + 1}`,
         most_played: `${fmtNumber(g.hours)} h`,
         most_valuable: g.value != null ? eur.format(g.value) : "",
-        achievements: `🏆 ${g.achievements}/${g.achievements_total}`,
+        achievements: `${icon("trophy", 13)} ${g.achievements}/${g.achievements_total}`,
     })[section];
     document.getElementById("showcase").innerHTML = sections.map(s => `
         <section class="mb-4">

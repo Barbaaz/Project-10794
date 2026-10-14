@@ -141,7 +141,6 @@ async function load() {
 async function loadSettings(user) {
     const settings = await fetch("/api/collection/settings").then(r => r.ok ? r.json() : null).catch(() => null);
     if (!settings) return;
-    const message = document.getElementById("settings-message");
     const page = document.getElementById("settings-collection-page");
     page.href = `/user/${encodeURIComponent(user.username)}/collection`;
     document.getElementById("settings-showcase").href = `/user/${encodeURIComponent(user.username)}`;
@@ -153,7 +152,8 @@ async function loadSettings(user) {
     showPublic(settings.public);
     document.getElementById("settings-alerts").checked = settings.wish_alerts;
     document.getElementById("settings-lang").value = settings.lang;
-    const save = async (changes, undo) => {
+    // "Guardado" under the section that changed (the collection switch is under Privacidade)
+    const save = async (changes, undo, message = document.getElementById("settings-message")) => {
         const { ok, data } = await api("/api/collection/settings", { method: "PUT", body: changes });
         message.className = `small mt-2 ${ok ? "text-success" : "text-danger"}`;
         message.textContent = ok ? t("collection_saved") : t(`error_${data?.error || "unknown"}`);
@@ -161,7 +161,8 @@ async function loadSettings(user) {
         return ok;
     };
     document.getElementById("settings-public").onchange = async e => {
-        if (await save({ public: e.target.checked }, () => e.target.checked = !e.target.checked)) showPublic(e.target.checked);
+        if (await save({ public: e.target.checked }, () => e.target.checked = !e.target.checked,
+                       document.getElementById("privacy-message"))) showPublic(e.target.checked);
     };
     document.getElementById("settings-alerts").onchange = e => save({ wish_alerts: e.target.checked }, () => e.target.checked = !e.target.checked);
     document.getElementById("settings-lang").onchange = e => save({ lang: e.target.value }, () => e.target.value = settings.lang);

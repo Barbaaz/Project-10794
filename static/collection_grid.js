@@ -87,19 +87,19 @@ function filtersToggle(button, sidebar, selected) {
 // Each play status's look, the same on the cards and in the edit window (user, 2026-10-12: every status a
 // badge); "owned" (no status chosen) has none
 const STATUS_LOOK = {
-    finished: { icon: "✓", css: "status-finished" }, playing: { icon: "▶", css: "status-playing" },
-    backlog: { icon: "⏳", css: "status-backlog" }, paused: { icon: "⏸", css: "status-paused" },
-    dropped: { icon: "✕", css: "status-dropped" }, owned: { icon: "", css: "status-owned" },
+    finished: { icon: "check", css: "status-finished" }, playing: { icon: "play", css: "status-playing" },
+    backlog: { icon: "hourglass", css: "status-backlog" }, paused: { icon: "pause", css: "status-paused" },
+    dropped: { icon: "x", css: "status-dropped" }, owned: { icon: "", css: "status-owned" },
 };
 
 function statusBadge(status) {
     const look = STATUS_LOOK[status];
-    return look && status !== "owned" ? `<span class="badge ${look.css}">${look.icon} ${esc(t(`status_play_${status}`))}</span>` : "";
+    return look && status !== "owned" ? `<span class="badge ${look.css}">${icon(look.icon, 12)} ${esc(t(`status_play_${status}`))}</span>` : "";
 }
 
 function coverBadges(item) {
     const status = statusBadge(item.status);
-    const platinum = item.platinum ? `<span class="badge cover-platinum">🏆 ${esc(t("collection_platinum"))}</span>` : "";
+    const platinum = item.platinum ? `<span class="badge cover-platinum">${icon("trophy", 12)} ${esc(t("collection_platinum"))}</span>` : "";
     return status || platinum ? `<div class="cover-badges">${status || "<span></span>"}${platinum}</div>` : "";
 }
 
@@ -108,8 +108,8 @@ function coverBadges(item) {
 function factRows(item) {
     const first = `<span>${esc(t(`format_${item.format || "physical"}`))}</span>`;
     const second = [
-        item.hours ? `<span>⏱ ${fmtNumber(item.hours)} h</span>` : "",
-        item.achievements_total ? `<span>🏆 ${item.achievements ?? 0}/${item.achievements_total}</span>` : "",
+        item.hours ? `<span>${icon("clock", 13)} ${fmtNumber(item.hours)} h</span>` : "",
+        item.achievements_total ? `<span>${icon("trophy", 13)} ${item.achievements ?? 0}/${item.achievements_total}</span>` : "",
         item.dlc?.total ? `<span>${esc(t("collection_dlc_count", item.dlc))}</span>` : "",
         item.score ? `<span>★ ${item.score}/10</span>` : "",
     ].join("");

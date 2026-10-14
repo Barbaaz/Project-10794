@@ -139,7 +139,7 @@ function progressBar(item) {
 function ownedControls(item) {
     const playstation = (item.platform_name || "").startsWith("PlayStation");
     const statuses = STATUSES.map(s => ({ value: s, css: STATUS_LOOK[s].css,
-                                          label: `${STATUS_LOOK[s].icon ? `${STATUS_LOOK[s].icon} ` : ""}${esc(t(`status_play_${s}`))}` }));
+                                          label: `${STATUS_LOOK[s].icon ? `${icon(STATUS_LOOK[s].icon, 14)} ` : ""}${esc(t(`status_play_${s}`))}` }));
     return `
         ${section(t("collection_status"), choices("status", statuses, item.status || "owned", t("collection_status")))}
         ${section(t("collection_format"), choices("format", ["physical", "digital"].map(f => ({ value: f, label: esc(t(`format_${f}`)) })),
@@ -160,7 +160,7 @@ function ownedControls(item) {
             </div>
             <div data-progress>${progressBar(item)}</div>
             ${playstation ? `<button type="button" class="choice mt-2" data-toggle="platinum" data-on="cover-platinum"
-                                     aria-pressed="${!!item.platinum}">🏆 ${esc(t("collection_platinum"))}</button>` : ""}`)}
+                                     aria-pressed="${!!item.platinum}">${icon("trophy", 14)} ${esc(t("collection_platinum"))}</button>` : ""}`)}
         ${section(t("collection_your_score"), `
             ${choices("score", [{ value: "", label: "—" }, ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))],
                       item.score ? String(item.score) : "", t("collection_your_score"))}
