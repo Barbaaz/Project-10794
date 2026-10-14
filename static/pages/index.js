@@ -471,7 +471,7 @@ function catalogCard(g) {
     if (!g.is_preorder) return makeCard(g, { again: catalogCard });
     return makeCard(g, {
         coverBadge: `<span class="badge badge-pre discount-badge">${t("preorder")}</span>`,
-        extraLine: `<span class="text-body-secondary">📅 ${esc(releaseLabel(g.release_date, g.date_is_estimate))}</span>`,
+        extraLine: `<span class="text-body-secondary">${icon("calendar", 14)} ${esc(releaseLabel(g.release_date, g.date_is_estimate))}</span>`,
         again: catalogCard,
     });
 }
@@ -655,7 +655,7 @@ function renderWishlist(groups) {
         const best = g.offers.find(o => o.in_stock && o.condition === "new");
         const lines = [];
         if (g.offers.some(o => o.restocked_at)) {
-            lines.push(`<span class="badge text-bg-warning">${t("back_in_stock")}</span>`);
+            lines.push(`<span class="badge text-bg-warning">${icon("bell", 12)} ${t("back_in_stock")}</span>`);
         }
         // "Lowest ever" only means something after a while (same 30 days as the discount rule)
         const trackedDays = low ? (Date.now() - new Date(low.tracked_since)) / 86400000 : 0;
@@ -712,7 +712,7 @@ function renderRestockAlerts(alerts) {
 
     box.innerHTML = `
         <div class="alert alert-warning alert-dismissible mb-4" role="status">
-            <div class="fw-semibold mb-1">🔔 ${alerts.length === 1 ? t("restock_one") : t("restock_many", { count: alerts.length })}</div>
+            <div class="fw-semibold mb-1">${icon("bell", 16)} ${alerts.length === 1 ? t("restock_one") : t("restock_many", { count: alerts.length })}</div>
             <ul class="list-unstyled mb-0">${items}</ul>
             <button type="button" class="btn-close" aria-label="${t("dismiss")}"></button>
         </div>`;
@@ -751,7 +751,7 @@ function renderPreorders(groups) {
     const grid = cardGrid();
     groups.forEach(g => grid.appendChild(makeCard(g, {
         coverBadge: `<span class="badge badge-pre discount-badge">${t("preorder")}</span>`,
-        extraLine: `📅 ${esc(releaseLabel(g.release_date, g.date_is_estimate))}`,
+        extraLine: `${icon("calendar", 14)} ${esc(releaseLabel(g.release_date, g.date_is_estimate))}`,
     })));
     return grid;
 }
@@ -985,7 +985,7 @@ function timeAgo(iso) {
     return t("ago_days", { count: Math.floor(hours / 24) });
 }
 
-// "Preços atualizados: CSTech há 3 h · Mega Mania há 3 h · ⚠ Press Start: falhou há 1 h"
+// "Preços atualizados: CSTech há 3 h · Mega Mania há 3 h · (warning icon) Press Start: falhou há 1 h"
 function renderStoreStatus(storeList) {
     const parts = storeList.map(s => {
         const problem = s.last_status === "failed" ? t("status_failed")
@@ -993,7 +993,7 @@ function renderStoreStatus(storeList) {
                       : s.is_stale ? t("status_stale") : null;
         const when = s.last_updated ? t("updated_ago", { ago: timeAgo(s.last_updated) }) : t("never_updated");
         if (!problem) return `<span>${esc(s.name)} ${when}</span>`;
-        return `<span class="text-warning-emphasis" title="${esc(s.last_error || "")}">⚠ ${esc(s.name)}: ${problem} (${when})</span>`;
+        return `<span class="text-warning-emphasis" title="${esc(s.last_error || "")}">${icon("alert", 14)} ${esc(s.name)}: ${problem} (${when})</span>`;
     });
     document.getElementById("store-status").innerHTML =
         `${t("status_intro")} ${parts.join(" · ")}`;
@@ -1024,7 +1024,6 @@ function loadWishlist() {
     return fetch(`/api/games/editions?ids=${wishedIds().slice(0, 200).join(",")}`).then(r => r.json());
 }
 
-// The card's star: ★ = on the wishlist; a small 📚 under it = in the collection
 // The card's round button (user, 2026-10-13: one clear sign, no emoji): a tick on blue when the user owns the
 // edition, a gold star when they want it, else an empty star; the state is also said in words for screen readers
 function starButton(group) {
@@ -1164,14 +1163,14 @@ function openMerge(a, b) {
 function fillCardMenu(focusKind) {
     const { menu, group } = cardMenu;
     const mine = collectionIds[group.edition_id] || {};
-    const items = [["wishlist", t("collection_add_wishlist"), Boolean(mine.wishlist)],
-                   ["owned", t("collection_add_owned"), Boolean(mine.owned)]];
-    menu.innerHTML = items.map(([kind, label, on]) => `
+    const items = [["wishlist", "star", t("collection_add_wishlist"), Boolean(mine.wishlist)],
+                   ["owned", "library", t("collection_add_owned"), Boolean(mine.owned)]];
+    menu.innerHTML = items.map(([kind, name, label, on]) => `
         <button type="button" class="dropdown-item" role="menuitemcheckbox" aria-checked="${on}" data-kind="${kind}">
-            <span class="check">${on ? "✓" : ""}</span>${esc(label)}</button>`).join("") + `
+            <span class="check">${on ? icon("check", 14) : ""}</span>${icon(name, 16)} ${esc(label)}</button>`).join("") + `
         <hr class="dropdown-divider">
         <a class="dropdown-item" role="menuitem" href="/sell?game_id=${group.game_id}&edition_id=${group.edition_id}">
-            <span class="check"></span>${esc(t("card_sell"))}</a>`;
+            <span class="check"></span>${icon("tag", 16)} ${esc(t("card_sell"))}</a>`;
     menu.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => toggleCardItem(group, b.dataset.kind));
     menu.querySelector(`[data-kind="${focusKind}"]`).focus();
 }

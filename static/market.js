@@ -34,7 +34,7 @@ const REPORT_REASONS = ["fake", "scam", "offensive", "wrong_game", "prohibited",
 // A small "Report" link; clicking it opens the report dialog (logged out: log in first)
 function reportButton(kind, id) {
     return `<button type="button" class="btn btn-link btn-sm p-0 text-body-secondary small" data-report-kind="${kind}"
-                data-report-id="${id}">⚑ ${esc(t("report"))}</button>`;
+                data-report-id="${id}">${icon("flag", 14)} ${esc(t("report"))}</button>`;
 }
 
 document.addEventListener("click", e => {

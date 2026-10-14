@@ -8,7 +8,7 @@ function facts(game) {
     if (!game) return "";
     const parts = [
         game.hours ? `${fmtNumber(game.hours)} h` : "",
-        game.achievements_total ? `🏆 ${game.achievements}/${game.achievements_total}` : "",
+        game.achievements_total ? `${icon("trophy", 13)} ${game.achievements}/${game.achievements_total}` : "",
         game.platinum ? `<span class="badge text-bg-info">${esc(t("collection_platinum"))}</span>` : "",
         game.finished ? `<span class="badge text-bg-secondary">${esc(t("status_play_finished"))}</span>` : "",
     ].filter(Boolean);
