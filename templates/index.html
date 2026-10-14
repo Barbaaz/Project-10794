@@ -116,16 +116,48 @@
                           box-shadow: 0 1px 3px rgb(0 0 0 / .2); }
         .low-price-badge { position: absolute; bottom: .5rem; left: .5rem; font-size: .75rem; border-radius: .4rem;
                            background: var(--save-bg); color: var(--save); }
-        /* Lançamentos (index.js renderReleases): two rows of the most anticipated at any width (2, 3 or 4 a row) */
-        .two-rows > :nth-child(n+5) { display: none; }
-        @media (min-width: 768px) { .two-rows > :nth-child(n+5) { display: block; } .two-rows > :nth-child(n+7) { display: none; } }
-        @media (min-width: 992px) { .two-rows > :nth-child(n+7) { display: block; } }
+        /* Lançamentos' most anticipated, one at a time (index.js anticipatedSlider): the cover blurred behind */
+        .slide { position: relative; overflow: hidden; display: flex; align-items: center; gap: 1.5rem; padding: 1.25rem;
+                 border-radius: 1rem; background: var(--bs-tertiary-bg); min-height: 17rem; animation: slide-in .45s ease; }
+        .slide[hidden] { display: none; }
+        @keyframes slide-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+        @media (prefers-reduced-motion: reduce) { .slide { animation: none; } }
+        .slide-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(30px) saturate(1.4);
+                    opacity: .35; transform: scale(1.3); pointer-events: none; }
+        .slide-cover, .slide-text { position: relative; }
+        .slide-chip { font-size: .75rem; font-weight: 700; padding: .15rem .5rem; border-radius: .4rem;
+                      background: var(--bs-body-bg); color: var(--bs-body-color); border: 1px solid var(--bs-border-color); }
+        .slide-cover img { width: 11rem; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .6rem;
+                           box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .3); display: block; }
+        .slide-cover img.store-photo { object-fit: contain; background: #fff; }
+        .slide-title { font-size: 1.6rem; font-weight: 800; margin-bottom: .4rem; }
+        .slide-title a { color: inherit; text-decoration: none; }
+        .slide-title a:hover { text-decoration: underline; }
+        .slide-price { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+        @media (max-width: 575.98px) {
+            .slide { gap: .9rem; padding: .8rem; min-height: 12rem; align-items: flex-start; }
+            .slide-cover img { width: 7rem; }
+            .slide-title { font-size: 1.15rem; }
+            .slide-price { font-size: 1.2rem; }
+        }
+        /* the dots: a finger-sized button, the current one a longer bar */
+        .slider-dots { display: flex; flex-wrap: wrap; }
+        .slider-dots .dot { width: 1.6rem; height: 1.6rem; display: inline-flex; align-items: center; justify-content: center;
+                            background: none; border: 0; padding: 0; }
+        .slider-dots .dot::before { content: ""; width: .55rem; height: .55rem; border-radius: 1rem; background: var(--bs-secondary-color);
+                                    opacity: .45; transition: width .2s; }
+        .slider-dots .dot[aria-current="true"]::before { width: 1.3rem; opacity: 1; background: var(--brand-btn); }
+        /* the calendar beside the day's games from a laptop's width, staying in view while they scroll */
+        .release-layout { display: grid; gap: 1.5rem; }
+        @media (min-width: 992px) {
+            .release-layout { grid-template-columns: 20rem 1fr; align-items: start; }
+            .release-calendar { position: sticky; top: 1rem; }
+        }
         /* the calendar: a week a row from Monday; a day with releases shows how many */
-        .release-calendar { max-width: 36rem; }
         .first-cap::first-letter { text-transform: uppercase; }
         .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: .25rem; }
         .cal-head { text-align: center; font-size: .75rem; color: var(--bs-secondary-color); text-transform: capitalize; }
-        .cal-day { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 3rem;
+        .cal-day { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 2.6rem;
                    border: 1px solid var(--bs-border-color); border-radius: .5rem; background: var(--bs-body-bg);
                    color: var(--bs-body-color); font-weight: 600; line-height: 1.1; padding: .2rem 0; }
         .cal-day small { font-size: .7rem; font-weight: 700; color: var(--brand-btn); }

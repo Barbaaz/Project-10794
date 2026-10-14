@@ -827,7 +827,11 @@ function renderPreorders(groups) {
 
 // Lançamentos (user, 2026-10-14): two rows of the most anticipated games, then a month calendar where
 // a day shows the games out that day. "31/12" estimates are a choice of their own under the calendar.
-const ANTICIPATED = 8;              // two rows of the widest grid (4 a row); CSS shows two rows on any width
+const ANTICIPATED = 8;              // games in the most anticipated slider
+const SLIDE_MS = 6000;              // each one this long, then the next
+let slideTimer = null;
+let slideIndex = 0;                 // kept when the calendar redraws the tab
+let slidePaused = matchMedia("(prefers-reduced-motion: reduce)").matches;     // no moving by itself then
 let releaseMonth = null;            // the calendar's month (a Date on its 1st)
 let releaseDay = null;              // "2026-10-15", or "tba"
 
@@ -846,14 +850,8 @@ function renderReleases(groups) {
     const top = mergePlatforms(groups).filter(c => interest(c) || wishes(c))
         .sort((a, b) => interest(b) - interest(a) || wishes(b) - wishes(a) || a.release_date.localeCompare(b.release_date))
         .slice(0, ANTICIPATED);
-    if (top.length) {
-        wrap.insertAdjacentHTML("beforeend", `<h3 class="h5 mb-1">${esc(t("releases_anticipated"))}</h3>
-            <p class="small text-body-secondary mb-2">${esc(t("releases_anticipated_hint"))}</p>`);
-        const grid = cardGrid();
-        grid.classList.add("two-rows");
-        top.forEach(c => grid.appendChild(releaseCard(c, true)));
-        wrap.appendChild(grid);
-    }
+    clearInterval(slideTimer);
+    if (top.length) wrap.appendChild(anticipatedSlider(top));
 
     // the day shown: the one picked, else today or the next day with releases
     if (releaseDay !== "tba" && !byDay[releaseDay]) releaseDay = days.find(d => d >= today) || (estimated.length ? "tba" : null);
@@ -862,13 +860,17 @@ function renderReleases(groups) {
     const last = days.length ? monthStart(parseDay(days[days.length - 1])) : first;
 
     const box = document.createElement("section");
-    box.className = "release-calendar mt-4";
+    box.className = "release-calendar";
     box.setAttribute("aria-label", t("releases_calendar"));
     const monthDays = new Date(releaseMonth.getFullYear(), releaseMonth.getMonth() + 1, 0).getDate();
-    const blanks = (releaseMonth.getDay() + 6) % 7;          // weeks start on Monday
+    // this month from this week on: the weeks already over were rows of greyed-out days
+    const now = new Date();
+    const thisMonth = releaseMonth.getTime() === monthStart(now).getTime();
+    const from = thisMonth ? Math.max(1, now.getDate() - (now.getDay() + 6) % 7) : 1;
+    const blanks = (new Date(releaseMonth.getFullYear(), releaseMonth.getMonth(), from).getDay() + 6) % 7;   // weeks start on Monday
     const cells = [];
     for (let i = 0; i < blanks; i++) cells.push(`<span></span>`);
-    for (let d = 1; d <= monthDays; d++) {
+    for (let d = from; d <= monthDays; d++) {
         const iso = isoDay(new Date(releaseMonth.getFullYear(), releaseMonth.getMonth(), d));
         const count = byDay[iso] ? mergePlatforms(byDay[iso]).length : 0;
         cells.push(`<button type="button" class="cal-day${iso === today ? " is-today" : ""}" data-day="${iso}"
@@ -903,19 +905,119 @@ function renderReleases(groups) {
         renderFront();
         document.querySelector(`.release-calendar [data-day="${releaseDay}"]`)?.focus();
     });
-    wrap.appendChild(box);
-
-    // that day's games
+    // the calendar beside the day's games on a wide screen, above them on a phone (user, 2026-10-14: under the
+    // cards it left a lot of empty space)
+    const layout = document.createElement("div");
+    layout.className = "release-layout";
+    layout.appendChild(box);
+    const dayBox = document.createElement("section");
+    dayBox.className = "min-w-0";
     const chosen = releaseDay === "tba" ? estimated : byDay[releaseDay] || [];
     if (releaseDay) {
         const title = releaseDay === "tba" ? t("date_tba")
             : parseDay(releaseDay).toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" });
-        wrap.insertAdjacentHTML("beforeend", `<h3 class="h6 text-body-secondary mt-3 mb-2 first-cap">${esc(title)}</h3>`);
+        const count = mergePlatforms(chosen).length;
+        dayBox.setAttribute("aria-label", title);
+        dayBox.insertAdjacentHTML("beforeend", `<h3 class="h5 mb-2 first-cap">${esc(title)}
+            <span class="small fw-normal text-body-secondary">· ${esc(count === 1 ? t("releases_day_one") : t("releases_day_many", { count }))}</span></h3>`);
         const grid = cardGrid();
+        grid.className = "row row-cols-2 row-cols-md-3 row-cols-xxl-4 card-grid";       // the calendar takes a column
         mergePlatforms(chosen).forEach(c => grid.appendChild(releaseCard(c, releaseDay === "tba")));
-        wrap.appendChild(grid);
+        dayBox.appendChild(grid);
     }
+    layout.appendChild(dayBox);
+    wrap.appendChild(layout);
     return wrap;
+}
+
+// The most anticipated, one at a time (user, 2026-10-14: "a slide that changes games automatically and
+// highlights each of them"): the next every SLIDE_MS, held while the pointer or the keyboard is on it, a
+// pause button (also the default when the device asks for less motion), arrows, dots, a swipe on a phone
+function anticipatedSlider(cards) {
+    const box = document.createElement("section");
+    box.className = "slider mb-4";
+    box.setAttribute("aria-roledescription", t("releases_slider"));
+    box.setAttribute("aria-label", t("releases_anticipated"));
+    slideIndex %= cards.length;
+    box.innerHTML = `
+        <div class="d-flex align-items-baseline flex-wrap column-gap-2 mb-2">
+            <h3 class="h5 mb-0">${esc(t("releases_anticipated"))}</h3>
+            <span class="small text-body-secondary">${esc(t("releases_anticipated_hint"))}</span>
+        </div>
+        <div class="slides">${cards.map((c, i) => slideHtml(c, i, cards.length)).join("")}</div>
+        <div class="d-flex align-items-center gap-1 mt-2">
+            <button type="button" class="btn btn-sm btn-secondary" data-step="-1" aria-label="${esc(t("releases_slide_prev"))}">&lsaquo;</button>
+            <div class="slider-dots">${cards.map((c, i) => `<button type="button" class="dot" data-slide="${i}"
+                aria-label="${esc(`${t("releases_slide_of", { n: i + 1, total: cards.length })}: ${localName(c)}`)}"></button>`).join("")}</div>
+            <button type="button" class="btn btn-sm btn-secondary" data-step="1" aria-label="${esc(t("releases_slide_next"))}">&rsaquo;</button>
+            <button type="button" class="btn btn-sm btn-secondary ms-auto" data-pause></button>
+        </div>`;
+    const slides = box.querySelectorAll(".slide");
+    const dots = box.querySelectorAll("[data-slide]");
+    const pause = box.querySelector("[data-pause]");
+    let held = false;
+    const show = i => {
+        slideIndex = (i + cards.length) % cards.length;
+        slides.forEach((s, n) => { s.hidden = n !== slideIndex; });
+        dots.forEach((d, n) => d.setAttribute("aria-current", n === slideIndex));
+    };
+    const showPause = () => {
+        pause.innerHTML = icon(slidePaused ? "play" : "pause", 14);
+        pause.setAttribute("aria-label", t(slidePaused ? "releases_slide_play" : "releases_slide_pause"));
+        pause.title = pause.getAttribute("aria-label");
+    };
+    box.querySelectorAll("[data-step]").forEach(b => b.onclick = () => show(slideIndex + Number(b.dataset.step)));
+    dots.forEach(d => d.onclick = () => show(Number(d.dataset.slide)));
+    pause.onclick = () => { slidePaused = !slidePaused; showPause(); };
+    box.addEventListener("mouseenter", () => { held = true; });
+    box.addEventListener("mouseleave", () => { held = false; });
+    box.addEventListener("focusin", () => { held = true; });
+    box.addEventListener("focusout", e => { if (!box.contains(e.relatedTarget)) held = false; });
+    let touchX = null;
+    box.addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, { passive: true });
+    box.addEventListener("touchend", e => {
+        const dx = e.changedTouches[0].clientX - (touchX ?? e.changedTouches[0].clientX);
+        if (Math.abs(dx) > 40) show(slideIndex + (dx < 0 ? 1 : -1));
+        touchX = null;
+    });
+    slideTimer = setInterval(() => {
+        if (!box.isConnected) return clearInterval(slideTimer);       // another tab drawn
+        if (!slidePaused && !held && !document.hidden) show(slideIndex + 1);
+    }, SLIDE_MS);
+    show(slideIndex);
+    showPause();
+    return box;
+}
+
+// One slide: the big cover, the platforms, when it's out (and how long to go), how many follow it, the best price
+function slideHtml(card, i, total) {
+    const all = platformsOf(card) || [card];
+    const best = all.flatMap(g => g.offers).filter(o => o.in_stock).sort((a, b) => a.price - b.price)[0];
+    const hypes = Math.max(...all.map(g => g.hypes || 0));
+    const days = Math.round((parseDay(card.release_date) - parseDay(isoDay(new Date()))) / 86400000);
+    const toGo = card.date_is_estimate ? ""
+        : days === 0 ? t("releases_out_today") : days === 1 ? t("releases_out_tomorrow") : t("releases_days_left", { count: days });
+    const url = `/game/${card.game_id}`;
+    return `
+        <div class="slide" role="group" aria-roledescription="${esc(t("releases_slide"))}"
+             aria-label="${esc(t("releases_slide_of", { n: i + 1, total }))}" ${i === slideIndex ? "" : "hidden"}>
+            ${card.cover ? `<img class="slide-bg" src="${esc(card.cover)}" alt="" aria-hidden="true">` : ""}
+            <a href="${url}" class="slide-cover" tabindex="-1" aria-hidden="true">${card.cover
+                ? `<img src="${esc(card.cover)}" alt="" class="${coverClass(card.cover)}">` : ""}</a>
+            <div class="slide-text min-w-0">
+                <div class="d-flex flex-wrap gap-1 mb-2">${all.map(g =>
+                    `<span class="slide-chip">${esc(PLATFORM_SHORT[g.console] || g.platform_name)}</span>`).join("")}</div>
+                <h4 class="slide-title"><a href="${url}">${esc(localName(card))}</a></h4>
+                <div class="slide-date">${icon("calendar", 16)} ${esc(releaseLabel(card.release_date, card.date_is_estimate))}${
+                    toGo ? ` <span class="badge text-bg-primary ms-1">${esc(toGo)}</span>` : ""}</div>
+                ${hypes ? `<div class="small text-body-secondary mt-1">${esc(t("releases_followers", { count: fmtNumber(hypes) }))}</div>` : ""}
+                <div class="d-flex flex-wrap align-items-center gap-3 mt-3">
+                    ${best ? `<div><span class="slide-price">${eur.format(best.price)}</span>
+                        <span class="small text-body-secondary">${esc(storeName(best.store))}</span></div>` : ""}
+                    <a class="btn btn-primary btn-sm" href="${url}">${esc(t("releases_slide_go"))}</a>
+                </div>
+            </div>
+        </div>`;
 }
 
 // A release's card: the date under it where the list isn't one day's; its editions count
