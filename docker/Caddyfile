@@ -1,7 +1,11 @@
 # The test copy online (docker-compose.hosting.yml): HTTPS for DOMAIN (certificate from Let's
 # Encrypt, renewed by Caddy), one shared password for everything, then the site.
+# Except what installing the app needs: browsers fetch the manifest, its icons and the service
+# worker without the password, so behind it the phone can't install the app (user, 2026-10-14).
+# Nothing private in them (the repo is public).
 {$DOMAIN} {
-	basic_auth {
+	@private not path /manifest.webmanifest /sw.js /static/icons/* /static/favicon.svg
+	basic_auth @private {
 		{$TEST_USER} {$TEST_PASSWORD_HASH}
 	}
 	encode gzip
