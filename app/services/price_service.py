@@ -1,5 +1,6 @@
 from app.services.common import (
-    LATEST_PRICE, OFFER_COLUMNS, better_title, cached, card_cover, card_name, edition_en, page_result, title_en,
+    CARD_KEY, LATEST_PRICE, OFFER_COLUMNS, better_title, cached, card_cover, card_name, edition_en, page_result, same_card,
+    title_en,
 )
 from app.services.review_service import mark_review_scores
 from app.services.tag_service import mark_historical_lows
@@ -47,8 +48,12 @@ def featured_discounts(limit=12, min_percent=10, platform=None):
     new copies in stock only, optionally for one platform (so a filtered list still has
     `limit` games). Cached for a few minutes.
     """
-    return cached(("featured", limit, min_percent, platform),
-                  lambda: attach_store_offers(_featured_discounts(limit, min_percent, platform)))
+    def compute():
+        rows = _featured_discounts(limit, min_percent, platform)
+        for r in rows:
+            r["same"] = same_card(r)          # the same game's discount on another platform: one card
+        return attach_store_offers(rows)
+    return cached(("featured", limit, min_percent, platform), compute)
 
 
 def _featured_discounts(limit, min_percent, platform):
@@ -61,7 +66,7 @@ def _featured_discounts(limit, min_percent, platform):
               AND o.condition = 'new' AND o.discount_percent >= ?
         )
         SELECT g.title, g.title_en, g.cover_image_id, p.code AS platform, p.name AS platform_name,
-               e.name AS edition, e.edition_key, {OFFER_COLUMNS}
+               e.name AS edition, e.edition_key, {CARD_KEY} AS card_key, {OFFER_COLUMNS}
         FROM ranked o
         JOIN stores s ON s.id = o.store_id
         JOIN games g ON g.id = o.game_id

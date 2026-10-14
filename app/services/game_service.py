@@ -3,7 +3,7 @@ import re
 from datetime import datetime, timezone
 
 from app.services.common import (
-    EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, card_cover, card_group, edition_en, lowest_prices, page_result,
+    CARD_KEY, EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, card_cover, card_group, edition_en, lowest_prices, page_result,
     title_word_filters,
 )
 from app.services.genre_service import genre_filter
@@ -309,10 +309,6 @@ CARD_SORTS = {
     "price_desc": "MIN(ed.best_price) DESC, MIN(g.title), game_key, e.edition_key",
 }
 
-
-# One front-page card per game across platforms, also when the stores name it differently on one
-# (games.card_key, pipeline/card_keys.py)
-CARD_KEY = "COALESCE(g.card_key, g.normalized_title)"
 
 # What catalog(kind=…) lists: games, or the consoles tab's (core/hardware.py; consoles only, user 2026-10-07)
 HARDWARE_KINDS = ("console",)

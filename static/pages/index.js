@@ -81,6 +81,23 @@ function platformsOf(group) {
     return group._all || (group.alternatives?.length ? [group, ...group.alternatives] : null);
 }
 
+// One card per game and edition across platforms (user, 2026-10-14: every list, not only the catalogue):
+// groups with the same `same` key (common.same_card) become one card where the first was, the others its
+// platform chips
+function mergePlatforms(groups) {
+    const cards = [], byKey = new Map();
+    for (const g of groups) {
+        const card = g.same && byKey.get(g.same);
+        if (card) card.alternatives.push(g);
+        else {
+            const c = { ...g, alternatives: [] };
+            cards.push(c);
+            if (g.same) byKey.set(g.same, c);
+        }
+    }
+    return cards;
+}
+
 function platformLine(group) {
     const reviews = group.review_count
         ? `<span title="${esc(t("review_score_hint", { count: group.review_count }))}">${fmtNumber(group.review_score)}/10 (${group.review_count})</span>` : "";
@@ -493,8 +510,8 @@ const FRONT_TABS = {
         render: renderDiscounts,
         empty: "empty_discounts",
     },
-    preorders: { url: "/api/preorders", render: renderPreorders, empty: "empty_preorders" },
-    releases: { url: "/api/releases", render: renderReleases, empty: "empty_releases" },
+    preorders: { url: "/api/preorders", render: renderPreorders, empty: "empty_preorders", merge: true },
+    releases: { url: "/api/releases", render: renderReleases, empty: "empty_releases", whole: true },
     catalog: catalogTab(false, "empty_catalog"),
     special: catalogTab(true, "empty_special"),
     hardware: catalogTab(false, "empty_hardware", true),
@@ -514,6 +531,8 @@ const FRONT_TABS = {
         load: () => loadWishlist(),
         fresh: true,
         render: renderWishlist,
+        merge: true,
+        prepare: sortWishlist,
         // logged out there's nothing to show: the wishlist belongs to an account
         get empty() { return currentUser ? "empty_wishlist" : "empty_wishlist_logged_out"; },
     },
@@ -619,7 +638,17 @@ function renderFront() {
     }
 
     const selected = document.getElementById("consoleFilter").value;
-    const items = (frontData[frontTab] || []).filter(i => !selected || (i.console || i.platform) === selected);
+    let items = (frontData[frontTab] || []).filter(i => !selected || (i.console || i.platform) === selected);
+    if (config.prepare) items = config.prepare(items);
+    if (config.merge) items = mergePlatforms(items);
+
+    // Lançamentos draws all of them its own way (most anticipated, calendar)
+    if (config.whole) {
+        if (items.length) content.appendChild(config.render(items));
+        empty.textContent = selected && frontData[frontTab]?.length ? t("empty_platform") : t(config.empty);
+        empty.classList.toggle("d-none", items.length > 0);
+        return;
+    }
 
     // ~540 pre-orders at once made the page 65,000 px tall on a phone: SHOW_STEP at a time
     const shown = frontShown[frontTab] || SHOW_STEP;
@@ -647,10 +676,41 @@ function cardGrid() {
     return grid;
 }
 
+// The wishlist tab's order (user, 2026-10-14: "a user should be able to sort the wishlist"; /wishlist has more);
+// remembered in this browser. Recent: the wish's id (newer wishes, bigger ids)
+const WISH_SORTS = ["name", "added", "price_asc", "price_desc", "discount"];
+let wishSort = WISH_SORTS.includes(saved("wishSort")) ? saved("wishSort") : "name";
+
+function sortWishlist(groups) {
+    const best = g => g.offers.filter(o => o.in_stock && o.condition === "new").reduce((m, o) => Math.min(m, o.price), Infinity);
+    const discount = g => Math.max(0, ...g.offers.filter(o => o.in_stock && o.is_discount).map(o => o.discount_percent || 0));
+    const name = (a, b) => (localName(a) || "").localeCompare(localName(b) || "", LOCALE);
+    const order = {
+        name,
+        added: (a, b) => ((collectionIds[b.edition_id] || {}).wishlist || 0) - ((collectionIds[a.edition_id] || {}).wishlist || 0),
+        price_asc: (a, b) => best(a) - best(b),               // nobody sells it (Infinity): at the end
+        price_desc: (a, b) => (best(b) === Infinity ? -1 : best(b)) - (best(a) === Infinity ? -1 : best(a)),
+        discount: (a, b) => discount(b) - discount(a),
+    }[wishSort];
+    return [...groups].sort((a, b) => order(a, b) || name(a, b) || a.edition_id - b.edition_id);
+}
+
 // Wished editions with all their offers and the historical low (new copies, in stock)
 function renderWishlist(groups) {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `<div class="d-flex justify-content-end mb-2">
+        <select class="form-select form-select-sm w-auto" aria-label="${esc(t("collection_sort"))}">${WISH_SORTS.map(s =>
+            `<option value="${s}" ${s === wishSort ? "selected" : ""}>${esc(t(`sort_${s}`))}</option>`).join("")}</select></div>`;
+    wrap.querySelector("select").onchange = e => {
+        wishSort = e.target.value;
+        save("wishSort", wishSort);
+        renderFront();
+        document.querySelector("#front-content select")?.focus();
+    };
     const grid = cardGrid();
-    groups.forEach(g => {
+    wrap.appendChild(grid);
+    // each platform's own lines (stock, lowest price), also after a platform chip is pressed
+    const make = g => {
         const low = g.lowest_price;
         const best = g.offers.find(o => o.in_stock && o.condition === "new");
         const lines = [];
@@ -664,9 +724,10 @@ function renderWishlist(groups) {
         } else if (low) {
             lines.push(`<span class="text-body-secondary">${t("historical_low_short", { price: eur.format(low.price) })}</span>`);
         }
-        grid.appendChild(makeCard(g, { extraLine: lines.join(" ") }));
-    });
-    return grid;
+        return makeCard(g, { extraLine: lines.join(" "), again: make });
+    };
+    groups.forEach(g => grid.appendChild(make(g)));
+    return wrap;
 }
 
 // ---------------------------------------------------------------------------
@@ -732,94 +793,143 @@ function renderDiscounts(offers) {
     const wrap = document.createElement("div");
     const storeDeals = offers[0]?.isStoreDeal;
     const grid = cardGrid();
-    offers.forEach(o => {
-        // o.offers: this store's offer plus the other stores' prices, each shown as a button
-        const group = { name: o.name, name_en: o.name_en, cover: o.cover, console: o.platform, platform_name: o.platform_name, game_id: o.game_id,
-                        edition_id: o.edition_id, offers: o.offers || [o] };
-        grid.appendChild(makeCard(group, {
+    // o.offers: this store's offer plus the other stores' prices, each shown as a button; the same game's
+    // discount on another platform is a chip of the same card, with its own badge
+    const groups = offers.map(o => ({ name: o.name, name_en: o.name_en, cover: o.cover, console: o.platform,
+                                      platform_name: o.platform_name, game_id: o.game_id, edition_id: o.edition_id,
+                                      same: o.same, deal: o, offers: o.offers || [o] }));
+    const make = group => {
+        const o = group.deal;
+        return makeCard(group, {
+            again: make,
             coverBadge: storeDeals
                 ? `<span class="badge badge-save discount-badge" title="${esc(t("vs_other_stores_hint", { percent: o.savings_percent }))}">${
                     t("vs_other_stores", { saving: eur.format(o.savings ?? (o.next_price - o.price)) })}</span>`
                 : `<span class="badge text-bg-danger discount-badge">-${o.discount_percent}%</span>`,
-        }));
-    });
+        });
+    };
+    mergePlatforms(groups).forEach(g => grid.appendChild(make(g)));
     wrap.appendChild(grid);
     return wrap;
 }
 
 function renderPreorders(groups) {
     const grid = cardGrid();
-    groups.forEach(g => grid.appendChild(makeCard(g, {
+    // each platform's own date (they can differ)
+    const make = g => makeCard(g, {
         coverBadge: `<span class="badge badge-pre discount-badge">${t("preorder")}</span>`,
         extraLine: `${icon("calendar", 14)} ${esc(releaseLabel(g.release_date, g.date_is_estimate))}`,
-    })));
+        again: make,
+    });
+    groups.forEach(g => grid.appendChild(make(g)));
     return grid;
 }
 
-// Agenda: month → day → games. "31/12" estimates go to a final "to be announced" group.
-function renderReleases(games) {
+// Lançamentos (user, 2026-10-14): two rows of the most anticipated games, then a month calendar where
+// a day shows the games out that day. "31/12" estimates are a choice of their own under the calendar.
+const ANTICIPATED = 8;              // two rows of the widest grid (4 a row); CSS shows two rows on any width
+let releaseMonth = null;            // the calendar's month (a Date on its 1st)
+let releaseDay = null;              // "2026-10-15", or "tba"
+
+function renderReleases(groups) {
     const wrap = document.createElement("div");
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dated = groups.filter(g => !g.date_is_estimate);
+    const estimated = groups.filter(g => g.date_is_estimate);
+    const byDay = {};
+    dated.forEach(g => (byDay[g.release_date] ||= []).push(g));
+    const days = Object.keys(byDay).sort();
+    const today = isoDay(new Date());
 
-    const dated = games.filter(g => !g.date_is_estimate);
-    const estimated = games.filter(g => g.date_is_estimate);
+    // the most followed on IGDB, then the most wished here; a game's platforms count once
+    const interest = card => Math.max(...(platformsOf(card) || [card]).map(g => g.hypes || 0));
+    const wishes = card => (platformsOf(card) || [card]).reduce((n, g) => n + (g.wishes || 0), 0);
+    const top = mergePlatforms(groups).filter(c => interest(c) || wishes(c))
+        .sort((a, b) => interest(b) - interest(a) || wishes(b) - wishes(a) || a.release_date.localeCompare(b.release_date))
+        .slice(0, ANTICIPATED);
+    if (top.length) {
+        wrap.insertAdjacentHTML("beforeend", `<h3 class="h5 mb-1">${esc(t("releases_anticipated"))}</h3>
+            <p class="small text-body-secondary mb-2">${esc(t("releases_anticipated_hint"))}</p>`);
+        const grid = cardGrid();
+        grid.classList.add("two-rows");
+        top.forEach(c => grid.appendChild(releaseCard(c, true)));
+        wrap.appendChild(grid);
+    }
 
-    let month = null, dayList = null, dayKey = null;
-    dated.forEach(g => {
-        const day = parseDay(g.release_date);
-        const monthKey = `${day.getFullYear()}-${day.getMonth()}`;
-        if (monthKey !== month) {
-            month = monthKey;
-            wrap.insertAdjacentHTML("beforeend",
-                `<h3 class="h6 text-uppercase text-body-secondary mt-4 mb-2">${monthName(day)} ${day.getFullYear()}</h3>`);
-        }
-        if (g.release_date !== dayKey) {
-            dayKey = g.release_date;
-            const isToday = day.getTime() === today.getTime();
-            const row = document.createElement("div");
-            row.className = "release-day d-flex gap-3 py-2 border-bottom";
-            row.innerHTML = `
-                <div class="release-date text-center flex-shrink-0">
-                    <div class="fs-4 fw-bold lh-1">${day.getDate()}</div>
-                    <div class="small text-body-secondary">${weekdayName(day)}</div>
-                    ${isToday ? `<span class="badge text-bg-success">${t("today")}</span>` : ""}
-                </div>
-                <div class="release-games flex-grow-1 min-w-0 row row-cols-1 row-cols-md-2 row-cols-xl-3 g-2"></div>`;
-            wrap.appendChild(row);
-            dayList = row.querySelector(".release-games");
-        }
-        dayList.appendChild(releaseItem(g));
+    // the day shown: the one picked, else today or the next day with releases
+    if (releaseDay !== "tba" && !byDay[releaseDay]) releaseDay = days.find(d => d >= today) || (estimated.length ? "tba" : null);
+    if (!releaseMonth) releaseMonth = monthStart(releaseDay && releaseDay !== "tba" ? parseDay(releaseDay) : new Date());
+    const first = monthStart(new Date());
+    const last = days.length ? monthStart(parseDay(days[days.length - 1])) : first;
+
+    const box = document.createElement("section");
+    box.className = "release-calendar mt-4";
+    box.setAttribute("aria-label", t("releases_calendar"));
+    const monthDays = new Date(releaseMonth.getFullYear(), releaseMonth.getMonth() + 1, 0).getDate();
+    const blanks = (releaseMonth.getDay() + 6) % 7;          // weeks start on Monday
+    const cells = [];
+    for (let i = 0; i < blanks; i++) cells.push(`<span></span>`);
+    for (let d = 1; d <= monthDays; d++) {
+        const iso = isoDay(new Date(releaseMonth.getFullYear(), releaseMonth.getMonth(), d));
+        const count = byDay[iso] ? mergePlatforms(byDay[iso]).length : 0;
+        cells.push(`<button type="button" class="cal-day${iso === today ? " is-today" : ""}" data-day="${iso}"
+            aria-pressed="${iso === releaseDay}" ${count ? "" : "disabled"}
+            aria-label="${esc(`${parseDay(iso).toLocaleDateString(LOCALE, { day: "numeric", month: "long" })}: ${count === 1 ? t("releases_day_one") : t("releases_day_many", { count })}`)}">
+            <span>${d}</span>${count ? `<small>${count}</small>` : ""}</button>`);
+    }
+    // "seg", "ter"... (pt-PT's short names are whole words); 1 Jan 2024 was a Monday
+    const names = Array.from({ length: 7 }, (_, i) => weekdayName(new Date(2024, 0, 1 + i)).slice(0, 3));
+    box.innerHTML = `
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <h3 class="h5 mb-0 flex-grow-1 first-cap">${esc(monthName(releaseMonth))} ${releaseMonth.getFullYear()}</h3>
+            <button type="button" class="btn btn-sm btn-secondary" data-month="-1" aria-label="${esc(t("releases_prev_month"))}"
+                    ${releaseMonth <= first ? "disabled" : ""}>&lsaquo;</button>
+            <button type="button" class="btn btn-sm btn-secondary" data-month="1" aria-label="${esc(t("releases_next_month"))}"
+                    ${releaseMonth >= last ? "disabled" : ""}>&rsaquo;</button>
+        </div>
+        <div class="cal-grid" role="group" aria-label="${esc(monthName(releaseMonth))}">
+            ${names.map(n => `<span class="cal-head" aria-hidden="true">${esc(n)}</span>`).join("")}${cells.join("")}
+        </div>
+        ${estimated.length ? `<button type="button" class="btn btn-sm btn-secondary mt-2" data-day="tba" aria-pressed="${releaseDay === "tba"}">
+            ${esc(t("date_tba"))} (${mergePlatforms(estimated).length})</button>` : ""}`;
+    box.querySelectorAll("[data-month]").forEach(b => b.onclick = () => {
+        releaseMonth = new Date(releaseMonth.getFullYear(), releaseMonth.getMonth() + Number(b.dataset.month), 1);
+        const inMonth = days.find(d => d.startsWith(isoDay(releaseMonth).slice(0, 7)));
+        if (inMonth) releaseDay = inMonth;
+        renderFront();
+        document.querySelector(`.release-calendar [data-month="${b.dataset.month}"]:not([disabled])`)?.focus();
     });
+    box.querySelectorAll("[data-day]").forEach(b => b.onclick = () => {
+        releaseDay = b.dataset.day;
+        renderFront();
+        document.querySelector(`.release-calendar [data-day="${releaseDay}"]`)?.focus();
+    });
+    wrap.appendChild(box);
 
-    if (estimated.length) {
-        wrap.insertAdjacentHTML("beforeend", `<h3 class="h6 text-uppercase text-body-secondary mt-4 mb-2">${t("date_tba")}</h3>`);
-        const list = document.createElement("div");
-        list.className = "row row-cols-1 row-cols-md-2 row-cols-xl-3 g-2";
-        estimated.forEach(g => list.appendChild(releaseItem(g, `${parseDay(g.release_date).getFullYear()}`)));
-        wrap.appendChild(list);
+    // that day's games
+    const chosen = releaseDay === "tba" ? estimated : byDay[releaseDay] || [];
+    if (releaseDay) {
+        const title = releaseDay === "tba" ? t("date_tba")
+            : parseDay(releaseDay).toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" });
+        wrap.insertAdjacentHTML("beforeend", `<h3 class="h6 text-body-secondary mt-3 mb-2 first-cap">${esc(title)}</h3>`);
+        const grid = cardGrid();
+        mergePlatforms(chosen).forEach(c => grid.appendChild(releaseCard(c, releaseDay === "tba")));
+        wrap.appendChild(grid);
     }
     return wrap;
 }
 
-function releaseItem(g, note = "") {
-    const col = document.createElement("div");
-    col.className = "col";
-    const gameUrl = `/game/${g.game_id}`;
-    const editions = g.editions > 1 ? ` · ${t("editions_count", { count: g.editions })}` : "";
-    col.innerHTML = `
-        <div class="d-flex gap-2 align-items-center release-item">
-            <a href="${gameUrl}" class="flex-shrink-0" tabindex="-1" aria-hidden="true"><img src="${esc(g.image || "")}" alt="" loading="lazy"></a>
-            <div class="flex-grow-1 min-w-0">
-                <a href="${gameUrl}" class="link-body-emphasis text-decoration-none fw-semibold d-block text-truncate"
-                   title="${esc(localName(g, "title"))}">${esc(localName(g, "title"))}</a>
-                <div class="small text-body-secondary">${esc(g.platform_name)}${editions}${note ? ` · ${esc(note)}` : ""}</div>
-            </div>
-            ${g.best_price != null ? `<a href="${esc(g.url)}" target="_blank" rel="noopener"
-                class="release-price" title="${esc(t("view_at", { store: storeName(g.store) }))}">
-                <span class="amount">${eur.format(g.best_price)}</span><span class="where">${esc(storeName(g.store))}</span></a>` : ""}
-        </div>`;
-    return col;
+// A release's card: the date under it where the list isn't one day's; its editions count
+function releaseCard(group, withDate) {
+    const make = g => makeCard(g, {
+        extraLine: [withDate ? `${icon("calendar", 14)} ${esc(releaseLabel(g.release_date, g.date_is_estimate))}` : "",
+                    g.editions > 1 ? esc(t("editions_count", { count: g.editions })) : ""].filter(Boolean).join(" · "),
+        again: make,
+    });
+    return make(group);
 }
+
+const monthStart = d => new Date(d.getFullYear(), d.getMonth(), 1);
+const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 function showFront(show) {
     document.getElementById("front").classList.toggle("d-none", !show);
@@ -1163,14 +1273,16 @@ function openMerge(a, b) {
 function fillCardMenu(focusKind) {
     const { menu, group } = cardMenu;
     const mine = collectionIds[group.edition_id] || {};
+    // the icon says whether it's on, as on the card's round button (user, 2026-10-14: owned = the tick):
+    // a gold filled star when wished, a blue tick when owned, grey when not
     const items = [["wishlist", "star", t("collection_add_wishlist"), Boolean(mine.wishlist)],
-                   ["owned", "library", t("collection_add_owned"), Boolean(mine.owned)]];
+                   ["owned", "check", t("collection_add_owned"), Boolean(mine.owned)]];
     menu.innerHTML = items.map(([kind, name, label, on]) => `
         <button type="button" class="dropdown-item" role="menuitemcheckbox" aria-checked="${on}" data-kind="${kind}">
-            <span class="check">${on ? icon("check", 14) : ""}</span>${icon(name, 16)} ${esc(label)}</button>`).join("") + `
+            <span class="mark mark-${kind}">${icon(name, 16, { filled: on && kind === "wishlist" })}</span>${esc(label)}</button>`).join("") + `
         <hr class="dropdown-divider">
         <a class="dropdown-item" role="menuitem" href="/sell?game_id=${group.game_id}&edition_id=${group.edition_id}">
-            <span class="check"></span>${icon("tag", 16)} ${esc(t("card_sell"))}</a>`;
+            <span class="mark">${icon("tag", 16)}</span>${esc(t("card_sell"))}</a>`;
     menu.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => toggleCardItem(group, b.dataset.kind));
     menu.querySelector(`[data-kind="${focusKind}"]`).focus();
 }

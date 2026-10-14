@@ -88,6 +88,9 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS card_key varchar(300) NULL;
 -- A PC game's Steam app (2026-10-11: "Ver na Steam" when no store here sells it), from IGDB
 -- (pipeline/igdb.fill_steam_ids) or a user's Steam import; 0 = IGDB knows none; NULL = not asked yet
 ALTER TABLE games ADD COLUMN IF NOT EXISTS steam_app_id integer NULL;
+-- How many IGDB users follow a game before it's out (IGDB's "hypes", 2026-10-14): Lançamentos' most
+-- anticipated. Refreshed with the critics' scores (pipeline/igdb.refresh_critic_scores); NULL = not asked yet
+ALTER TABLE games ADD COLUMN IF NOT EXISTS hypes integer NULL;
 
 -- Editions of a game: Standard, Deluxe, Day One, Collector's, Game Key Card...
 CREATE TABLE IF NOT EXISTS game_editions (

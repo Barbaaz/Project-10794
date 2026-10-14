@@ -30,10 +30,14 @@ LATEST_PRICE = """
                         WHERE ps.store_product_id = sp.id ORDER BY ps.scraped_at DESC, ps.id DESC LIMIT 1) last
 """
 
+# One front-page card per game across platforms, also when the stores name it differently on one
+# (games.card_key, pipeline/card_keys.py)
+CARD_KEY = "COALESCE(g.card_key, g.normalized_title)"
+
 # What card_group() needs, from game_editions e JOIN games g JOIN platforms p
-EDITION_CARD_COLUMNS = """
+EDITION_CARD_COLUMNS = f"""
     e.id AS edition_id, e.name AS edition, e.edition_key, g.id AS game_id, g.title, g.title_en, g.cover_image_id,
-    p.code AS console, p.name AS platform_name, g.kind
+    p.code AS console, p.name AS platform_name, g.kind, {CARD_KEY} AS card_key
 """
 
 # The game's IGDB cover, double size (528 × 748) so cards stay sharp on phone screens
@@ -133,6 +137,12 @@ def card_name(title, edition_key, edition):
     return title if edition_key == "" else f"{title} — {edition}"
 
 
+def same_card(row):
+    """The same game and edition on another platform has the same: the page shows them as one card with
+    platform chips (user, 2026-10-14: every list, not only the catalogue). None: never merged."""
+    return f"{row['card_key']}|{row['edition_key']}" if row.get("card_key") else None
+
+
 def card_group(row, offers, **extra):
     """
     One card of the page (an edition with its offers), from a row with edition_id, game_id,
@@ -147,6 +157,7 @@ def card_group(row, offers, **extra):
         "console": row["console"],
         "platform_name": row["platform_name"],
         "kind": row.get("kind", "game"),        # game / console (core/hardware.py)
+        "same": same_card(row),
         **extra,
         "offers": offers,
     }

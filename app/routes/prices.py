@@ -35,10 +35,10 @@ def preorders():
 
 @bp.get("/releases")
 def upcoming_releases():
-    """Games coming out from today on, one per game, by release date."""
+    """Games coming out from today on, one card per game, by release date."""
     platform = text_arg("platform")
     games = release_service.upcoming_releases()
-    return jsonify([g for g in games if not platform or g["platform"] == platform])
+    return jsonify([g for g in games if not platform or g["console"] == platform])
 
 
 @bp.get("/discounts")

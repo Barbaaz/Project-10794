@@ -69,7 +69,9 @@
         .fav-btn .fav-wished { color: #e0a100; display: flex; }
         /* The star's menu (favourite, collection, wishlist), inside the cover so the card doesn't clip it */
         .card-menu { top: 2.4rem; right: .4rem; min-width: 9rem; font-size: .85rem; z-index: 5; }
-        .card-menu .check { display: inline-block; width: 1.1rem; }
+        .card-menu .mark { display: inline-flex; width: 1.5rem; color: var(--bs-secondary-color); }
+        .card-menu [aria-checked="true"] .mark-wishlist { color: #e0a100; }
+        .card-menu [aria-checked="true"] .mark-owned { color: var(--brand-btn); }
         /* A "…" of the page buttons once pressed: a box the size of a page button (index.js pagination) */
         .page-jump { width: 3.2rem; text-align: center; padding-left: .25rem; padding-right: .25rem; }
         /* Staff: the "..." at a card's bottom right and its menu, opening upwards (index.js fillAdminMenu) */
@@ -110,18 +112,27 @@
             .platform-picker #platform-chips { flex-wrap: nowrap !important; }
             .platform-picker .chip-btn, .platform-picker .chip-select { flex-shrink: 0; white-space: nowrap; }
         }
-        /* The release calendar: the price as text, the store under it */
-        .release-price { flex-shrink: 0; text-align: right; text-decoration: none; color: var(--bs-body-color); line-height: 1.2; }
-        .release-price .amount { display: block; font-weight: 800; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
-        .release-price .where { display: block; font-size: .78rem; color: var(--bs-secondary-color); }
-        .release-price:hover .amount { color: var(--bs-link-hover-color); }
-        .release-item img { border-radius: .4rem !important; }
         .discount-badge { position: absolute; top: .5rem; left: .5rem; font-size: .78rem; font-weight: 800; border-radius: .4rem;
                           box-shadow: 0 1px 3px rgb(0 0 0 / .2); }
         .low-price-badge { position: absolute; bottom: .5rem; left: .5rem; font-size: .75rem; border-radius: .4rem;
                            background: var(--save-bg); color: var(--save); }
-        .release-date { width: 3.2rem; }
-        .release-item img { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem; background: #000; }
+        /* Lançamentos (index.js renderReleases): two rows of the most anticipated at any width (2, 3 or 4 a row) */
+        .two-rows > :nth-child(n+5) { display: none; }
+        @media (min-width: 768px) { .two-rows > :nth-child(n+5) { display: block; } .two-rows > :nth-child(n+7) { display: none; } }
+        @media (min-width: 992px) { .two-rows > :nth-child(n+7) { display: block; } }
+        /* the calendar: a week a row from Monday; a day with releases shows how many */
+        .release-calendar { max-width: 36rem; }
+        .first-cap::first-letter { text-transform: uppercase; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: .25rem; }
+        .cal-head { text-align: center; font-size: .75rem; color: var(--bs-secondary-color); text-transform: capitalize; }
+        .cal-day { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 3rem;
+                   border: 1px solid var(--bs-border-color); border-radius: .5rem; background: var(--bs-body-bg);
+                   color: var(--bs-body-color); font-weight: 600; line-height: 1.1; padding: .2rem 0; }
+        .cal-day small { font-size: .7rem; font-weight: 700; color: var(--brand-btn); }
+        .cal-day:disabled { opacity: .4; border-color: transparent; background: transparent; }
+        .cal-day.is-today { box-shadow: inset 0 0 0 2px var(--bs-secondary-color); }
+        .cal-day[aria-pressed="true"] { background: var(--brand-btn); border-color: var(--brand-btn); color: #fff; }
+        .cal-day[aria-pressed="true"] small { color: #fff; }
         .min-w-0 { min-width: 0; }
         /* Catalogue filters, labels above: always shown from tablet width, behind "Filtros" on a phone */
         .catalog-filters { display: none; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
