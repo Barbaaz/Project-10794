@@ -75,8 +75,9 @@ async function load() {
     document.title = `${t("compare_collections")} · ${them} · SaveOnGames`;
     document.getElementById("title").innerHTML = esc(t("compare_title", { user: "\u0000" })).replace("\u0000",
         `<a href="/user/${encodeURIComponent(data.them.username)}">${esc(them)}</a>`);
-    document.getElementById("head-me").textContent = t("compare_you");
-    document.getElementById("head-them").textContent = them;
+    // each column under its owner's picture
+    document.getElementById("head-me").innerHTML = `${avatarImage(data.me.avatar, 22)} ${esc(t("compare_you"))}`;
+    document.getElementById("head-them").innerHTML = `${avatarImage(data.them.avatar, 22)} ${esc(them)}`;
     summary();
     render();
     document.getElementById("compare").classList.remove("d-none");

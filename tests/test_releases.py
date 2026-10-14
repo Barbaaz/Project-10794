@@ -14,19 +14,20 @@ def releases(app_on_test_db):
     common.clear_cache()
     cursor = app_on_test_db.conn.cursor()
 
-    def product(platform, title, edition, price, hypes=None, released=SOON):
+    def product(platform, title, edition, price, hypes=None, released=SOON, store="mega-mania", preorder=True, game_id=None):
         platform_id = cursor.execute("SELECT id FROM platforms WHERE code = ?", platform).fetchone()[0]
-        game_id = cursor.execute(
-            "INSERT INTO games (platform_id, title, normalized_title, hypes) VALUES (?, ?, ?, ?) RETURNING id",
-            platform_id, title, title.lower(), hypes).fetchone()[0]
         key = "" if edition == "Standard" else edition
-        edition_id = cursor.execute(
-            "INSERT INTO game_editions (game_id, edition_key, name) VALUES (?, ?, ?) RETURNING id",
-            game_id, key, edition).fetchone()[0]
+        if game_id is None:
+            game_id = cursor.execute(
+                "INSERT INTO games (platform_id, title, normalized_title, hypes) VALUES (?, ?, ?, ?) RETURNING id",
+                platform_id, title, title.lower(), hypes).fetchone()[0]
+            cursor.execute("INSERT INTO game_editions (game_id, edition_key, name) VALUES (?, ?, ?)", game_id, key, edition)
+        edition_id = cursor.execute("SELECT id FROM game_editions WHERE game_id = ? AND edition_key = ?", game_id, key).fetchone()[0]
         sp_id = cursor.execute(
             "INSERT INTO store_products (store_id, game_id, edition_id, platform_id, url, external_name, release_date, is_preorder) "
-            "SELECT id, ?, ?, ?, ?, ?, ?, true FROM stores WHERE slug = 'mega-mania' RETURNING id",
-            game_id, edition_id, platform_id, f"https://example.test/{platform}/{title}", title, released).fetchone()[0]
+            "SELECT id, ?, ?, ?, ?, ?, ?, ? FROM stores WHERE slug = ? RETURNING id",
+            game_id, edition_id, platform_id, f"https://example.test/{store}/{platform}/{title}", title, released,
+            preorder, store).fetchone()[0]
         cursor.execute("INSERT INTO price_snapshots (store_product_id, price, in_stock) VALUES (?, ?, true)", sp_id, price)
         return game_id
 
@@ -35,6 +36,13 @@ def releases(app_on_test_db):
     product("PC", "Big Game", "Day One Edition", 49.99, hypes=500)        # no Standard on PC
     product("PS5", "Small Game", "Standard", 19.99)
     product("PS5", "Old Game", "Standard", 9.99, released=date.today() - timedelta(days=3))
+    # "31/12" at one store, sold as an ordinary game at another: out already (Silent Hill: Townfall, 2026-10-14)
+    placeholder = date(date.today().year, 12, 31)
+    out = product("PS5", "Out Game", "Standard", 39.99, released=placeholder)
+    product("PS5", "Out Game", "Standard", 34.99, released=None, store="cstech", preorder=False, game_id=out)
+    # a real date to come stays, also where a store sells it without the pre-order mark
+    soon = product("PS5", "Tomorrow Game", "Standard", 59.99)
+    product("PS5", "Tomorrow Game", "Standard", 58.99, released=None, store="cstech", preorder=False, game_id=soon)
 
     yield release_service.upcoming_releases()
 
@@ -56,3 +64,6 @@ def test_most_anticipated_numbers_and_only_upcoming(releases):
     assert by_name["Big Game"]["hypes"] == 500 and by_name["Small Game"]["hypes"] == 0
     assert all(g["wishes"] == 0 for g in releases)
     assert "Old Game" not in by_name                        # out already
+    assert "Out Game" not in by_name and "Tomorrow Game" in by_name
+    assert not any(g["name"] == "Out Game" for g in release_service.preorders())
+    assert release_service.game_release_date(by_name["Tomorrow Game"]["game_id"])["release_date"] == SOON.isoformat()

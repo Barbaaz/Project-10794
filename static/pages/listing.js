@@ -24,9 +24,10 @@ function render() {
     document.getElementById("price").textContent = eur.format(listing.price);
     document.getElementById("status").innerHTML = statusBadge(listing.status);
     document.getElementById("condition").textContent = conditionLabel(listing.condition);
-    // the seller links to their profile (ratings, other listings)
+    // the seller links to their profile (ratings, other listings), with their picture
     document.getElementById("seller").innerHTML =
-        `${listing.seller_username ? `<a href="/user/${encodeURIComponent(listing.seller_username)}">${esc(sellerName(listing))}</a>` : esc(sellerName(listing))}
+        `${avatarImage(listing.seller_avatar, 32)}
+         ${listing.seller_username ? `<a href="/user/${encodeURIComponent(listing.seller_username)}">${esc(sellerName(listing))}</a>` : esc(sellerName(listing))}
          ${ratingBadge(listing.seller_rating, listing.seller_rating_count)}
          <div class="text-body-secondary">${esc(t("member_since").toLowerCase())} ${new Date(listing.seller_since).toLocaleDateString(LOCALE)}</div>`;
     document.getElementById("published").textContent = new Date(listing.created_at).toLocaleDateString(LOCALE);

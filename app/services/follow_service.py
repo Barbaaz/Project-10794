@@ -119,7 +119,7 @@ def compare(viewer_id, username):
         if other.id != viewer_id and not other.collection_public:
             raise FollowError("collection_private", 403)
         me = s.get(User, viewer_id)
-        people = [(u.id, {"username": u.username, "display_name": u.display_name}) for u in (me, other)]
+        people = [(u.id, {"username": u.username, "display_name": u.display_name, "avatar": u.avatar}) for u in (me, other)]
     (my_id, me_info), (their_id, them_info) = people
     mine, theirs = _side(my_id), _side(their_id)
     by_name = lambda g: (g["name"] or "").lower()

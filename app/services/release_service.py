@@ -6,7 +6,11 @@ from db import fetch_all, placeholders
 
 # One release date per game, from what the stores announce for its products:
 # a real date beats a "31/12" placeholder, then the date most stores agree on, then the earliest.
-GAME_RELEASE_DATES = """
+# out_already: games with only a "31/12" placeholder that a store already sells new, in stock, not as a
+# pre-order and with no date to come: they're out, whatever the others still say (user, 2026-10-14: Silent
+# Hill: Townfall came out the month before, two stores still had it "31/12"). A real date isn't overruled:
+# stores sell games out tomorrow without the pre-order mark.
+GAME_RELEASE_DATES = f"""
 game_dates AS (
     SELECT game_id, release_date,
            (EXTRACT(MONTH FROM release_date) = 12 AND EXTRACT(DAY FROM release_date) = 31) AS date_is_estimate,
@@ -22,6 +26,14 @@ game_release AS (
         FROM game_dates
     ) x
     WHERE rn = 1
+),
+out_already AS (
+    SELECT r.game_id FROM game_release r
+    WHERE r.date_is_estimate AND EXISTS (
+        SELECT 1 FROM store_products sp
+        {LATEST_PRICE}
+        WHERE sp.game_id = r.game_id AND sp.is_active AND sp.condition = 'new' AND NOT sp.is_preorder AND last.in_stock
+          AND (sp.release_date IS NULL OR sp.release_date <= CAST(utcnow() AS date)))
 )
 """
 
@@ -37,7 +49,7 @@ def game_release_dates(game_ids):
         return {}
     rows = fetch_all(
         f"WITH {GAME_RELEASE_DATES} SELECT game_id, release_date, date_is_estimate "
-        f"FROM game_release WHERE game_id IN ({placeholders(game_ids)})",
+        f"FROM game_release WHERE game_id IN ({placeholders(game_ids)}) AND game_id NOT IN (SELECT game_id FROM out_already)",
         *game_ids,
     )
     return {r.pop("game_id"): r for r in rows}
@@ -66,6 +78,7 @@ def preorders():
               -- out already: some stores keep the pre-order label after the release date
               -- (the product's own date first: a special edition can come out later than the game)
               AND COALESCE(o.release_date, r.release_date, '9999-12-31') >= CAST(utcnow() AS date)
+              AND g.id NOT IN (SELECT game_id FROM out_already)
             ORDER BY CASE WHEN r.release_date IS NULL THEN 1 ELSE 0 END, r.release_date, g.title,
                      CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, e.name, e.id, o.price, o.store_product_id
         """)
@@ -100,6 +113,7 @@ def upcoming_releases():
                 {LATEST_PRICE}
                 WHERE sp.is_active AND sp.condition = 'new' AND sp.edition_id IS NOT NULL
                   AND sp.game_id IN (SELECT game_id FROM game_release WHERE release_date >= CAST(utcnow() AS date))
+                  AND sp.game_id NOT IN (SELECT game_id FROM out_already)
                 GROUP BY sp.game_id, sp.edition_id
             ),
             picked AS (

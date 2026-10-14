@@ -26,7 +26,7 @@ async function loadList() {
                     <strong class="text-truncate">${esc(c.title)}</strong>
                     ${c.unread ? `<span class="badge rounded-pill text-bg-danger">${c.unread}</span>` : ""}
                 </div>
-                <div class="small">${esc(userLabel(c.other_username))} ·${t(c.role === "buyer" ? "you_buy" : "you_sell")}</div>
+                <div class="small">${avatarImage(c.other_avatar, 18)} ${esc(userLabel(c.other_username))} ·${t(c.role === "buyer" ? "you_buy" : "you_sell")}</div>
                 <div class="small preview opacity-75">${esc(c.last_event ? eventText(c.last_event) : c.last_body || (c.last_photos ? t("chat_photo") : ""))}</div>
             </div>
         </a>`).join("");
@@ -72,7 +72,7 @@ function renderChat(newMessages) {
     listing.href = `/listing/${open.listing_id}`;
     listing.textContent = `${open.title} · ${eur.format(open.price)}`;
     document.getElementById("chat-with").innerHTML =
-        `${esc(t(open.role === "buyer" ? "you_buy_from" : "you_sell_to"))} ${userLink(open.other_username)} · ${esc(open.platform_name)}`;
+        `${esc(t(open.role === "buyer" ? "you_buy_from" : "you_sell_to"))} ${avatarImage(open.other_avatar, 22)} ${userLink(open.other_username)} · ${esc(open.platform_name)}`;
     // the other side deleted their account: the conversation stays to read, nothing more can be sent
     document.getElementById("chat-form").classList.toggle("d-none", open.other_deleted);
     const status = document.getElementById("chat-status");

@@ -51,7 +51,7 @@ def as_dicts(listings):
             "created_at", "updated_at", "sold_at", "removed_by_moderator",
             title=l.game.title, platform=l.game.platform.code, platform_name=l.game.platform.name,
             edition=l.edition.name if l.edition else None,
-            seller_username=l.seller.username, seller_name=l.seller.display_name,
+            seller_username=l.seller.username, seller_name=l.seller.display_name, seller_avatar=l.seller.avatar,
             seller_since=json_value(l.seller.created_at), seller_rating=rating, seller_rating_count=count,
             photos=[fields(p, "id", "listing_id", "position", "photo_key", "thumb_key",
                            url=storage.url(p.photo_key), thumb_url=storage.url(p.thumb_key)) for p in l.photos],
