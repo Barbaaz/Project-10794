@@ -21,7 +21,7 @@ from sqlalchemy.orm import aliased
 from app.models import (
     CollectionItem, Game, GameEdition, GameReview, Listing, MergedId, Platform, Store, StoreProduct,
 )
-from core.editions import edition_key_of, is_excluded
+from core.editions import edition_key_of, is_excluded, is_merchandise
 from core.titles import best_title
 from core.normalizer import numerals, split_plus_numbers
 from db import session
@@ -52,7 +52,7 @@ def rematch_all(dry_run=False):
 
         for sp in products:
             old_game, old_edition = sp.game_id, sp.edition_id
-            if is_excluded(sp.external_name):
+            if is_excluded(sp.external_name) or is_merchandise(sp.external_name):
                 if (old_game, old_edition, sp.is_active) == (None, None, False):
                     continue
                 sp.game_id, sp.edition_id, sp.is_active = None, None, False

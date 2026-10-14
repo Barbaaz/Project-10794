@@ -1,6 +1,6 @@
 import pytest
 
-from core.editions import is_excluded, learn_phrase, parse_title
+from core.editions import is_excluded, is_merchandise, learn_phrase, parse_title
 from core.normalizer import normalize_name
 
 
@@ -89,6 +89,22 @@ def test_same_game_from_different_stores_normalizes_the_same(a, b):
 ])
 def test_codigo_na_caixa_is_excluded(name, excluded):
     assert is_excluded(name) == excluded
+
+
+@pytest.mark.parametrize("name, merchandise", [
+    # what the stores filed with their games (user, 2026-10-14)
+    ("Figura FiGGYZ - Metal Gear Solid 3 - The Boss 099", True),
+    ("Funko Pop! Kratos God of War", True),
+    ("PS5 Maxx Tech Turbo Boost Racing Kit", True),
+    ("Shine Star PC 100DVD2N game case 100 units", True),
+    # games: a gift in brackets, a game with "Funko" in its name
+    ("Funko Fusion PS5", False),
+    ("EA SPORTS FC 26 (Oferta Porta-Chaves) PS5", False),
+    ("LEGO Batman: Legacy of the Dark Knight - Deluxe Edition (Inclui Mini Figura LEGO) Nintendo Switch 2", False),
+    ("Luigi's Mansion 2 HD Nintendo Switch (Oferta Poster)", False),
+])
+def test_merchandise_is_not_kept(name, merchandise):
+    assert is_merchandise(name) == merchandise
 
 
 @pytest.mark.parametrize("name, game_key, edition_key", [
