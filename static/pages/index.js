@@ -1273,10 +1273,10 @@ function openMerge(a, b) {
 function fillCardMenu(focusKind) {
     const { menu, group } = cardMenu;
     const mine = collectionIds[group.edition_id] || {};
-    // the icon says whether it's on, as on the card's round button (user, 2026-10-14: owned = the tick):
-    // a gold filled star when wished, a blue tick when owned, grey when not
+    // the icon says whether it's on: a gold filled star when wished, blue books (Coleção's icon) when owned,
+    // grey when not
     const items = [["wishlist", "star", t("collection_add_wishlist"), Boolean(mine.wishlist)],
-                   ["owned", "owned", t("collection_add_owned"), Boolean(mine.owned)]];
+                   ["owned", "library", t("collection_add_owned"), Boolean(mine.owned)]];
     menu.innerHTML = items.map(([kind, name, label, on]) => `
         <button type="button" class="dropdown-item" role="menuitemcheckbox" aria-checked="${on}" data-kind="${kind}">
             <span class="menu-icon menu-icon-${kind}">${icon(name, 16, { filled: on && kind === "wishlist" })}</span>${esc(label)}</button>`).join("") + `
