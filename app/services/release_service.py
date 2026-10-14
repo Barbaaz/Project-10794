@@ -1,5 +1,5 @@
 """Pre-orders and upcoming releases for the front page."""
-from app.services.common import EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, cached, card_cover, card_group
+from app.services.common import EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, cached, card_cover, card_group
 from app.services.review_service import mark_review_scores
 from app.services.tag_service import mark_historical_lows
 from db import fetch_all, placeholders
@@ -85,37 +85,57 @@ def preorders():
 
 def upcoming_releases():
     """
-    Games coming out from today on, one row per game (all editions), with the cheapest
-    new offer in stock or on pre-order. Sorted by date; "31/12" estimates at the end.
+    Games coming out from today on, as cards (same shape as /preorders): one per game, its Standard
+    edition (else its cheapest), with the new offers in stock or on pre-order. Each also has
+    release_date / date_is_estimate, `editions` (how many the game has), `hypes` (IGDB users following
+    it) and `wishes` (our users wishing for it): Lançamentos' most anticipated and its calendar
+    (user, 2026-10-14). Sorted by date; "31/12" estimates at the end.
     """
     def compute():
-        rows = fetch_all(f"""
+        games = fetch_all(f"""
             WITH {GAME_RELEASE_DATES},
-            prices AS (
-                SELECT sp.game_id, sp.url, s.slug AS store, s.name AS store_name, last.price,
-                       ROW_NUMBER() OVER (PARTITION BY sp.game_id ORDER BY last.price, sp.id) AS rn
+            editions AS (
+                SELECT sp.game_id, sp.edition_id, MIN(CASE WHEN last.in_stock THEN last.price END) AS best
                 FROM store_products sp
-                JOIN stores s ON s.id = sp.store_id
                 {LATEST_PRICE}
-                -- a sold-out pre-order (e.g. a limited edition) can't be bought, so it isn't a price
-                WHERE sp.is_active AND sp.condition = 'new' AND last.in_stock
-                  AND sp.game_id IN (SELECT game_id FROM game_release
-                                     WHERE release_date >= CAST(utcnow() AS date))
+                WHERE sp.is_active AND sp.condition = 'new' AND sp.edition_id IS NOT NULL
+                  AND sp.game_id IN (SELECT game_id FROM game_release WHERE release_date >= CAST(utcnow() AS date))
+                GROUP BY sp.game_id, sp.edition_id
+            ),
+            picked AS (
+                SELECT ed.*, COUNT(*) OVER (PARTITION BY ed.game_id) AS editions,
+                       ROW_NUMBER() OVER (PARTITION BY ed.game_id
+                                          ORDER BY CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, ed.best NULLS LAST,
+                                                   ed.edition_id) AS rn
+                FROM editions ed
+                JOIN game_editions e ON e.id = ed.edition_id
             )
-            SELECT g.id AS game_id, g.title, NULLIF(g.title_en, '') AS title_en, p.code AS platform, p.name AS platform_name, g.image_url AS image,
-                   r.release_date, r.date_is_estimate,
-                   pr.price AS best_price, pr.store, pr.store_name, pr.url,
-                   (SELECT COUNT(DISTINCT sp.edition_id) FROM store_products sp
-                    WHERE sp.game_id = g.id AND sp.is_active) AS editions
-            FROM game_release r
-            JOIN games g ON g.id = r.game_id
+            SELECT {EDITION_CARD_COLUMNS}, r.release_date, r.date_is_estimate, pk.editions,
+                   COALESCE(g.hypes, 0) AS hypes,
+                   (SELECT COUNT(DISTINCT ci.user_id) FROM collection_items ci
+                    WHERE ci.kind = 'wishlist' AND ci.game_id = g.id) AS wishes
+            FROM picked pk
+            JOIN game_release r ON r.game_id = pk.game_id
+            JOIN games g ON g.id = pk.game_id
             JOIN platforms p ON p.id = g.platform_id
-            LEFT JOIN prices pr ON pr.game_id = g.id AND pr.rn = 1
-            WHERE r.release_date >= CAST(utcnow() AS date) AND g.kind = 'game'
+            JOIN game_editions e ON e.id = pk.edition_id
+            WHERE pk.rn = 1 AND r.release_date >= CAST(utcnow() AS date) AND g.kind = 'game'
             ORDER BY r.date_is_estimate, r.release_date, g.title, p.sort_order, g.id
         """)
-        for r in rows:
-            r["title"] = better_title(r)
-        return rows
+        offers = {}
+        ids = [g["edition_id"] for g in games]
+        if ids:
+            for o in fetch_all(f"""
+                    SELECT {OFFER_COLUMNS}
+                    FROM current_offers o
+                    JOIN stores s ON s.id = o.store_id
+                    WHERE o.edition_id IN ({placeholders(ids)}) AND o.is_active AND o.condition = 'new' AND o.in_stock
+                    ORDER BY o.price, o.store_product_id""", *ids):
+                offers.setdefault(o["edition_id"], []).append(o)
+        # one card per game, whatever edition each platform shows (PC may have no Standard)
+        groups = [card_group(g, offers.get(g["edition_id"], []), release_date=g["release_date"],
+                             date_is_estimate=g["date_is_estimate"], editions=g["editions"], hypes=g["hypes"],
+                             wishes=g["wishes"], same=g["card_key"]) for g in games]
+        return mark_review_scores(mark_historical_lows(groups))
 
     return cached("releases", compute)

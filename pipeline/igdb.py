@@ -374,7 +374,8 @@ def fill_steam_ids(client=None):
 def refresh_critic_scores(client=None):
     """
     Critics' scores of every matched game, asked again each full run: reviews come out around a
-    game's release, after it was matched. 500 games per request (~8 for 4,000 games).
+    game's release, after it was matched. Also its hypes (follows before release: Lançamentos' most
+    anticipated), which change daily. 500 games per request (~8 for 4,000 games).
     """
     with connection() as conn:
         cursor = conn.cursor()
@@ -386,13 +387,13 @@ def refresh_critic_scores(client=None):
         for start in range(0, len(ids), BATCH):
             batch = ids[start:start + BATCH]
             found = {g["id"]: g for g in client.query(
-                f"fields id,aggregated_rating,aggregated_rating_count; where id = ({','.join(map(str, batch))}); "
+                f"fields id,aggregated_rating,aggregated_rating_count,hypes; where id = ({','.join(map(str, batch))}); "
                 f"limit {BATCH};")}
             for igdb_id in batch:
                 if igdb_id in found:     # a game IGDB didn't return keeps its score
                     score = critic_score(found[igdb_id])
-                    cursor.execute("UPDATE games SET rating = ?, rating_count = ? WHERE igdb_id = ?",
-                                   score["rating"], score["rating_count"], igdb_id)
+                    cursor.execute("UPDATE games SET rating = ?, rating_count = ?, hypes = ? WHERE igdb_id = ?",
+                                   score["rating"], score["rating_count"], found[igdb_id].get("hypes") or 0, igdb_id)
             conn.commit()
     log.info("IGDB: critics' scores refreshed for %d games", len(ids))
     return len(ids)

@@ -142,13 +142,14 @@ def test_refresh_critic_scores_keeps_games_igdb_did_not_return(monkeypatch):
 
     class FakeClient:
         def query(self, body):
-            return [{"id": 1, "aggregated_rating": 88.6, "aggregated_rating_count": 30}, {"id": 2}]
+            return [{"id": 1, "aggregated_rating": 88.6, "aggregated_rating_count": 30, "hypes": 412}, {"id": 2}]
 
     conn = FakeConn()
     import db
     monkeypatch.setattr(db, "get_connection", lambda: conn)
     assert igdb.refresh_critic_scores(FakeClient()) == 3
-    assert {params[-1]: params[:-1] for params in conn.c.updates} == {1: (89, 30), 2: (None, 0)}
+    # (rating, critics, hypes): no hypes from IGDB = nobody following it
+    assert {params[-1]: params[:-1] for params in conn.c.updates} == {1: (89, 30, 412), 2: (None, 0, 0)}
 
 
 def test_fill_steam_ids_marks_games_without_one(monkeypatch):
