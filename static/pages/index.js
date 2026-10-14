@@ -1276,13 +1276,13 @@ function fillCardMenu(focusKind) {
     // the icon says whether it's on, as on the card's round button (user, 2026-10-14: owned = the tick):
     // a gold filled star when wished, a blue tick when owned, grey when not
     const items = [["wishlist", "star", t("collection_add_wishlist"), Boolean(mine.wishlist)],
-                   ["owned", "check", t("collection_add_owned"), Boolean(mine.owned)]];
+                   ["owned", "owned", t("collection_add_owned"), Boolean(mine.owned)]];
     menu.innerHTML = items.map(([kind, name, label, on]) => `
         <button type="button" class="dropdown-item" role="menuitemcheckbox" aria-checked="${on}" data-kind="${kind}">
-            <span class="mark mark-${kind}">${icon(name, 16, { filled: on && kind === "wishlist" })}</span>${esc(label)}</button>`).join("") + `
+            <span class="menu-icon menu-icon-${kind}">${icon(name, 16, { filled: on && kind === "wishlist" })}</span>${esc(label)}</button>`).join("") + `
         <hr class="dropdown-divider">
         <a class="dropdown-item" role="menuitem" href="/sell?game_id=${group.game_id}&edition_id=${group.edition_id}">
-            <span class="mark">${icon("tag", 16)}</span>${esc(t("card_sell"))}</a>`;
+            <span class="menu-icon">${icon("tag", 16)}</span>${esc(t("card_sell"))}</a>`;
     menu.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => toggleCardItem(group, b.dataset.kind));
     menu.querySelector(`[data-kind="${focusKind}"]`).focus();
 }

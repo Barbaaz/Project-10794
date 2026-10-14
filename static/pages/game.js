@@ -711,7 +711,7 @@ function reviewItem(r) {
         ${r.body ? clampedText(r.body, 5) : ""}
         <div class="small text-body-secondary mt-1">
             ${userLink(r.username)}
-            ${r.owner ? `<span class="badge bg-body-secondary text-body border" title="${esc(t("review_owner_hint"))}">${icon("check", 13)} ${esc(t("review_owner"))}</span>` : ""}
+            ${r.owner ? `<span class="badge bg-body-secondary text-body border" title="${esc(t("review_owner_hint"))}">${icon("owned", 13)} ${esc(t("review_owner"))}</span>` : ""}
             · ${fmtDate(r.created_at)}${r.edited ? ` (${esc(t("review_edited"))})` : ""}
             ${r.mine ? "" : `· ${reportButton("review", r.id)}`}
         </div>

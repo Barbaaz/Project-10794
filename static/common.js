@@ -51,6 +51,7 @@ const ICONS = {
     lock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
     gamepad: '<line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.59l-.92 8.31A3 3 0 0 0 4.77 20.2a3 3 0 0 0 2.73-1.75L8.6 16h6.8l1.1 2.45a3 3 0 0 0 5.72-1.55l-.92-8.31A4 4 0 0 0 17.32 5z"/>',
     check: '<path d="M20 6 9 17l-5-5"/>',
+    owned: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',      // the cards' owned mark: a tick in a circle
     moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
     more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
     settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
@@ -171,7 +172,7 @@ async function renderAccountArea() {
            title="${esc(label)}" aria-label="${esc(label)}"><span class="icon">${icon}</span>${iconOnly ? "" : `<span class="d-none d-lg-inline">${esc(label)}</span>`}</a>`;
     box.innerHTML = `
         ${navButton("/sell", icon("tag"), t("nav_sell"))}
-        ${navButton("/collection", icon("check"), t("nav_collection"), 'id="collection-link"')}
+        ${navButton("/collection", icon("owned"), t("nav_collection"), 'id="collection-link"', true)}
         ${navButton("/wishlist", icon("star"), t("nav_wishlist"), 'id="wishlist-link"', true)}
         ${navButton("/messages", icon("inbox"), t("messages"), 'id="messages-link"', true)}
         <div class="notifications position-relative">
