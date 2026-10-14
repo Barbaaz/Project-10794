@@ -46,6 +46,17 @@ EXCLUDED = re.compile(
     re.IGNORECASE,
 )
 
+# Not games, though a store files them with its games (user, 2026-10-14: figures in the add-a-game search):
+# figures, plush toys, mugs, t-shirts, empty cases, a "racing kit". Only the name outside brackets counts:
+# "(Oferta Porta-Chaves)", "(Inclui Mini Figura LEGO)" are gifts with a real game
+MERCHANDISE = re.compile(
+    r"\bfiguras?\b|\bfigures?\b|\bfiggyz\b|\bfunko\s+pop|\bpop!\s*vinyl|\bnendoroid\b|\bpeluches?\b|\bplush\w*"
+    r"|\bporta[- ]chaves\b|\bkey\s*chains?\b|\bcanecas?\b|\bmugs?\b|\bt-?shirts?\b|\bposters?\b"
+    r"|\bgame\s+cases?\b|\bcaixas?\s+(?:de|para)\s+jogos?\b|\bracing\s+kit\b",
+    re.IGNORECASE,
+)
+IN_BRACKETS = re.compile(r"[\(\[][^\)\]]*[\)\]]")
+
 # Tags in brackets that make it a different product. Other brackets ("OFERTA DLC", "PT") are ignored.
 BRACKET_TAGS = [
     ("PlayStation Hits", re.compile(r"playstation\s+hits", re.IGNORECASE)),
@@ -90,6 +101,11 @@ class ParsedTitle:
 def is_excluded(name):
     """True for "Código na caixa" / "Code in box" / "Download Digital" products, which are not stored."""
     return bool(EXCLUDED.search(name))
+
+
+def is_merchandise(name):
+    """True for a figure, a mug, an empty case... a store lists among its games: not stored either."""
+    return bool(MERCHANDISE.search(IN_BRACKETS.sub(" ", name)))
 
 
 def parse_title(name, known_phrases=()):

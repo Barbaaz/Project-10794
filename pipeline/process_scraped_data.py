@@ -5,7 +5,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from sqlalchemy import func, select, update
 
 from app.models import NOW, Game, GameEdition, MatchOverride, Platform, PriceSnapshot, Store, StoreProduct
-from core.editions import is_excluded
+from core.editions import is_excluded, is_merchandise
 from db import json_or_none, session
 from pipeline.deduplicator import deduplicate
 from pipeline.matcher import MATCH_ONLY_STORES, GameMatcher
@@ -23,11 +23,11 @@ def process_products(store_slug, products, full_catalog=True, still_listed=None)
     full_catalog=True means `products` is the store's whole catalogue, so
     products not seen in this run are marked inactive (removed from the store). A store read in
     part per run (Techinn) passes still_listed, the URLs it still sells: only the others are.
-    "Código na caixa" products are skipped (core.editions.is_excluded). A MATCH_ONLY_STORES
+    "Código na caixa" products and merchandise are skipped (core.editions.is_excluded, is_merchandise). A MATCH_ONLY_STORES
     store's products only link to games and editions that already exist.
     """
     scraped = deduplicate(products)
-    products = [p for p in scraped if not is_excluded(p["external_name"])]
+    products = [p for p in scraped if not is_excluded(p["external_name"]) and not is_merchandise(p["external_name"])]
     stats = {
         "products": len(products), "excluded": len(scraped) - len(products),
         "new_products": 0, "price_changes": 0, "deactivated": 0,
