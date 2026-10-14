@@ -153,11 +153,12 @@ const SECTIONS = ["favourites", "most_played", "most_valuable", "achievements"];
 const MAX_FAVOURITES = 10;
 
 function showShowcase(sections) {
+    // HTML (the trophies line has an icon)
     const caption = (section, g, i) => ({
         favourites: `#${i + 1}`,
-        most_played: `${fmtNumber(g.hours)} h`,
-        most_valuable: g.value != null ? eur.format(g.value) : "",
-        achievements: `${icon("trophy", 13)} ${g.achievements}/${g.achievements_total}`,
+        most_played: esc(`${fmtNumber(g.hours)} h`),
+        most_valuable: g.value != null ? esc(eur.format(g.value)) : "",
+        achievements: `${icon("trophy", 13)} ${esc(`${g.achievements}/${g.achievements_total}`)}`,
     })[section];
     document.getElementById("showcase").innerHTML = sections.map(s => `
         <section class="mb-4">
@@ -167,7 +168,7 @@ function showShowcase(sections) {
                     ${g.image ? `<img src="${esc(g.image)}" alt="" class="w-100 rounded mb-1 object-fit-cover ${coverClass(g.image)}" style="aspect-ratio: 3 / 4;">`
                               : `<div class="w-100 rounded mb-1 bg-body-secondary" style="aspect-ratio: 3 / 4;"></div>`}
                     <div class="text-truncate fw-semibold">${esc(localName(g) || "")}</div>
-                    <div class="text-body-secondary text-truncate">${esc(caption(s.section, g, i))} · ${esc(g.platform_name || "")}</div>
+                    <div class="text-body-secondary text-truncate">${caption(s.section, g, i)} · ${esc(g.platform_name || "")}</div>
                 </a></div>`).join("")}
             </div>
         </section>`).join("");
