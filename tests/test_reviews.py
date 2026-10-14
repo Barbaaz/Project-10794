@@ -40,7 +40,7 @@ def test_one_review_per_user_and_game(market):
 def test_review_rules(market):
     client, game = market["client"], market["game"]
     sign_up(client, "ana")
-    for score in (0, 11, "x", None):
+    for score in (0, -1, -10, 11, "x", None):
         assert save(client, game, score).get_json()["error"] == "score_invalid"
     assert save(client, game, 5, "t" * 121).get_json()["error"] == "review_title_long"
     assert save(client, game, 5, body="b" * 4001).get_json()["error"] == "review_text_long"
@@ -66,6 +66,7 @@ def test_score_from_the_collection(market):
     assert (mine["score"], mine["title"], mine["body"]) == (9, "Muito bom", "Gostei.")    # text kept
     assert score("").get_json()["error"] == "review_has_text"            # text: deleted on the game page
     assert score(11).get_json()["error"] == "score_invalid"
+    assert score(-3).get_json()["error"] == "score_invalid"
 
     save(client, game, 9)                                                   # no text: "" takes it away
     assert score("").get_json() == {"score": None}
