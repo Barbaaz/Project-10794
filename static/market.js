@@ -102,7 +102,7 @@ function listingCard(listing, { showSeller = true } = {}) {
                         <strong class="fs-5">${eur.format(listing.price)}</strong>${statusBadge(listing.status)}
                     </div>
                     <div class="small">${esc(conditionLabel(listing.condition))}</div>
-                    ${showSeller ? `<div class="small text-body-secondary text-truncate">${esc(sellerName(listing))}
+                    ${showSeller ? `<div class="small text-body-secondary text-truncate">${avatarImage(listing.seller_avatar, 18)} ${esc(sellerName(listing))}
                         ${ratingBadge(listing.seller_rating, listing.seller_rating_count)}</div>` : ""}
                 </div>
             </a>

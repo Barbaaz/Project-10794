@@ -50,7 +50,8 @@ def _demo_users(s):
 
 def remove():
     with session() as s:
-        users = [u.id for u in _demo_users(s)]
+        demo = _demo_users(s)
+        users = [u.id for u in demo]
         if not users:
             log.info("No demo marketplace data")
             return
@@ -60,6 +61,7 @@ def remove():
         keys = [key for l in listings for p in l.photos for key in (p.photo_key, p.thumb_key)]
         sent = s.scalars(select(MessagePhoto).join(Message).where(Message.conversation_id.in_(conversations))).all()
         keys += [key for p in sent for key in (p.photo_key, p.thumb_key)]
+        keys += [u.avatar_key for u in demo if u.avatar_key]      # a picture given to try the pages
         s.execute(delete(Report).where(Report.reporter_id.in_(users)))
         s.execute(delete(ModerationLog).where(ModerationLog.moderator_id.in_(users)))
         s.execute(delete(Rating).where(Rating.conversation_id.in_(conversations)))

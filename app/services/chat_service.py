@@ -322,7 +322,7 @@ def _as_dict(c, user_id):
         title=listing.game.title, platform_name=listing.game.platform.name,
         buyer_username=c.buyer.username, buyer_name=c.buyer.display_name,
         seller_username=c.seller.username, seller_name=c.seller.display_name,
-        role=role, other_username=other.username, other_name=other.display_name,
+        role=role, other_username=other.username, other_name=other.display_name, other_avatar=other.avatar,
         other_deleted=other.deleted_at is not None,
         thumb_url=storage.url(thumb) if thumb else None,
         steps=[] if other.deleted_at else available_steps(c.deal_status, role, listing.status),
