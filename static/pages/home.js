@@ -52,7 +52,7 @@ function row(title, sub, href, cards) {
     section.setAttribute("aria-label", title);
     section.innerHTML = `
         <div class="row-head"><div class="min-w-0"><h2>${esc(title)}</h2><div class="row-sub">${esc(sub)}</div></div>
-            ${href ? `<a class="see-all" href="${href}">${esc(t("home_see_all"))} &rsaquo;</a>` : ""}
+            ${href ? `<a class="btn btn-sm btn-secondary see-all" href="${href}">${esc(t("home_see_all"))} &rsaquo;</a>` : ""}
             ${cards.length ? `<div class="rail-arrows ${href ? "" : "ms-auto"}">
                 <button type="button" class="rail-btn prev" aria-label="${esc(t("home_row_prev"))}">&lsaquo;</button>
                 <button type="button" class="rail-btn next" aria-label="${esc(t("home_row_next"))}">&rsaquo;</button></div>` : ""}</div>
@@ -82,7 +82,7 @@ function drawSlider() {
     if (!top.length) return;
     const slider = anticipatedSlider(top);
     slider.querySelector("h3").parentElement.insertAdjacentHTML("beforeend",
-        `<a class="see-all small ms-auto" href="/browse?${query({ tab: "releases", platform })}">${esc(t("home_see_all"))} &rsaquo;</a>`);
+        `<a class="btn btn-sm btn-secondary see-all" href="/browse?${query({ tab: "releases", platform })}">${esc(t("home_see_all"))} &rsaquo;</a>`);
     box.appendChild(slider);
 }
 
