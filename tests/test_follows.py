@@ -41,16 +41,14 @@ def test_following_needs_a_login(market):
 
 def test_compare_collections(market):
     """Games both have (one game across platforms and copies), the ones only one has; hours, trophies."""
-    from app.services import collection_service     # trophies only come from the imports, which write them so
     client = market["client"]
-    ana = sign_up(client, "ana_c")["id"]
-    add(client, market["edition"], hours="10")
-    collection_service.update(ana, item_id(client, market["edition"]), {"achievements": 5, "achievements_total": 50})
+    sign_up(client, "ana_c")
+    add(client, market["edition"], hours="10", achievements=5, achievements_total=50)
     add(client, market["edition"], format="digital", hours="2,5")                  # the same game, a download
     add(client, market["other_edition"], status="finished")
-    rui = sign_up(client, "rui_c")["id"]
-    add(client, market["edition"], hours="40")
-    collection_service.update(rui, item_id(client, market["edition"]), {"achievements": 50, "achievements_total": 50, "platinum": True})
+    sign_up(client, "rui_c")
+    add(client, market["edition"], hours="40", achievements=50, achievements_total=50)
+    client.patch(f"/api/collection/{item_id(client, market['edition'])}", json={"platinum": True}, headers=HEADERS)
     answer = client.get("/api/users/ana_c/compare")
     assert (answer.status_code, answer.get_json()["error"]) == (403, "collection_private")
 

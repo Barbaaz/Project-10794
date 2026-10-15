@@ -45,25 +45,37 @@
         .tag-sale { background: var(--bs-danger); color: #fff; }
         .tag-low { background: #0f7a4a; color: #fff; }
         .tag-new { background: var(--bs-primary); color: #fff; }
-        /* a row of cards that scrolls sideways (snapping to a card); arrows where there's a mouse */
-        .rail-wrap { position: relative; }
-        .rail { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 4 * 1rem) / 5); gap: 1rem;
+        /* a row of cards as a slider (user, 2026-10-15: "like the rest"): the arrows in its title bar, always there, and
+           the next card showing at the edge; it also scrolls by swipe / trackpad, snapping to a card */
+        .rail { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 5 * 1rem) / 5.4); gap: 1rem;
                 overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: .25rem; }
         .rail > * { scroll-snap-align: start; }
-        @media (max-width: 991.98px) { .rail { grid-auto-columns: calc((100% - 2 * 1rem) / 3); } }
+        @media (max-width: 991.98px) { .rail { grid-auto-columns: calc((100% - 3 * 1rem) / 3.4); } }
         @media (max-width: 575.98px) { .rail { grid-auto-columns: 42%; gap: .75rem; } }
-        .rail-btn { position: absolute; top: 35%; width: 2.4rem; height: 2.4rem; border-radius: 50%; border: 1px solid var(--bs-border-color);
-                    background: var(--bs-body-bg); color: var(--bs-body-color); box-shadow: 0 2px 8px rgb(0 0 0 / .15); z-index: 1; }
-        .rail-btn:disabled { opacity: 0; pointer-events: none; }
-        .rail-btn.prev { left: -.6rem; }
-        .rail-btn.next { right: -.6rem; }
-        @media (hover: none), (max-width: 575.98px) { .rail-btn { display: none; } }
+        .rail-arrows { display: flex; gap: .35rem; }
+        .rail-btn { width: 2.1rem; height: 2.1rem; border-radius: 50%; border: 1px solid var(--bs-border-color); padding: 0;
+                    background: var(--bs-body-bg); color: var(--bs-body-color); font-size: 1.1rem; line-height: 1; }
+        .rail-btn:hover:not(:disabled) { background: var(--bs-secondary-bg); }
+        .rail-btn:disabled { opacity: .35; }
+        .row-head { align-items: center; }
     </style>
 </head>
 <body class="bg-body-tertiary">
 {% set landing = true %}
 {% include "_header.html" %}
 <main class="container-xxl pb-5">
+    <!-- the sections (user, 2026-10-15: a way to the tabs, which moved to /browse) -->
+    <nav class="tabs-band" data-i18n-aria-label="sections">
+        <ul class="nav nav-pills front-tabs">
+            <li class="nav-item"><a class="nav-link" href="/browse?tab=discounts" data-i18n="tab_discounts"></a></li>
+            <li class="nav-item"><a class="nav-link" href="/browse?tab=preorders" data-i18n="tab_preorders"></a></li>
+            <li class="nav-item"><a class="nav-link" href="/browse?tab=releases" data-i18n="tab_releases"></a></li>
+            <li class="nav-item"><a class="nav-link" href="/browse?tab=catalog" data-i18n="tab_catalog"></a></li>
+            <li class="nav-item"><a class="nav-link" href="/browse?tab=special" data-i18n="tab_special"></a></li>
+            <li class="nav-item"><a class="nav-link" href="/browse?tab=hardware" data-i18n="tab_hardware"></a></li>
+            <li class="nav-item"><a class="nav-link" href="/browse?tab=market" data-i18n="tab_market"></a></li>
+        </ul>
+    </nav>
     <div id="home-platforms" class="home-platforms" role="group" data-i18n-aria-label="platform"></div>
     <div id="home-slider"></div>
     <div id="home-rows"></div>

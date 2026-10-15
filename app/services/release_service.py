@@ -8,6 +8,10 @@ from db import fetch_all, placeholders
 
 # One release date per game, from what the stores announce for its products:
 # a real date beats a "31/12" placeholder, then the date most stores agree on, then the earliest.
+# IGDB's date for the game's platform (user, 2026-10-15: for games the stores have "por anunciar") is one more
+# candidate below every store date of its kind: a store's real date wins over IGDB's day (the Portuguese
+# release), IGDB's day over the stores' "31/12", a store's "31/12" over IGDB's year. Only a date to come, for a
+# game the stores have on pre-order or dated: IGDB gives a date, it never takes a game out of the upcoming ones.
 # out_already: games with only a "31/12" placeholder that a store already sells new, in stock, not as a
 # pre-order and with no date to come: they're out, whatever the others still say (user, 2026-10-14: Silent
 # Hill: Townfall came out the month before, two stores still had it "31/12"). A real date isn't overruled:
@@ -16,15 +20,21 @@ GAME_RELEASE_DATES = f"""
 game_dates AS (
     SELECT game_id, release_date,
            (EXTRACT(MONTH FROM release_date) = 12 AND EXTRACT(DAY FROM release_date) = 31) AS date_is_estimate,
-           COUNT(*) AS stores
+           COUNT(*) AS stores, 0 AS from_igdb
     FROM store_products
     WHERE is_active AND release_date IS NOT NULL AND game_id IS NOT NULL
     GROUP BY game_id, release_date
+    UNION ALL
+    SELECT g.id, g.igdb_platform_release, NOT g.igdb_platform_release_exact, 0, 1
+    FROM games g
+    WHERE g.igdb_platform_release >= CAST(utcnow() AS date)
+      AND EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active
+                  AND (sp.is_preorder OR sp.release_date IS NOT NULL))
 ),
 game_release AS (
     SELECT game_id, release_date, date_is_estimate
     FROM (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY game_id ORDER BY date_is_estimate, stores DESC, release_date) AS rn
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY game_id ORDER BY date_is_estimate, from_igdb, stores DESC, release_date) AS rn
         FROM game_dates
     ) x
     WHERE rn = 1
@@ -119,7 +129,9 @@ def upcoming_releases():
     edition (else its cheapest), with the new offers in stock or on pre-order. Each also has
     release_date / date_is_estimate, `editions` (how many the game has), `hypes` (IGDB users following
     it) and `wishes` (our users wishing for it): Lançamentos' most anticipated and its calendar
-    (user, 2026-10-14). Sorted by date; "31/12" estimates at the end.
+    (user, 2026-10-14). Sorted by date; "31/12" estimates at the end. igdb_release_date: the game's first
+    release anywhere (IGDB): a physical edition or a port of a game out already isn't "most anticipated"
+    (slider.js mostAnticipated; user, 2026-10-15: Silksong, The Alters), but stays a release in the calendar.
     """
     def compute():
         games = fetch_all(f"""
@@ -142,7 +154,7 @@ def upcoming_releases():
                 JOIN game_editions e ON e.id = ed.edition_id
             )
             SELECT {EDITION_CARD_COLUMNS}, r.release_date, r.date_is_estimate, pk.editions,
-                   COALESCE(g.hypes, 0) AS hypes,
+                   COALESCE(g.hypes, 0) AS hypes, g.first_release_date AS igdb_release_date,
                    (SELECT COUNT(DISTINCT ci.user_id) FROM collection_items ci
                     WHERE ci.kind = 'wishlist' AND ci.game_id = g.id) AS wishes
             FROM picked pk
@@ -166,7 +178,8 @@ def upcoming_releases():
         # one card per game, whatever edition each platform shows (PC may have no Standard)
         groups = [card_group(g, offers.get(g["edition_id"], []), release_date=g["release_date"],
                              date_is_estimate=g["date_is_estimate"], editions=g["editions"], hypes=g["hypes"],
-                             wishes=g["wishes"], same=g["card_key"]) for g in games]
+                             wishes=g["wishes"], same=g["card_key"], igdb_release_date=g["igdb_release_date"])
+                  for g in games]
         return mark_review_scores(mark_historical_lows(groups))
 
     return cached("releases", compute)

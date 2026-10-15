@@ -45,19 +45,19 @@ function card(g, badge) {
     </a>`;
 }
 
-// A row: its title and line, "Ver tudo", and the cards scrolling sideways (arrows where there's a mouse)
+// A row: its title and line, "Ver tudo" and the arrows, then the cards as a slider (a page of cards per arrow)
 function row(title, sub, href, cards) {
     const section = document.createElement("section");
     section.className = "mb-4";
     section.setAttribute("aria-label", title);
     section.innerHTML = `
         <div class="row-head"><div class="min-w-0"><h2>${esc(title)}</h2><div class="row-sub">${esc(sub)}</div></div>
-            ${href ? `<a class="see-all" href="${href}">${esc(t("home_see_all"))} &rsaquo;</a>` : ""}</div>
-        ${cards.length ? `<div class="rail-wrap">
-            <button type="button" class="rail-btn prev" aria-label="${esc(t("home_row_prev"))}">&lsaquo;</button>
-            <div class="rail">${cards.join("")}</div>
-            <button type="button" class="rail-btn next" aria-label="${esc(t("home_row_next"))}">&rsaquo;</button>
-        </div>` : `<p class="text-body-secondary small mb-0">${esc(t("home_row_empty"))}</p>`}`;
+            ${href ? `<a class="see-all" href="${href}">${esc(t("home_see_all"))} &rsaquo;</a>` : ""}
+            ${cards.length ? `<div class="rail-arrows ${href ? "" : "ms-auto"}">
+                <button type="button" class="rail-btn prev" aria-label="${esc(t("home_row_prev"))}">&lsaquo;</button>
+                <button type="button" class="rail-btn next" aria-label="${esc(t("home_row_next"))}">&rsaquo;</button></div>` : ""}</div>
+        ${cards.length ? `<div class="rail">${cards.join("")}</div>`
+                       : `<p class="text-body-secondary small mb-0">${esc(t("home_row_empty"))}</p>`}`;
     const rail = section.querySelector(".rail");
     if (rail) {
         const prev = section.querySelector(".prev"), next = section.querySelector(".next");
@@ -68,7 +68,6 @@ function row(title, sub, href, cards) {
         prev.onclick = () => rail.scrollBy({ left: -rail.clientWidth, behavior: "smooth" });
         next.onclick = () => rail.scrollBy({ left: rail.clientWidth, behavior: "smooth" });
         rail.addEventListener("scroll", ends, { passive: true });
-        requestAnimationFrame(ends);
     }
     return section;
 }
@@ -126,6 +125,7 @@ async function draw() {
     settled.filter(s => s.status === "rejected").forEach(s => console.error("Erro a carregar a página inicial:", s.reason));
     rows.replaceChildren(...settled.filter(s => s.status === "fulfilled").map(s => s.value));
     rows.removeAttribute("aria-busy");
+    rows.querySelectorAll(".rail").forEach(r => r.dispatchEvent(new Event("scroll")));    // the arrows, now they're measured
 }
 
 async function start() {

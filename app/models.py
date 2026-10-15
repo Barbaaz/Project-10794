@@ -86,6 +86,9 @@ class Game(Base):
     rating: Mapped[int | None] = mapped_column(Integer)          # critics' score 0-100
     rating_count: Mapped[int | None] = mapped_column(Integer)    # critics' reviews it's made of
     hypes: Mapped[int | None] = mapped_column(Integer)           # IGDB users following it before release
+    igdb_platform_release = mapped_column(Date)                  # IGDB's date for its platform (exact: a day)
+    igdb_platform_release_exact: Mapped[bool | None] = mapped_column(Boolean)
+    igdb_dates_checked_at = mapped_column(DateTime)
     pegi: Mapped[str | None] = mapped_column(Unicode(10))
     cover_image_id: Mapped[str | None] = mapped_column(Unicode(50))
     screenshot_ids: Mapped[str | None] = mapped_column(UnicodeText)

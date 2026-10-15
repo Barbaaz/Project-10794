@@ -366,6 +366,10 @@ python -m pytest
   First fill: `python -m pipeline.igdb --limit 6000`; trailers for games matched before they were
   kept: `python -m pipeline.igdb --videos`. The game page shows thumbnails and loads the
   YouTube player (youtube-nocookie) only when a video is clicked.
+- **Release dates from IGDB**: each daily run asks IGDB for the release date, on their own platform, of the
+  games the stores have on pre-order or dated (`python -m pipeline.igdb --release-dates`). Used only where no
+  store gives a real date: IGDB's day over a store's "31/12", never over a store's real date, and only a date
+  still to come.
 
 ## Not getting blocked by the stores
 
