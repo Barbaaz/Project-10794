@@ -44,9 +44,7 @@ def upcoming_releases():
 @bp.get("/releases/recent")
 def recent_releases():
     """Games out in the last weeks (the home page), newest first, one card per game and platform."""
-    platform = text_arg("platform")
-    games = release_service.recent_releases()
-    return jsonify([g for g in games if not platform or g["console"] == platform])
+    return jsonify(release_service.recent_releases(text_arg("platform")))
 
 
 @bp.get("/discounts")

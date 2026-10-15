@@ -9,6 +9,10 @@ CREATE INDEX IF NOT EXISTS ix_store_products_game ON store_products (game_id) WH
 -- All offers for one edition
 CREATE INDEX IF NOT EXISTS ix_store_products_edition ON store_products (edition_id) WHERE is_active;
 
+-- An edition's products also no longer sold: its lowest price ever (tag_service.AT_HISTORICAL_LOW) counts them.
+-- Without it that check read the whole table once per product (6 s for the catalogue's lows, 2026-10-15)
+CREATE INDEX IF NOT EXISTS ix_store_products_edition_all ON store_products (edition_id, condition);
+
 -- Pre-orders and upcoming releases (front page)
 CREATE INDEX IF NOT EXISTS ix_store_products_release ON store_products (release_date)
     INCLUDE (game_id, edition_id, is_preorder) WHERE is_active AND release_date IS NOT NULL;

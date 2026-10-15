@@ -78,3 +78,6 @@ def test_recent_releases_only_the_last_weeks(releases):
     assert [g["name"] for g in recent] == ["Old Game", "Old Game"]
     assert {g["console"] for g in recent} == {"PS5", "Switch"} and len({g["same"] for g in recent}) == 1
     assert all(g["offers"] and g["release_date"] == (date.today() - timedelta(days=3)).isoformat() for g in recent)
+    # one platform's: chosen before the newest are taken (a platform's row stays full)
+    assert [g["console"] for g in release_service.recent_releases("Switch")] == ["Switch"]
+    assert release_service.recent_releases("PC") == []

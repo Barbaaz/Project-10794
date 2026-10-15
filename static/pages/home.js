@@ -7,7 +7,7 @@ const ROW_SIZE = 20;                 // cards in a row
 const SLIDES = 12;                   // games in the slider
 let stores = {};                     // storeName(): "cstech" is "CSTech"
 let platform = HOME_PLATFORMS.includes(saved("homePlatform")) ? saved("homePlatform") : "";
-let upcoming = [], recent = [];      // every platform's; filtered here (the others ask the server per platform)
+let upcoming = [];                   // every platform's, for the slider (filtered here); the rows ask per platform
 
 const json = url => fetch(url).then(r => r.ok ? r.json() : Promise.reject(new Error(`${url}: ${r.status}`)));
 const query = params => new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null)).toString();
@@ -106,22 +106,25 @@ async function lowsRow() {
                page.groups.map(g => card(g, `<span class="badge tag tag-low">${esc(t("home_low_badge"))}</span>`)));
 }
 
-function recentRow() {
-    const cards = mergePlatforms(forPlatform(recent)).slice(0, ROW_SIZE)
+async function recentRow() {
+    const recent = await json(`/api/releases/recent?${query({ platform })}`);
+    const cards = mergePlatforms(recent).slice(0, ROW_SIZE)
         .map(g => card(g, `<span class="badge tag tag-new">${esc(dayLabel(g.release_date))}</span>`));
     return row(t("home_recent"), t("home_recent_sub"), null, cards);
 }
 
-let drawing = 0;         // a quicker platform choice wins over a slower one still loading
+// The rows of the chosen platform, all asked at once; while they load the old ones are dimmed (and can't be
+// clicked), so they're never taken for the new platform's. A quicker choice wins over a slower one still loading
+let drawing = 0;
 async function draw() {
     const mine = ++drawing;
     drawSlider();
     const rows = document.getElementById("home-rows");
     rows.setAttribute("aria-busy", "true");
-    const settled = await Promise.allSettled([savingRow(), lowsRow()]);
+    const settled = await Promise.allSettled([recentRow(), savingRow(), lowsRow()]);
     if (mine !== drawing) return;
-    const [saving, lows] = settled.map(s => s.status === "fulfilled" ? s.value : null);
-    rows.replaceChildren(...[recentRow(), saving, lows].filter(Boolean));
+    settled.filter(s => s.status === "rejected").forEach(s => console.error("Erro a carregar a página inicial:", s.reason));
+    rows.replaceChildren(...settled.filter(s => s.status === "fulfilled").map(s => s.value));
     rows.removeAttribute("aria-busy");
 }
 
@@ -129,14 +132,18 @@ async function start() {
     applyI18n();
     renderAccountArea();
     renderPlatforms();
+    const releases = json("/api/releases");      // the slider's list is the biggest: asked now, drawn when it comes
     try {
-        const [storeList, up, latest] = await Promise.all([json("/api/stores"), json("/api/releases"), json("/api/releases/recent")]);
-        storeList.forEach(s => stores[s.slug] = s);
-        upcoming = up;
-        recent = latest;
+        (await json("/api/stores")).forEach(s => stores[s.slug] = s);     // the cards' store names
     } catch (e) {
-        console.error("Erro a carregar a página inicial:", e);
+        console.error("Erro a carregar as lojas:", e);
     }
-    draw();
+    draw();                                      // the rows don't wait for the slider
+    try {
+        upcoming = await releases;
+        drawSlider();
+    } catch (e) {
+        console.error("Erro a carregar os lançamentos:", e);
+    }
 }
 start();

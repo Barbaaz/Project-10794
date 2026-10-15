@@ -177,11 +177,12 @@ RECENT_DAYS = 45
 RECENT_LIMIT = 40
 
 
-def recent_releases():
+def recent_releases(platform=None):
     """
     Games out in the last RECENT_DAYS days that a store sells new and in stock, newest first (then the most
     followed), as cards like upcoming_releases: one per game and platform, its Standard edition (else its
     cheapest), `same` to fold a game's platforms into one card. "31/12" estimates are left out (no real day).
+    platform: only that one's (filtered before the RECENT_LIMIT newest are taken, so a platform's row stays full).
     """
     def compute():
         games = fetch_all(f"""
@@ -210,10 +211,10 @@ def recent_releases():
             JOIN games g ON g.id = pk.game_id
             JOIN platforms p ON p.id = g.platform_id
             JOIN game_editions e ON e.id = pk.edition_id
-            WHERE pk.rn = 1 AND g.kind = 'game'
+            WHERE pk.rn = 1 AND g.kind = 'game' AND (CAST(? AS text) IS NULL OR p.code = ?)
             ORDER BY r.release_date DESC, COALESCE(g.hypes, 0) DESC, g.title, p.sort_order, g.id
             LIMIT ?
-        """, RECENT_DAYS, RECENT_LIMIT)
+        """, RECENT_DAYS, platform, platform, RECENT_LIMIT)
         offers = {}
         ids = [g["edition_id"] for g in games]
         if ids:
@@ -228,4 +229,4 @@ def recent_releases():
                              same=g["card_key"]) for g in games]
         return mark_review_scores(mark_historical_lows(groups))
 
-    return cached("recent_releases", compute)
+    return cached(("recent_releases", platform), compute)

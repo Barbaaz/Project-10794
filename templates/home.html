@@ -20,6 +20,7 @@
         .min-w-0 { min-width: 0; }
         .home-platforms { display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none; padding: 2px; margin-bottom: 1.25rem; }
         .home-platforms .chip-btn { flex-shrink: 0; white-space: nowrap; }
+        #home-rows[aria-busy="true"] { opacity: .45; pointer-events: none; transition: opacity .15s; }
         .row-head { display: flex; align-items: baseline; gap: .75rem; margin-bottom: .6rem; }
         .row-head h2 { font-size: 1.25rem; font-weight: 800; margin: 0; }
         .row-head .see-all { margin-left: auto; font-size: .9rem; white-space: nowrap; }

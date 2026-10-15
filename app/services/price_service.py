@@ -105,15 +105,18 @@ def _best_store_deals(limit, min_percent, max_percent, platform):
             SELECT *, ROW_NUMBER() OVER (PARTITION BY edition_id, store_id ORDER BY price, offer_id) AS store_rn
             FROM offers
         ),
+        -- the next store's price is the next row (LEAD): a join of the list with itself took 1.6 s (the planner
+        -- guessed a row or two and compared every pair, 2026-10-15)
         ranked AS (
-            SELECT *, ROW_NUMBER() OVER (PARTITION BY edition_id ORDER BY price, offer_id) AS rn
+            SELECT *, ROW_NUMBER() OVER w AS rn, LEAD(price) OVER w AS next_price, LEAD(store_id) OVER w AS next_store_id
             FROM per_store WHERE store_rn = 1
+            WINDOW w AS (PARTITION BY edition_id ORDER BY price, offer_id)
         ),
         gaps AS (
-            SELECT a.offer_id, a.edition_id, a.price, b.price AS next_price, b.store_id AS next_store_id,
-                   CAST(ROUND(100.0 * (b.price - a.price) / b.price, 0) AS integer) AS savings_percent
-            FROM ranked a JOIN ranked b ON b.edition_id = a.edition_id AND b.rn = 2
-            WHERE a.rn = 1
+            SELECT offer_id, edition_id, price, next_price, next_store_id,
+                   CAST(ROUND(100.0 * (next_price - price) / next_price, 0) AS integer) AS savings_percent
+            FROM ranked
+            WHERE rn = 1 AND next_price IS NOT NULL
         ),
         -- one deal per game (its platforms and editions compete), the most money saved first: a
         -- percentage sort put the same -60% on every card (the gaps are capped at max_percent)
