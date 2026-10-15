@@ -9,9 +9,7 @@ from app.services.steam_service import SteamError
 
 bp = Blueprint("collection", __name__, url_prefix="/api")
 
-# What a user can set on an item. Not the trophies / achievements or the platinum (user, 2026-10-15): those come
-# only from the Steam and PSN imports, which set them through collection_service directly
-EDITABLE = ("format", "status", "hours", "notes")
+EDITABLE = ("format", "status", "hours", "achievements", "achievements_total", "platinum", "notes")
 
 
 @bp.errorhandler(CollectionError)

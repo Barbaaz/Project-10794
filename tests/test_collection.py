@@ -76,6 +76,8 @@ def test_checks(market):
     assert add(client, 999999).status_code == 404
     for fields, error in [({"status": "bored"}, "play_status_invalid"), ({"format": "cassette"}, "format_invalid"),
                           ({"hours": "-1"}, "hours_invalid"), ({"hours": "-0,5"}, "hours_invalid"), ({"hours": "lots"}, "hours_invalid"),
+                          ({"achievements": -1}, "achievements_invalid"), ({"achievements_total": -3}, "achievements_invalid"),
+                          ({"achievements": -2, "achievements_total": -1}, "achievements_invalid"),
                           ({"notes": "x" * 1001}, "notes_long")]:
         assert add(client, market["edition"], **fields).get_json()["error"] == error, fields
     item = add(client, market["edition"]).get_json()["id"]
@@ -127,28 +129,21 @@ def test_worth_counts_store_and_used_prices(market):
     assert (stats["worth_new"], stats["priced_new"]) == (0, 0)          # no store sells the test game
 
 
-def test_achievements_only_from_the_imports(market):
-    """User, 2026-10-15: trophies / achievements and the platinum come only from the Steam / PSN imports, which set
-    them through collection_service (checked there); what a user sends for them is left out."""
-    from app.services import collection_service
-    from app.services.collection_service import CollectionError
+def test_achievements(market):
     client = market["client"]
-    user_id = sign_up(client, "achiever")["id"]
-    item = add(client, market["edition"], achievements=10, achievements_total=40, platinum=True).get_json()["id"]
-    patch = lambda data: client.patch(f"/api/collection/{item}", json=data, headers=HEADERS)
-    assert patch({"achievements": 40, "achievements_total": 40, "platinum": True}).status_code == 200
-    [mine_now] = mine(client)["items"]
-    assert (mine_now["achievements"], mine_now["achievements_total"], mine_now["platinum"]) == (None, None, None)
-    assert patch({"hours": -2}).get_json()["error"] == "hours_invalid"
-
-    # the imports' way in
-    collection_service.update(user_id, item, {"achievements": 10, "achievements_total": 40})
-    other = collection_service.add(user_id, market["other_edition"], "owned", achievements=5)    # no total: not counted
+    sign_up(client, "achiever")
+    item = add(client, market["edition"], achievements=10, achievements_total=40).get_json()["id"]
+    add(client, market["other_edition"], achievements=5)                       # no total: not counted
     stats = mine(client)["stats"]
-    assert (stats["achievements"], stats["achievements_total"]) == (10, 40) and other
-    for bad in ({"achievements": 41}, {"achievements_total": "x"}, {"achievements": -1}, {"achievements_total": -40}):
-        with pytest.raises(CollectionError, match="achievements_invalid"):
-            collection_service.update(user_id, item, bad)
+    assert (stats["achievements"], stats["achievements_total"]) == (10, 40)
+    patch = lambda data: client.patch(f"/api/collection/{item}", json=data, headers=HEADERS)
+    assert patch({"achievements": 41}).get_json()["error"] == "achievements_invalid"     # more than the total
+    assert patch({"achievements_total": "x"}).get_json()["error"] == "achievements_invalid"
+    assert patch({"achievements": -1}).get_json()["error"] == "achievements_invalid"       # never below 0
+    assert patch({"achievements_total": -40}).get_json()["error"] == "achievements_invalid"
+    assert patch({"hours": -2}).get_json()["error"] == "hours_invalid"
+    assert patch({"achievements": 40}).status_code == 200
+    assert mine(client)["stats"]["achievements"] == 40
 
 
 def test_a_wish_remembers_its_price(market, monkeypatch):
