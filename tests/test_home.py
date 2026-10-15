@@ -21,7 +21,8 @@ def test_home_and_browse_pages(web_client):
     assert '<h1 class="site-brand' in home and 'action="/browse"' in home       # the name is the page's title
     browse = web_client.get("/browse").get_data(as_text=True)
     assert "/static/pages/index.js" in browse and "/static/slider.js" in browse
-    assert 'data-go-home class="site-brand-link' not in browse                  # the name opens the home page
+    assert 'data-go-home' not in browse and 'id="home-btn"' not in browse        # the name opens the home page; the
+                                                                                 # tabs leave a search (no "Secções")
 
 
 def test_recent_releases_api(web_client):

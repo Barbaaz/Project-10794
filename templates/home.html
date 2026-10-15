@@ -23,7 +23,8 @@
         #home-rows[aria-busy="true"] { opacity: .45; pointer-events: none; transition: opacity .15s; }
         .row-head { display: flex; align-items: baseline; gap: .75rem; margin-bottom: .6rem; }
         .row-head h2 { font-size: 1.25rem; font-weight: 800; margin: 0; }
-        .row-head .see-all { margin-left: auto; font-size: .9rem; white-space: nowrap; }
+        /* "Ver tudo" as a button (user, 2026-10-15), on the right of the title bar, before the arrows */
+        .see-all { margin-left: auto; white-space: nowrap; border-radius: 999px; padding-inline: .85rem; }
         .row-sub { font-size: .85rem; color: var(--bs-secondary-color); }
         /* a card: cover (with the list's badge), platforms, name, the best price and its store */
         .home-card { display: block; color: inherit; text-decoration: none; min-width: 0; }

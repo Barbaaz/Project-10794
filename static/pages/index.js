@@ -845,14 +845,6 @@ const monthStart = d => new Date(d.getFullYear(), d.getMonth(), 1);
 
 function showFront(show) {
     document.getElementById("front").classList.toggle("d-none", !show);
-    document.getElementById("home-btn").classList.toggle("d-none", show);
-}
-
-// Clear the search and show the front page tabs again
-function goHome() {
-    document.getElementById("q").value = "";
-    search();
-    window.scrollTo({ top: 0 });
 }
 
 // A section's tab also leaves a search (the tabs stay on screen while results are shown)
@@ -1258,9 +1250,6 @@ applyI18n();
     loadRestockAlerts();
 })();
 
-// The header's home links and the search form (bound here: the page has no inline handlers)
-document.querySelectorAll("[data-go-home]").forEach(el => el.addEventListener("click", event => {
-    event.preventDefault();
-    goHome();
-}));
+// The header's search form (bound here: the page has no inline handlers). A tab leaves a search (user,
+// 2026-10-15: no "Secções" button any more)
 document.getElementById("search-form").addEventListener("submit", handleSearch);

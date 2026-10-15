@@ -8,7 +8,6 @@
 const STRINGS = {
     pt: {
         // header & search
-        home: "← Secções",
         dark_mode: "Modo escuro",
         language: "Idioma",
         search_placeholder: "Procurar um jogo…",
@@ -961,7 +960,6 @@ const STRINGS = {
         error_review_has_text: "A sua avaliação tem texto: para a apagar, use a página do jogo.",
     },
     en: {
-        home: "← Sections",
         dark_mode: "Dark mode",
         language: "Language",
         search_placeholder: "Search for a game…",
