@@ -705,7 +705,6 @@ const STRINGS = {
         error_play_status_invalid: "Estado inválido.",
         error_hours_invalid: "Horas inválidas.",
         error_notes_long: "Notas demasiado longas (máximo 1000 caracteres).",
-        error_collection_full: "A coleção chegou ao limite de 2000 jogos.",
 
         // reports and moderation
         report: "Denunciar",
@@ -1649,7 +1648,6 @@ const STRINGS = {
         error_play_status_invalid: "Invalid status.",
         error_hours_invalid: "Invalid hours.",
         error_notes_long: "Notes too long (at most 1000 characters).",
-        error_collection_full: "The collection reached its limit of 2000 games.",
 
         // reports and moderation
         report: "Report",

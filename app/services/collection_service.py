@@ -20,7 +20,8 @@ from app.models import (
 )
 from db import session
 
-MAX_ITEMS = 2000
+# No limit on a collection's size (user, 2026-10-15); only one import request of browser favourites is capped
+MAX_FAVOURITES = 2000
 MAX_NOTES = 1000
 MAX_HOURS = Decimal("99999.9")
 # "In demand" (user, 2026-10-11): games this many users wish for, at least; one wish is never shown
@@ -193,8 +194,6 @@ def add(user_id, edition_id, kind, game_id=None, new_edition=None, **changes):
                                                       CollectionItem.edition_id == edition.id,
                                                       CollectionItem.format.is_not_distinct_from(format))).first()
         if item is None:
-            if s.query(CollectionItem).filter(CollectionItem.user_id == user_id).count() >= MAX_ITEMS:
-                raise CollectionError("collection_full")
             item = CollectionItem(user_id=user_id, game_id=edition.game_id, edition_id=edition.id, kind=kind,
                                   format=format, status="owned" if kind == "owned" else None,
                                   wish_price=best_new_price(edition.id) if kind == "wishlist" else None)
@@ -223,7 +222,7 @@ def add_wishes(user_id, edition_ids):
     """
     from app.services.game_service import merged_into
     try:
-        ids = list(dict.fromkeys(int(i) for i in edition_ids))[:MAX_ITEMS]
+        ids = list(dict.fromkeys(int(i) for i in edition_ids))[:MAX_FAVOURITES]
     except (TypeError, ValueError):
         raise CollectionError("edition_invalid")
     merged = merged_into("edition", ids)
