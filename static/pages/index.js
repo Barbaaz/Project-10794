@@ -786,6 +786,23 @@ function renderReleases(groups) {
     const first = monthStart(new Date());
     const last = days.length ? monthStart(parseDay(days[days.length - 1])) : first;
 
+    // the calendar beside the day's games on a wide screen, above them on a phone (user, 2026-10-14: under the
+    // cards it left a lot of empty space). Picking a day or a month draws only this again, not the slider
+    // (user, 2026-10-15: it went back to its start)
+    const layout = document.createElement("div");
+    layout.className = "release-layout";
+    wrap.appendChild(layout);
+    const redraw = focus => {
+        layout.replaceChildren(...calendarParts(byDay, days, estimated, first, last, redraw));
+        document.querySelector(focus)?.focus();
+    };
+    layout.append(...calendarParts(byDay, days, estimated, first, last, redraw));
+    return wrap;
+}
+
+// The release calendar's month and the chosen day's games: [calendar, day's games]; redraw(selector to focus)
+function calendarParts(byDay, days, estimated, first, last, redraw) {
+    const today = isoDay(new Date());
     const box = document.createElement("section");
     box.className = "release-calendar";
     box.setAttribute("aria-label", t("releases_calendar"));
@@ -824,19 +841,12 @@ function renderReleases(groups) {
         releaseMonth = new Date(releaseMonth.getFullYear(), releaseMonth.getMonth() + Number(b.dataset.month), 1);
         const inMonth = days.find(d => d.startsWith(isoDay(releaseMonth).slice(0, 7)));
         if (inMonth) releaseDay = inMonth;
-        renderFront();
-        document.querySelector(`.release-calendar [data-month="${b.dataset.month}"]:not([disabled])`)?.focus();
+        redraw(`.release-calendar [data-month="${b.dataset.month}"]:not([disabled])`);
     });
     box.querySelectorAll("[data-day]").forEach(b => b.onclick = () => {
         releaseDay = b.dataset.day;
-        renderFront();
-        document.querySelector(`.release-calendar [data-day="${releaseDay}"]`)?.focus();
+        redraw(`.release-calendar [data-day="${releaseDay}"]`);
     });
-    // the calendar beside the day's games on a wide screen, above them on a phone (user, 2026-10-14: under the
-    // cards it left a lot of empty space)
-    const layout = document.createElement("div");
-    layout.className = "release-layout";
-    layout.appendChild(box);
     const dayBox = document.createElement("section");
     dayBox.className = "min-w-0";
     const chosen = releaseDay === "tba" ? estimated : byDay[releaseDay] || [];
@@ -852,9 +862,7 @@ function renderReleases(groups) {
         mergePlatforms(chosen).forEach(c => grid.appendChild(releaseCard(c, releaseDay === "tba")));
         dayBox.appendChild(grid);
     }
-    layout.appendChild(dayBox);
-    wrap.appendChild(layout);
-    return wrap;
+    return [box, dayBox];
 }
 
 // The most anticipated, one at a time (user, 2026-10-14: "a slide that changes games automatically and
