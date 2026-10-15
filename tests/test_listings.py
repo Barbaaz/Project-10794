@@ -165,3 +165,30 @@ def test_the_market_tab_filters_games_and_hardware(market):
     assert titles() == ["Market Test Game", "Other Game"]
     assert titles("game") == ["Market Test Game"]
     assert titles("hardware") == ["Other Game"]
+
+
+def test_the_market_tab_has_one_card_per_game_across_platforms(market):
+    """The same game and edition sold on PS5 and PS4 is one card: the newest (or cheapest) platform first,
+    the other as its alternative; one platform chosen, only that one."""
+    client, c = market["client"], market["db"]
+    ps4 = c.execute("SELECT id FROM platforms WHERE code = 'PS4'").fetchone()[0]
+    game = c.execute("INSERT INTO games (platform_id, title, normalized_title) VALUES (?, 'Market Test Game', "
+                     "'market test game') RETURNING id", ps4).fetchone()[0]
+    edition = c.execute("INSERT INTO game_editions (game_id, edition_key, name) VALUES (?, '', 'Standard') RETURNING id",
+                        game).fetchone()[0]
+    try:
+        sign_up(client, "seller_platforms")
+        new_listing(market, price="30")
+        new_listing(market, game_id=game, edition_id=edition, price="20")
+        new_listing(market, game_id=market["other_game"], edition_id=market["other_edition"], price="25")
+        cards = lambda query: [(g["name"], g["console"], [a["console"] for a in g["alternatives"]])
+                               for g in client.get(f"/api/listings?{query}").get_json()["groups"]]
+        assert cards("sort=newest") == [("Other Game", "PS5", []), ("Market Test Game", "PS4", ["PS5"])]
+        assert cards("sort=price_asc") == [("Market Test Game", "PS4", ["PS5"]), ("Other Game", "PS5", [])]
+        assert cards("platform=PS5&sort=price_asc") == [("Other Game", "PS5", []), ("Market Test Game", "PS5", [])]
+        assert client.get("/api/listings?per_page=1").get_json()["total"] == 2
+    finally:
+        c.execute("DELETE FROM listing_photos")
+        c.execute("DELETE FROM user_listings")
+        c.execute("DELETE FROM game_editions WHERE id = ?", edition)
+        c.execute("DELETE FROM games WHERE id = ?", game)

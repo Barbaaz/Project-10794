@@ -4,7 +4,7 @@ Only the seller changes a listing. A listing always has MIN_PHOTOS..MAX_PHOTOS p
 """
 from decimal import Decimal, InvalidOperation
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, tuple_
 
 from app.models import NOW, Conversation, Game, GameEdition, Listing, ListingPhoto, Platform, User, fields
 from app.services.common import card_group, page_result
@@ -102,16 +102,18 @@ def get_listing(listing_id, viewer_id=None):
 
 def browse(platform=None, sort="newest", page=1, per_page=48, kind=None):
     """
-    The market tab: one group per game edition users sell (a game can have several sellers),
-    each with its active listings, cheapest first; editions with the newest listing first, or
-    by their cheapest price. Paged by edition. kind: "game", "hardware" (consoles:
-    core/hardware.py) or None for both.
+    The market tab: one card per game and edition users sell, across platforms (user, 2026-10-14:
+    every list, like the catalogue): the platform with the newest listing (or the cheapest copy) is
+    the card, the others its `alternatives` (platform chips). Each platform's group has its active
+    listings, cheapest first. Cards with the newest listing first, or by their cheapest price; paged
+    by card. kind: "game", "hardware" (consoles: core/hardware.py) or None for both.
     """
     used = (select(Listing.edition_id, func.min(Listing.price).label("min_price"),
                    func.max(Listing.created_at).label("newest"))
             .where(Listing.status == "active", Listing.edition_id.is_not(None), SELLER_ACTIVE)
             .group_by(Listing.edition_id).subquery())
-    editions = (select(GameEdition, Game, Platform)
+    card = func.coalesce(Game.card_key, Game.normalized_title)       # common.CARD_KEY
+    editions = (select(GameEdition, Game, Platform, used.c.min_price, used.c.newest, card.label("card_key"))
                 .join(used, used.c.edition_id == GameEdition.id)
                 .join(Game, Game.id == GameEdition.game_id).join(Platform, Platform.id == Game.platform_id))
     if platform:
@@ -120,22 +122,36 @@ def browse(platform=None, sort="newest", page=1, per_page=48, kind=None):
         editions = editions.where(Game.kind == "game")
     elif kind == "hardware":
         editions = editions.where(Game.kind != "game")
-    order = {"newest": (used.c.newest.desc(), Game.title, used.c.edition_id),
-             "price_asc": (used.c.min_price, Game.title, used.c.edition_id),
-             "price_desc": (used.c.min_price.desc(), Game.title, used.c.edition_id)}[sort if sort in BROWSE_SORTS else "newest"]
+    found = editions.with_only_columns(card.label("card_key"), GameEdition.edition_key, used.c.min_price,
+                                       used.c.newest, Game.title).subquery()
+    cards = (select(found.c.card_key, found.c.edition_key, func.min(found.c.min_price).label("min_price"),
+                    func.max(found.c.newest).label("newest"), func.min(found.c.title).label("title"))
+             .group_by(found.c.card_key, found.c.edition_key)).subquery()
+    sort = sort if sort in BROWSE_SORTS else "newest"
+    last = (cards.c.title, cards.c.card_key, cards.c.edition_key)
+    order = {"newest": (cards.c.newest.desc(), *last),
+             "price_asc": (cards.c.min_price, *last),
+             "price_desc": (cards.c.min_price.desc(), *last)}[sort]
 
     with session() as s:
-        total = s.scalar(select(func.count()).select_from(editions.subquery()))
-        rows = s.execute(editions.order_by(*order).offset((page - 1) * per_page).limit(per_page)).all()
-        ids = [edition.id for edition, _, _ in rows]
+        total = s.scalar(select(func.count()).select_from(cards))
+        keys = s.execute(select(cards.c.card_key, cards.c.edition_key).order_by(*order)
+                         .offset((page - 1) * per_page).limit(per_page)).all()
+        lead = (used.c.newest.desc(),) if sort == "newest" else (used.c.min_price,)
+        rows = s.execute(editions.where(tuple_(card, GameEdition.edition_key).in_([tuple(k) for k in keys]))
+                         .order_by(*lead, GameEdition.id)).all() if keys else []
+        ids = [row.GameEdition.id for row in rows]
         listings = as_dicts(s.scalars(select(Listing).where(Listing.status == "active", Listing.edition_id.in_(ids),
                                                           SELLER_ACTIVE)
                                       .order_by(Listing.price, Listing.created_at, Listing.id)).unique().all()) if ids else []
-    groups = [card_group({"edition_id": edition.id, "game_id": game.id, "title": game.title,
-                          "edition_key": edition.edition_key, "edition": edition.name,
-                          "console": platform_.code, "platform_name": platform_.name, "kind": game.kind},
-                         [], image=game.image_url, listings=[l for l in listings if l["edition_id"] == edition.id])
-              for edition, game, platform_ in rows]
+    by_card = {}
+    for edition, game, platform_, _, _, card_key in rows:
+        by_card.setdefault((card_key, edition.edition_key), []).append(card_group(
+            {"edition_id": edition.id, "game_id": game.id, "title": game.title,
+             "edition_key": edition.edition_key, "edition": edition.name, "card_key": card_key,
+             "console": platform_.code, "platform_name": platform_.name, "kind": game.kind},
+            [], image=game.image_url, listings=[l for l in listings if l["edition_id"] == edition.id]))
+    groups = [{**first, "alternatives": others} for first, *others in (by_card[tuple(k)] for k in keys)]
     return page_result(page, per_page, total, groups=groups)
 
 
