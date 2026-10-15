@@ -534,26 +534,15 @@ const FRONT_TABS = {
         render: renderMarket,
         empty: "empty_market",
     },
-    wishlist: {
-        // the list changes as the visitor wishes for games, so it's fetched every time
-        load: () => loadWishlist(),
-        fresh: true,
-        render: renderWishlist,
-        merge: true,
-        prepare: sortWishlist,
-        // logged out there's nothing to show: the wishlist belongs to an account
-        get empty() { return currentUser ? "empty_wishlist" : "empty_wishlist_logged_out"; },
-    },
 };
 const frontData = {};      // tab → data, loaded once per visit
 const SHOW_STEP = 48;      // items drawn at a time on the long tabs ("Mostrar mais" for the next ones)
 const frontShown = {};     // tab → how many are drawn now
 const frontDataPlatform = {};   // tab → platform its data was loaded for (platform-aware tabs)
-// The favourites tab became the wishlist (favourites were folded into it): old links and choices go there
-const tabName = tab => tab === "favorites" ? "wishlist" : tab;
-// Open tab: /?tab=releases if given (shareable links), else the visitor's last choice
-let frontTab = FRONT_TABS[tabName(saved("frontTab"))] ? tabName(saved("frontTab")) : "discounts";
-const tabFromUrl = tabName(new URLSearchParams(location.search).get("tab"));
+// Open tab: /?tab=releases if given (shareable links), else the visitor's last choice (one since removed, as the
+// wishlist tab: the first; ?tab=wishlist links go to /wishlist, web.py)
+let frontTab = FRONT_TABS[saved("frontTab")] ? saved("frontTab") : "discounts";
+const tabFromUrl = new URLSearchParams(location.search).get("tab");
 if (FRONT_TABS[tabFromUrl]) frontTab = tabFromUrl;
 
 // Month and weekday names in the visitor's language
@@ -582,9 +571,7 @@ async function selectFrontTab(tab) {
     const config = FRONT_TABS[tab];
     const platform = document.getElementById("consoleFilter").value;
     const stale = config.platformAware && frontDataPlatform[tab] !== platform;
-    if (tab === "wishlist" && !wishedIds().length) {
-        frontData[tab] = [];
-    } else if (!frontData[tab] || config.fresh || stale) {
+    if (!frontData[tab] || stale) {
         document.getElementById("front-content").innerHTML = "";
         document.getElementById("front-empty").classList.add("d-none");
         document.getElementById("front-loading").classList.remove("d-none");
@@ -635,7 +622,6 @@ function renderFront() {
 
     const selected = document.getElementById("consoleFilter").value;
     let items = (frontData[frontTab] || []).filter(i => !selected || (i.console || i.platform) === selected);
-    if (config.prepare) items = config.prepare(items);
     if (config.merge) items = mergePlatforms(items);
 
     // Lançamentos draws all of them its own way (most anticipated, calendar)
@@ -672,64 +658,6 @@ function cardGrid() {
     return grid;
 }
 
-// The wishlist tab's order (user, 2026-10-14: "a user should be able to sort the wishlist"; /wishlist has more);
-// remembered in this browser. Recent: the wish's id (newer wishes, bigger ids)
-const WISH_SORTS = ["name", "added", "price_asc", "price_desc", "discount"];
-let wishSort = WISH_SORTS.includes(saved("wishSort")) ? saved("wishSort") : "name";
-
-function sortWishlist(groups) {
-    const best = g => g.offers.filter(o => o.in_stock && o.condition === "new").reduce((m, o) => Math.min(m, o.price), Infinity);
-    const discount = g => Math.max(0, ...g.offers.filter(o => o.in_stock && o.is_discount).map(o => o.discount_percent || 0));
-    const name = (a, b) => (localName(a) || "").localeCompare(localName(b) || "", LOCALE);
-    const order = {
-        name,
-        added: (a, b) => ((collectionIds[b.edition_id] || {}).wishlist || 0) - ((collectionIds[a.edition_id] || {}).wishlist || 0),
-        price_asc: (a, b) => best(a) - best(b),               // nobody sells it (Infinity): at the end
-        price_desc: (a, b) => (best(b) === Infinity ? -1 : best(b)) - (best(a) === Infinity ? -1 : best(a)),
-        discount: (a, b) => discount(b) - discount(a),
-    }[wishSort];
-    return [...groups].sort((a, b) => order(a, b) || name(a, b) || a.edition_id - b.edition_id);
-}
-
-// Wished editions with all their offers and the historical low (new copies, in stock)
-function renderWishlist(groups) {
-    const wrap = document.createElement("div");
-    wrap.innerHTML = `<div class="d-flex justify-content-end mb-2">
-        <select class="form-select form-select-sm w-auto" aria-label="${esc(t("collection_sort"))}">${WISH_SORTS.map(s =>
-            `<option value="${s}" ${s === wishSort ? "selected" : ""}>${esc(t(`sort_${s}`))}</option>`).join("")}</select></div>`;
-    wrap.querySelector("select").onchange = e => {
-        wishSort = e.target.value;
-        save("wishSort", wishSort);
-        renderFront();
-        document.querySelector("#front-content select")?.focus();
-    };
-    const grid = cardGrid();
-    wrap.appendChild(grid);
-    // each platform's own lines (stock, lowest price), also after a platform chip is pressed
-    const make = g => {
-        const low = g.lowest_price;
-        const best = g.offers.find(o => o.in_stock && o.condition === "new");
-        const lines = [];
-        if (g.offers.some(o => o.restocked_at)) {
-            lines.push(`<span class="badge text-bg-warning">${icon("bell", 12)} ${t("back_in_stock")}</span>`);
-        }
-        // "Lowest ever" only means something after a while (same 30 days as the discount rule)
-        const trackedDays = low ? (Date.now() - new Date(low.tracked_since)) / 86400000 : 0;
-        if (low && best && best.price <= low.price && trackedDays >= 30) {
-            lines.push(`<span class="badge text-bg-success">${t("lowest_ever")}</span>`);
-        } else if (low) {
-            lines.push(`<span class="text-body-secondary">${t("historical_low_short", { price: eur.format(low.price) })}</span>`);
-        }
-        // not out yet (user, 2026-10-15): "Pré-reserva" on the cover and the release date instead, as in the
-        // pre-orders tab (a historical low says little before the release)
-        if (!g.is_preorder) return makeCard(g, { extraLine: lines.join(" "), again: make });
-        return makeCard(g, { coverBadge: `<span class="badge badge-pre discount-badge">${t("preorder")}</span>`,
-                             extraLine: `${icon("calendar", 14)} ${esc(releaseLabel(g.release_date, g.date_is_estimate))}`, again: make });
-    };
-    groups.forEach(g => grid.appendChild(make(g)));
-    return wrap;
-}
-
 // ---------------------------------------------------------------------------
 // Back-in-stock alerts for the wishlist
 // The server flags offers that went from sold out to in stock recently (restocked_at);
@@ -748,7 +676,6 @@ async function loadRestockAlerts() {
     if (!wishedIds().length) return;
     try {
         const groups = await loadWishlist();
-        frontData.wishlist = groups;
         const dismissed = dismissedRestocks();
         const alerts = groups.flatMap(g => g.offers
             .filter(o => o.restocked_at && !dismissed.has(restockKey(o)))
@@ -1423,14 +1350,6 @@ async function toggleCardItem(group, kind) {
         : await api("/api/collection", { body: { edition_id: id, kind } });
     if (!ok) return;
     await loadCollectionIds();      // "Tenho" also takes it off the wishlist
-
-    // off the wishlist while its tab is open: the card goes
-    const wished = wishedIds();
-    if (!hasSearched && frontTab === "wishlist" && !wished.includes(id)) {
-        closeCardMenu();
-        frontData.wishlist = (frontData.wishlist || []).filter(g => wished.includes(g.edition_id));
-        return renderFront();
-    }
     // the same edition can be on more than one card
     document.querySelectorAll(`.fav-btn[data-edition="${id}"]`).forEach(b => b.innerHTML = starButton(group));
     if (cardMenu) fillCardMenu(kind);
