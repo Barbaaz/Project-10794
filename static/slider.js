@@ -6,11 +6,15 @@ let slideIndex = 0;                 // kept when the calendar redraws the tab
 let slidePaused = matchMedia("(prefers-reduced-motion: reduce)").matches;     // no moving by itself then
 
 // The most anticipated of these releases (/api/releases cards), one card per game: the most followed on IGDB,
-// then the most wished here; a game's platforms count once
+// then the most wished here; a game's platforms count once. Only games not out yet (user, 2026-10-15): not one
+// out today, nor one IGDB says came out already (a physical edition or a port a store dates later: Silksong)
 function mostAnticipated(groups, count) {
+    const today = isoDay(new Date());
+    const out = card => (platformsOf(card) || [card]).some(g => g.release_date <= today
+        || (g.igdb_release_date && g.igdb_release_date <= today));
     const interest = card => Math.max(...(platformsOf(card) || [card]).map(g => g.hypes || 0));
     const wishes = card => (platformsOf(card) || [card]).reduce((n, g) => n + (g.wishes || 0), 0);
-    return mergePlatforms(groups).filter(c => interest(c) || wishes(c))
+    return mergePlatforms(groups).filter(c => !out(c) && (interest(c) || wishes(c)))
         .sort((a, b) => interest(b) - interest(a) || wishes(b) - wishes(a) || a.release_date.localeCompare(b.release_date))
         .slice(0, count);
 }

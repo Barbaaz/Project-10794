@@ -119,7 +119,9 @@ def upcoming_releases():
     edition (else its cheapest), with the new offers in stock or on pre-order. Each also has
     release_date / date_is_estimate, `editions` (how many the game has), `hypes` (IGDB users following
     it) and `wishes` (our users wishing for it): Lançamentos' most anticipated and its calendar
-    (user, 2026-10-14). Sorted by date; "31/12" estimates at the end.
+    (user, 2026-10-14). Sorted by date; "31/12" estimates at the end. igdb_release_date: the game's first
+    release anywhere (IGDB): a physical edition or a port of a game out already isn't "most anticipated"
+    (slider.js mostAnticipated; user, 2026-10-15: Silksong, The Alters), but stays a release in the calendar.
     """
     def compute():
         games = fetch_all(f"""
@@ -142,7 +144,7 @@ def upcoming_releases():
                 JOIN game_editions e ON e.id = ed.edition_id
             )
             SELECT {EDITION_CARD_COLUMNS}, r.release_date, r.date_is_estimate, pk.editions,
-                   COALESCE(g.hypes, 0) AS hypes,
+                   COALESCE(g.hypes, 0) AS hypes, g.first_release_date AS igdb_release_date,
                    (SELECT COUNT(DISTINCT ci.user_id) FROM collection_items ci
                     WHERE ci.kind = 'wishlist' AND ci.game_id = g.id) AS wishes
             FROM picked pk
@@ -166,7 +168,8 @@ def upcoming_releases():
         # one card per game, whatever edition each platform shows (PC may have no Standard)
         groups = [card_group(g, offers.get(g["edition_id"], []), release_date=g["release_date"],
                              date_is_estimate=g["date_is_estimate"], editions=g["editions"], hypes=g["hypes"],
-                             wishes=g["wishes"], same=g["card_key"]) for g in games]
+                             wishes=g["wishes"], same=g["card_key"], igdb_release_date=g["igdb_release_date"])
+                  for g in games]
         return mark_review_scores(mark_historical_lows(groups))
 
     return cached("releases", compute)

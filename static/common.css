@@ -79,6 +79,11 @@ h4, h5, h6, .h4, .h5, .h6 { font-weight: 700; letter-spacing: -0.01em; }
 .nav-pills.front-tabs { gap: 1.4rem !important; border-bottom: 1px solid var(--bs-border-color);
                         flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; padding-bottom: 0 !important; }
 .nav-pills.front-tabs .nav-link { white-space: nowrap; font-size: .95rem; padding-block: .8rem; }
+/* The sections' tabs (/browse) and their links (the home page): a white band under the header, edge to edge (the
+   shadow / clip pair paints it past the container without widening the page) */
+.tabs-band { background: var(--bs-body-bg); box-shadow: 0 0 0 100vmax var(--bs-body-bg); clip-path: inset(0 -100vmax);
+             border-bottom: 1px solid var(--bs-border-color); margin-bottom: 1.6rem; }
+.tabs-band .front-tabs { border-bottom: 0; }
 /* centred (user, 2026-10-15) by auto margins, not justify-content: a row wider than a phone still scrolls from its first tab */
 .nav-pills.front-tabs > :first-child { margin-left: auto; }
 .nav-pills.front-tabs > :last-child { margin-right: auto; }

@@ -34,7 +34,9 @@ def releases(app_on_test_db):
     product("PS5", "Big Game", "Standard", 69.99, hypes=500)
     product("Switch2", "Big Game", "Standard", 59.99, hypes=500)
     product("PC", "Big Game", "Day One Edition", 49.99, hypes=500)        # no Standard on PC
-    product("PS5", "Small Game", "Standard", 19.99)
+    small = product("PS5", "Small Game", "Standard", 19.99)
+    # out on IGDB a year ago (a store dates its physical edition later: Silksong, 2026-10-15)
+    cursor.execute("UPDATE games SET first_release_date = ? WHERE id = ?", date.today() - timedelta(days=365), small)
     product("PS5", "Old Game", "Standard", 9.99, released=date.today() - timedelta(days=3))
     product("Switch", "Old Game", "Standard", 8.99, released=date.today() - timedelta(days=3))
     product("PS5", "Ancient Game", "Standard", 5.99, released=date.today() - timedelta(days=release_service.RECENT_DAYS + 5))
@@ -64,6 +66,9 @@ def test_one_card_per_game_and_platform_merged_by_game(releases):
 def test_most_anticipated_numbers_and_only_upcoming(releases):
     by_name = {g["name"]: g for g in releases}
     assert by_name["Big Game"]["hypes"] == 500 and by_name["Small Game"]["hypes"] == 0
+    # IGDB's first release, for the slider to leave out a game out already (it stays in the calendar)
+    assert by_name["Small Game"]["igdb_release_date"] == (date.today() - timedelta(days=365)).isoformat()
+    assert by_name["Big Game"]["igdb_release_date"] is None
     assert all(g["wishes"] == 0 for g in releases)
     assert "Old Game" not in by_name                        # out already
     assert "Out Game" not in by_name and "Tomorrow Game" in by_name
