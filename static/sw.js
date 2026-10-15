@@ -15,7 +15,8 @@
 // v4: the new look (2026-10-10) and its font
 // v5: the site's name, SaveGame (2026-10-12): the saved offline page had the old one
 // v6: renamed SaveOnGames (2026-10-13)
-const VERSION = "v6";
+// v7: / is the home page, the tabs moved to /browse (2026-10-15): a saved / was the tabs page
+const VERSION = "v7";
 const CACHE = `site-${VERSION}`;
 const SLOW_MS = 6000;      // past this, a saved copy is shown while the network keeps trying
 const CDN = "https://cdn.jsdelivr.net";       // Bootstrap, Chart.js: fixed versions in their URLs
@@ -31,7 +32,7 @@ const PRECACHE = [
 // API reads that are the same for everyone (no personal data), by path
 const PUBLIC_API = [
     /^\/api\/games(\/catalog|\/editions)?$/, /^\/api\/games\/\d+(\/prices)?$/,
-    /^\/api\/(discounts|discounts\/featured|deals|preorders|releases|stores|platforms|genres|tags)$/,
+    /^\/api\/(discounts|discounts\/featured|deals|preorders|releases|releases\/recent|stores|platforms|genres|tags)$/,
     /^\/api\/listings$/,
 ];
 

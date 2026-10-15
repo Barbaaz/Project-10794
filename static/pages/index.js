@@ -17,9 +17,6 @@ function handleSearch(event) {
 // A card: cover, platform, title and edition, the best store price (the game page has them all).
 // group = {name, console, platform_name, game_id, edition_id, offers: [...]}
 // extraLine: null = no extra line; "" = keep the space, so cards in the same grid line up
-// Short platform names for the cards' chips (three fit on a phone's card)
-const PLATFORM_SHORT = { PS5: "PS5", PS4: "PS4", PS3: "PS3", Switch2: "Switch 2", Switch: "Switch",
-                         XboxSeries: "Xbox X|S", XboxOne: "Xbox One", Xbox360: "Xbox 360", PC: "PC" };
 
 // A game on several platforms is one card (the catalogue's `alternatives`): its platforms as chips,
 // pressing one shows that platform's offers, cover and ☆ menu. again(group): the card for another
@@ -74,28 +71,6 @@ function makeCard(group, { coverBadge = "", extraLine = null, again = null } = {
         card.querySelector(`[data-platform-index="${i}"]`)?.focus();
     });
     return col;
-}
-
-// The card's platforms in a fixed order (the cheapest first, as the catalogue sent them)
-function platformsOf(group) {
-    return group._all || (group.alternatives?.length ? [group, ...group.alternatives] : null);
-}
-
-// One card per game and edition across platforms (user, 2026-10-14: every list, not only the catalogue):
-// groups with the same `same` key (common.same_card) become one card where the first was, the others its
-// platform chips
-function mergePlatforms(groups) {
-    const cards = [], byKey = new Map();
-    for (const g of groups) {
-        const card = g.same && byKey.get(g.same);
-        if (card) card.alternatives.push(g);
-        else {
-            const c = { ...g, alternatives: [] };
-            cards.push(c);
-            if (g.same) byKey.set(g.same, c);
-        }
-    }
-    return cards;
 }
 
 function platformLine(group) {
@@ -243,12 +218,12 @@ async function showCatalogPage(page) {
     document.getElementById("front").scrollIntoView({ block: "start" });
 }
 
-// /?tab=catalog&page=3&platform=PS5&store=cstech&genre=rpg or /?q=zelda&page=2: each only when not the default
+// /browse?tab=catalog&page=3&platform=PS5&store=cstech&genre=rpg or /browse?q=zelda&page=2: each only when not the default
 function listUrl(params, page = 1) {
     const query = new URLSearchParams(params);
     if (page > 1) query.set("page", page);
     for (const [name, value] of extraFilters()) if (value) query.set(name, value);
-    return `/?${query}`;
+    return `/browse?${query}`;
 }
 
 // « Anterior  1 … 4 5 [6] 7 8 … 75  Seguinte »  (solid buttons, current page in blue). Each "…" is a button
@@ -550,7 +525,7 @@ const monthName = d => d.toLocaleDateString(LOCALE, { month: "long" });
 const weekdayName = d => d.toLocaleDateString(LOCALE, { weekday: "short" }).replace(".", "");
 
 
-// Keep the address bar in step with what's on screen (/?q=… or /?tab=…), and remember it
+// Keep the address bar in step with what's on screen (/browse?q=… or /browse?tab=…), and remember it
 // for this browser tab so the game page's back button returns exactly here
 function setPageUrl(url) {
     history.replaceState(null, "", url);
@@ -755,10 +730,6 @@ function renderPreorders(groups) {
 // Lançamentos (user, 2026-10-14): two rows of the most anticipated games, then a month calendar where
 // a day shows the games out that day. "31/12" estimates are a choice of their own under the calendar.
 const ANTICIPATED = 8;              // games in the most anticipated slider
-const SLIDE_MS = 6000;              // each one this long, then the next
-let slideTimer = null;
-let slideIndex = 0;                 // kept when the calendar redraws the tab
-let slidePaused = matchMedia("(prefers-reduced-motion: reduce)").matches;     // no moving by itself then
 let releaseMonth = null;            // the calendar's month (a Date on its 1st)
 let releaseDay = null;              // "2026-10-15", or "tba"
 
@@ -771,12 +742,7 @@ function renderReleases(groups) {
     const days = Object.keys(byDay).sort();
     const today = isoDay(new Date());
 
-    // the most followed on IGDB, then the most wished here; a game's platforms count once
-    const interest = card => Math.max(...(platformsOf(card) || [card]).map(g => g.hypes || 0));
-    const wishes = card => (platformsOf(card) || [card]).reduce((n, g) => n + (g.wishes || 0), 0);
-    const top = mergePlatforms(groups).filter(c => interest(c) || wishes(c))
-        .sort((a, b) => interest(b) - interest(a) || wishes(b) - wishes(a) || a.release_date.localeCompare(b.release_date))
-        .slice(0, ANTICIPATED);
+    const top = mostAnticipated(groups, ANTICIPATED);
     clearInterval(slideTimer);
     if (top.length) wrap.appendChild(anticipatedSlider(top));
 
@@ -865,96 +831,6 @@ function calendarParts(byDay, days, estimated, first, last, redraw) {
     return [box, dayBox];
 }
 
-// The most anticipated, one at a time (user, 2026-10-14: "a slide that changes games automatically and
-// highlights each of them"): the next every SLIDE_MS, held while the pointer or the keyboard is on it, a
-// pause button (also the default when the device asks for less motion), arrows, dots, a swipe on a phone
-function anticipatedSlider(cards) {
-    const box = document.createElement("section");
-    box.className = "slider mb-4";
-    box.setAttribute("aria-roledescription", t("releases_slider"));
-    box.setAttribute("aria-label", t("releases_anticipated"));
-    slideIndex %= cards.length;
-    box.innerHTML = `
-        <div class="d-flex align-items-baseline flex-wrap column-gap-2 mb-2">
-            <h3 class="h5 mb-0">${esc(t("releases_anticipated"))}</h3>
-            <span class="small text-body-secondary">${esc(t("releases_anticipated_hint"))}</span>
-        </div>
-        <div class="slides">${cards.map((c, i) => slideHtml(c, i, cards.length)).join("")}</div>
-        <div class="d-flex align-items-center gap-1 mt-2">
-            <button type="button" class="btn btn-sm btn-secondary" data-step="-1" aria-label="${esc(t("releases_slide_prev"))}">&lsaquo;</button>
-            <div class="slider-dots">${cards.map((c, i) => `<button type="button" class="dot" data-slide="${i}"
-                aria-label="${esc(`${t("releases_slide_of", { n: i + 1, total: cards.length })}: ${localName(c)}`)}"></button>`).join("")}</div>
-            <button type="button" class="btn btn-sm btn-secondary" data-step="1" aria-label="${esc(t("releases_slide_next"))}">&rsaquo;</button>
-            <button type="button" class="btn btn-sm btn-secondary ms-auto" data-pause></button>
-        </div>`;
-    const slides = box.querySelectorAll(".slide");
-    const dots = box.querySelectorAll("[data-slide]");
-    const pause = box.querySelector("[data-pause]");
-    let held = false;
-    const show = i => {
-        slideIndex = (i + cards.length) % cards.length;
-        slides.forEach((s, n) => { s.hidden = n !== slideIndex; });
-        dots.forEach((d, n) => d.setAttribute("aria-current", n === slideIndex));
-    };
-    const showPause = () => {
-        pause.innerHTML = icon(slidePaused ? "play" : "pause", 14);
-        pause.setAttribute("aria-label", t(slidePaused ? "releases_slide_play" : "releases_slide_pause"));
-        pause.title = pause.getAttribute("aria-label");
-    };
-    box.querySelectorAll("[data-step]").forEach(b => b.onclick = () => show(slideIndex + Number(b.dataset.step)));
-    dots.forEach(d => d.onclick = () => show(Number(d.dataset.slide)));
-    pause.onclick = () => { slidePaused = !slidePaused; showPause(); };
-    box.addEventListener("mouseenter", () => { held = true; });
-    box.addEventListener("mouseleave", () => { held = false; });
-    box.addEventListener("focusin", () => { held = true; });
-    box.addEventListener("focusout", e => { if (!box.contains(e.relatedTarget)) held = false; });
-    let touchX = null;
-    box.addEventListener("touchstart", e => { touchX = e.touches[0].clientX; }, { passive: true });
-    box.addEventListener("touchend", e => {
-        const dx = e.changedTouches[0].clientX - (touchX ?? e.changedTouches[0].clientX);
-        if (Math.abs(dx) > 40) show(slideIndex + (dx < 0 ? 1 : -1));
-        touchX = null;
-    });
-    slideTimer = setInterval(() => {
-        if (!box.isConnected) return clearInterval(slideTimer);       // another tab drawn
-        if (!slidePaused && !held && !document.hidden) show(slideIndex + 1);
-    }, SLIDE_MS);
-    show(slideIndex);
-    showPause();
-    return box;
-}
-
-// One slide: the big cover, the platforms, when it's out (and how long to go), how many follow it, the best price
-function slideHtml(card, i, total) {
-    const all = platformsOf(card) || [card];
-    const best = all.flatMap(g => g.offers).filter(o => o.in_stock).sort((a, b) => a.price - b.price)[0];
-    const hypes = Math.max(...all.map(g => g.hypes || 0));
-    const days = Math.round((parseDay(card.release_date) - parseDay(isoDay(new Date()))) / 86400000);
-    const toGo = card.date_is_estimate ? ""
-        : days === 0 ? t("releases_out_today") : days === 1 ? t("releases_out_tomorrow") : t("releases_days_left", { count: days });
-    const url = `/game/${card.game_id}`;
-    return `
-        <div class="slide" role="group" aria-roledescription="${esc(t("releases_slide"))}"
-             aria-label="${esc(t("releases_slide_of", { n: i + 1, total }))}" ${i === slideIndex ? "" : "hidden"}>
-            ${card.cover ? `<img class="slide-bg" src="${esc(card.cover)}" alt="" aria-hidden="true">` : ""}
-            <a href="${url}" class="slide-cover" tabindex="-1" aria-hidden="true">${card.cover
-                ? `<img src="${esc(card.cover)}" alt="" class="${coverClass(card.cover)}">` : ""}</a>
-            <div class="slide-text min-w-0">
-                <div class="d-flex flex-wrap gap-1 mb-2">${all.map(g =>
-                    `<span class="slide-chip">${esc(PLATFORM_SHORT[g.console] || g.platform_name)}</span>`).join("")}</div>
-                <h4 class="slide-title"><a href="${url}">${esc(localName(card))}</a></h4>
-                <div class="slide-date">${icon("calendar", 16)} ${esc(releaseLabel(card.release_date, card.date_is_estimate))}${
-                    toGo ? ` <span class="badge text-bg-primary ms-1">${esc(toGo)}</span>` : ""}</div>
-                ${hypes ? `<div class="small text-body-secondary mt-1">${esc(t("releases_followers", { count: fmtNumber(hypes) }))}</div>` : ""}
-                <div class="d-flex flex-wrap align-items-center gap-3 mt-3">
-                    ${best ? `<div><span class="slide-price">${eur.format(best.price)}</span>
-                        <span class="small text-body-secondary">${esc(storeName(best.store))}</span></div>` : ""}
-                    <a class="btn btn-primary btn-sm" href="${url}">${esc(t("releases_slide_go"))}</a>
-                </div>
-            </div>
-        </div>`;
-}
-
 // A release's card: the date under it where the list isn't one day's; its editions count
 function releaseCard(group, withDate) {
     const make = g => makeCard(g, {
@@ -966,7 +842,6 @@ function releaseCard(group, withDate) {
 }
 
 const monthStart = d => new Date(d.getFullYear(), d.getMonth(), 1);
-const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 function showFront(show) {
     document.getElementById("front").classList.toggle("d-none", !show);

@@ -36,6 +36,8 @@ def releases(app_on_test_db):
     product("PC", "Big Game", "Day One Edition", 49.99, hypes=500)        # no Standard on PC
     product("PS5", "Small Game", "Standard", 19.99)
     product("PS5", "Old Game", "Standard", 9.99, released=date.today() - timedelta(days=3))
+    product("Switch", "Old Game", "Standard", 8.99, released=date.today() - timedelta(days=3))
+    product("PS5", "Ancient Game", "Standard", 5.99, released=date.today() - timedelta(days=release_service.RECENT_DAYS + 5))
     # "31/12" at one store, sold as an ordinary game at another: out already (Silent Hill: Townfall, 2026-10-14)
     placeholder = date(date.today().year, 12, 31)
     out = product("PS5", "Out Game", "Standard", 39.99, released=placeholder)
@@ -67,3 +69,12 @@ def test_most_anticipated_numbers_and_only_upcoming(releases):
     assert "Out Game" not in by_name and "Tomorrow Game" in by_name
     assert not any(g["name"] == "Out Game" for g in release_service.preorders())
     assert release_service.game_release_date(by_name["Tomorrow Game"]["game_id"])["release_date"] == SOON.isoformat()
+
+
+def test_recent_releases_only_the_last_weeks(releases):
+    """The home page's "Acabados de sair" (2026-10-15): out in the last RECENT_DAYS days, newest first, a card per
+    platform with `same` to fold them; not the games to come, not the ones out long ago, not "31/12" estimates."""
+    recent = release_service.recent_releases()
+    assert [g["name"] for g in recent] == ["Old Game", "Old Game"]
+    assert {g["console"] for g in recent} == {"PS5", "Switch"} and len({g["same"] for g in recent}) == 1
+    assert all(g["offers"] and g["release_date"] == (date.today() - timedelta(days=3)).isoformat() for g in recent)

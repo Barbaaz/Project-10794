@@ -170,3 +170,62 @@ def upcoming_releases():
         return mark_review_scores(mark_historical_lows(groups))
 
     return cached("releases", compute)
+
+
+# The home page's "Acabados de sair" (user, 2026-10-15): games out in the last RECENT_DAYS days
+RECENT_DAYS = 45
+RECENT_LIMIT = 40
+
+
+def recent_releases():
+    """
+    Games out in the last RECENT_DAYS days that a store sells new and in stock, newest first (then the most
+    followed), as cards like upcoming_releases: one per game and platform, its Standard edition (else its
+    cheapest), `same` to fold a game's platforms into one card. "31/12" estimates are left out (no real day).
+    """
+    def compute():
+        games = fetch_all(f"""
+            WITH {GAME_RELEASE_DATES},
+            recent AS (
+                SELECT game_id, release_date FROM game_release
+                WHERE NOT date_is_estimate AND release_date < CAST(utcnow() AS date)
+                  AND release_date >= CAST(utcnow() AS date) - ?
+            ),
+            editions AS (
+                SELECT sp.game_id, sp.edition_id, MIN(last.price) AS best
+                FROM store_products sp
+                {LATEST_PRICE}
+                WHERE sp.is_active AND sp.condition = 'new' AND sp.edition_id IS NOT NULL AND last.in_stock
+                  AND sp.game_id IN (SELECT game_id FROM recent)
+                GROUP BY sp.game_id, sp.edition_id
+            ),
+            picked AS (
+                SELECT ed.*, ROW_NUMBER() OVER (PARTITION BY ed.game_id
+                             ORDER BY CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, ed.best, ed.edition_id) AS rn
+                FROM editions ed JOIN game_editions e ON e.id = ed.edition_id
+            )
+            SELECT {EDITION_CARD_COLUMNS}, r.release_date, COALESCE(g.hypes, 0) AS hypes
+            FROM picked pk
+            JOIN recent r ON r.game_id = pk.game_id
+            JOIN games g ON g.id = pk.game_id
+            JOIN platforms p ON p.id = g.platform_id
+            JOIN game_editions e ON e.id = pk.edition_id
+            WHERE pk.rn = 1 AND g.kind = 'game'
+            ORDER BY r.release_date DESC, COALESCE(g.hypes, 0) DESC, g.title, p.sort_order, g.id
+            LIMIT ?
+        """, RECENT_DAYS, RECENT_LIMIT)
+        offers = {}
+        ids = [g["edition_id"] for g in games]
+        if ids:
+            for o in fetch_all(f"""
+                    SELECT {OFFER_COLUMNS}
+                    FROM current_offers o
+                    JOIN stores s ON s.id = o.store_id
+                    WHERE o.edition_id IN ({placeholders(ids)}) AND o.is_active AND o.condition = 'new' AND o.in_stock
+                    ORDER BY o.price, o.store_product_id""", *ids):
+                offers.setdefault(o["edition_id"], []).append(o)
+        groups = [card_group(g, offers.get(g["edition_id"], []), release_date=g["release_date"], hypes=g["hypes"],
+                             same=g["card_key"]) for g in games]
+        return mark_review_scores(mark_historical_lows(groups))
+
+    return cached("recent_releases", compute)

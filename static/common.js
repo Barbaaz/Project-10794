@@ -31,6 +31,8 @@ function esc(text) {
     return String(text ?? "").replace(/[&<>"']/g, c => ESCAPES[c]);
 }
 
+const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 // "2026-10-15" → Date at local midnight (new Date("2026-10-15") would be UTC)
 function parseDay(iso) {
     const [y, m, d] = iso.split("-").map(Number);
@@ -422,3 +424,29 @@ whenReady(() => {
     addEventListener("scroll", update, { passive: true });
     update();
 });
+
+// Short platform names for the cards' chips (three fit on a phone's card)
+const PLATFORM_SHORT = { PS5: "PS5", PS4: "PS4", PS3: "PS3", Switch2: "Switch 2", Switch: "Switch",
+                         XboxSeries: "Xbox X|S", XboxOne: "Xbox One", Xbox360: "Xbox 360", PC: "PC" };
+
+// The card's platforms in a fixed order (the cheapest first, as the catalogue sent them)
+function platformsOf(group) {
+    return group._all || (group.alternatives?.length ? [group, ...group.alternatives] : null);
+}
+
+// One card per game and edition across platforms (user, 2026-10-14: every list, not only the catalogue):
+// groups with the same `same` key (common.same_card) become one card where the first was, the others its
+// platform chips
+function mergePlatforms(groups) {
+    const cards = [], byKey = new Map();
+    for (const g of groups) {
+        const card = g.same && byKey.get(g.same);
+        if (card) card.alternatives.push(g);
+        else {
+            const c = { ...g, alternatives: [] };
+            cards.push(c);
+            if (g.same) byKey.set(g.same, c);
+        }
+    }
+    return cards;
+}
