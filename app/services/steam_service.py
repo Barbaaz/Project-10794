@@ -217,8 +217,8 @@ def import_games(user_id, profile=None):
         if item_id is None:
             try:
                 collection_service.add(user_id, edition_id, "owned", format="digital", **change)
-            except collection_service.CollectionError:      # the collection is full
-                break
+            except collection_service.CollectionError:      # an edition gone meanwhile (no size limit since 2026-10-15)
+                continue
             added += 1
         elif change:
             collection_service.update(user_id, item_id, change)

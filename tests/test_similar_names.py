@@ -14,6 +14,7 @@ def test_the_same_game_written_differently():
     assert alike("Zelda Breath of the Wild", "The Legend of Zelda: Breath of the Wild")    # one inside the other
     assert alike("Clive Barker's Hellraiser: Revival", "HELLRAISER REVIVAL")
     assert alike("S.T.A.L.K.E.R. 2: Heart of Chornobyl", "S.T.A.L.K.E.R. 2: Heart of Chernobyl")
+    assert alike("STUPID NEBER DIES", "Stupid Never Dies")       # one letter in a short word (2026-10-15)
 
 
 def test_different_games_stay_apart():

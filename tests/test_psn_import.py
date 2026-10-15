@@ -260,6 +260,20 @@ def test_a_list_shared_by_consoles_is_the_one_played():
     assert games["A"]["platforms"][0] == "PS4" and games["B"]["platforms"][0] == "PS4"
 
 
+def test_a_series_named_played_game_is_its_trophy_list():
+    """User's PSN, 2026-10-15: "Devil May Cry 5 Series" played on a PS4 (two entries) and a PS5; the lists are
+    "Devil May Cry 5" (PS4) and "Devil May Cry 5 Special Edition" (PS5). Their hours go to those lists."""
+    lists = [{"id": "PS4LIST", "name": "Devil May Cry 5", "platforms": ["PS4"], "earned": 20, "total": 54, "platinum": False},
+             {"id": "PS5LIST", "name": "Devil May Cry 5 Special Edition", "platforms": ["PS5"], "earned": 19, "total": 55,
+              "platinum": False},
+             {"id": "DMC1", "name": "Devil May Cry", "platforms": ["PS4"], "earned": 21, "total": 34, "platinum": False}]
+    played = [{"id": "CUSA1", "name": "Devil May Cry 5 Series", "platforms": ["PS4"], "minutes": 660, "plus": False},
+              {"id": "CUSA2", "name": "Devil May Cry 5 Series", "platforms": ["PS4"], "minutes": 50, "plus": False},
+              {"id": "PPSA1", "name": "Devil May Cry 5 Series", "platforms": ["PS5"], "minutes": 575, "plus": False}]
+    games = {g["id"]: g["minutes"] for g in psn_service.games_of(lists, played)}
+    assert games == {"PS4LIST": 710, "PS5LIST": 575, "DMC1": 0}
+
+
 def test_the_newest_console_of_a_shared_list_comes_first(psn):
     psn["player"]["lists"] = [{"npCommunicationId": "NPWR1", "trophyTitleName": "Bastion", "trophyTitlePlatform": "PSVITA,PS4",
                                "definedTrophies": trophies(20, 2, 1, 0), "earnedTrophies": trophies(1, 0, 0, 0)}]
