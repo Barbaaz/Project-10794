@@ -71,6 +71,37 @@ def test_historical_low_counts_only_in_stock_prices(edition_id):
     assert group["lowest_price"]["price"] == 39.99
 
 
+def set_preorder(app_on_test_db, edition_id, days_to_release, names=None):
+    """Mark these offers (all by default) as pre-orders coming out in that many days."""
+    app_on_test_db.conn.cursor().execute(
+        "UPDATE store_products SET is_preorder = true, release_date = (utcnow() + make_interval(days => ?))::date "
+        "WHERE edition_id = ? AND (? OR external_name = ANY(?))",
+        days_to_release, edition_id, names is None, names or [],
+    )
+
+
+def test_pre_order_when_every_offer_in_stock_is_one(app_on_test_db, edition_id):
+    # the sold-out offer doesn't count: the wishlist shows "Pré-reserva" (user, 2026-10-15)
+    set_preorder(app_on_test_db, edition_id, 30, ["restocked 2 days ago", "never sold out", "restocked long ago"])
+    [group] = editions_with_offers([edition_id])
+    assert group["is_preorder"]
+    assert "own_release_date" not in group["offers"][0]
+
+
+def test_not_a_pre_order_when_one_offer_in_stock_is_not(app_on_test_db, edition_id):
+    set_preorder(app_on_test_db, edition_id, 30, ["restocked 2 days ago", "never sold out"])
+    [group] = editions_with_offers([edition_id])
+    assert not group["is_preorder"]
+
+
+def test_not_a_pre_order_once_its_release_date_has_passed(app_on_test_db, edition_id):
+    # some stores keep the label after the release
+    set_preorder(app_on_test_db, edition_id, -3)
+    [group] = editions_with_offers([edition_id])
+    assert not group["is_preorder"]
+    assert not any(o["is_preorder"] for o in group["offers"])
+
+
 def test_unknown_editions_are_ignored(app_on_test_db):
     assert editions_with_offers([999999]) == []
     assert editions_with_offers([]) == []

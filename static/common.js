@@ -31,6 +31,20 @@ function esc(text) {
     return String(text ?? "").replace(/[&<>"']/g, c => ESCAPES[c]);
 }
 
+// "2026-10-15" → Date at local midnight (new Date("2026-10-15") would be UTC)
+function parseDay(iso) {
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d);
+}
+
+// A release date as the cards show it: "15 out 2026", "2027" when only the year is known, else "por anunciar"
+function releaseLabel(iso, isEstimate) {
+    if (!iso) return t("date_tba");
+    const day = parseDay(iso);
+    if (isEstimate) return t("date_tba_year", { year: day.getFullYear() });
+    return day.toLocaleDateString(LOCALE, { day: "numeric", month: "short", year: "numeric" }).replace(".", "");
+}
+
 // "@name"; "utilizador removido" for an account deleted since (no username or page any more)
 // A card's picture: IGDB's flat cover fills the 3:4 frame; a store's photo (a special edition's box, a
 // game IGDB lacks) is shown whole on white, never cut (user, 2026-10-12: "normalize the images")

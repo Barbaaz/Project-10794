@@ -172,6 +172,8 @@ img.store-photo { object-fit: contain !important; background: #fff !important; p
                 gap: .25rem; pointer-events: none; }
 .cover-badges .badge { box-shadow: 0 1px 3px rgb(0 0 0 / .35); }
 .cover-platinum { background: linear-gradient(135deg, #e9eef5, #9fb3c8); color: #1d2a38; }
+/* a game not out yet: the front page's cards and the wishlist */
+.badge-pre { background: #14171f; color: #fff; }
 /* the play statuses (collection_grid.js STATUS_LOOK) and the collection's platform bar: one set of colours
    for the covers' badges, the edit window and the statistics (2026-10-12). Validated with the dataviz
    skill's checker (validate_palette.js), as neighbours in the status bar's order (finished, playing,

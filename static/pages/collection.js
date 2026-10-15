@@ -99,7 +99,10 @@ function priceLine(item) {
         parts.push(`<span class="text-body-secondary">${t("collection_no_store_price")}</span>`);
     }
     const used = item.used ? `<a href="/listing/${item.used.listing_id}">${esc(t("used_from", { price: eur.format(item.used.price) }))}</a>` : "";
-    const lines = `<div class="item-line small">${parts.join("")}</div><div class="item-line small">${used}</div>`;
+    // a wish not out yet: its release date where a used copy would be (nobody sells a used copy of it)
+    const second = item.kind === "wishlist" && item.is_preorder && !used
+        ? `<span class="text-body-secondary">${icon("calendar", 13)} ${esc(releaseLabel(item.release_date, item.date_is_estimate))}</span>` : used;
+    const lines = `<div class="item-line small">${parts.join("")}</div><div class="item-line small">${second}</div>`;
     if (item.kind !== "wishlist") return lines;
     const badges = [
         item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}${item.discount ? ` −${Math.round(item.discount)}%` : ""}</span>` : "",
@@ -179,7 +182,8 @@ function itemRow(item) {
           <div class="card h-100 item-card overflow-hidden ${item.good_deal ? "border-success border-2" : ""}" data-id="${item.id}">
             <div class="position-relative">
                 <a href="/game/${item.game_id}" class="item-cover-link" tabindex="-1" aria-hidden="true"><img class="item-cover ${coverClass(item.image)}" src="${esc(item.image || "")}" alt="" loading="lazy"></a>
-                ${coverBadges(item)}
+                ${owned ? coverBadges(item) : item.is_preorder
+                    ? `<div class="cover-badges"><span class="badge badge-pre">${esc(t("preorder"))}</span></div>` : ""}
             </div>
             <div class="card-body p-2 d-flex flex-column min-w-0">
                     <a href="/game/${item.game_id}" class="item-title fw-semibold small link-body-emphasis text-decoration-none">${esc(localName(item) || "")}</a>
