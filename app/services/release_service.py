@@ -1,4 +1,6 @@
 """Pre-orders and upcoming releases for the front page."""
+from datetime import date
+
 from app.services.common import EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, cached, card_cover, card_group
 from app.services.review_service import mark_review_scores
 from app.services.tag_service import mark_historical_lows
@@ -36,6 +38,20 @@ out_already AS (
           AND (sp.release_date IS NULL OR sp.release_date <= CAST(utcnow() AS date)))
 )
 """
+
+# A product's own release date this much earlier than its game's (what most stores say) is a typo, not an
+# edition out earlier (user, 2026-10-15: Mega Mania's Persona 4 Revival Steelbook "2026-02-18" for 2027):
+# the game's date counts, so the pre-order isn't taken as out already
+TYPO_DAYS = 180
+OFFER_RELEASE_DATE = f"""CASE WHEN o.release_date < r.release_date - {TYPO_DAYS} THEN r.release_date
+                             ELSE COALESCE(o.release_date, r.release_date) END"""
+
+
+def offer_release_date(own, game):
+    """The day an offer comes out (ISO text or None): its own date, else the game's; OFFER_RELEASE_DATE in Python."""
+    if own and game and (date.fromisoformat(str(game)) - date.fromisoformat(str(own))).days > TYPO_DAYS:
+        return game
+    return own or game
 
 
 def game_release_date(game_id):
@@ -76,8 +92,9 @@ def preorders():
             LEFT JOIN game_release r ON r.game_id = g.id
             WHERE o.is_active AND o.is_preorder AND o.condition = 'new' AND o.in_stock AND g.kind = 'game'
               -- out already: some stores keep the pre-order label after the release date
-              -- (the product's own date first: a special edition can come out later than the game)
-              AND COALESCE(o.release_date, r.release_date, '9999-12-31') >= CAST(utcnow() AS date)
+              -- (the product's own date first: a special edition can come out later than the game;
+              -- not one far earlier: a typo, OFFER_RELEASE_DATE)
+              AND COALESCE({OFFER_RELEASE_DATE}, '9999-12-31') >= CAST(utcnow() AS date)
               AND g.id NOT IN (SELECT game_id FROM out_already)
             ORDER BY CASE WHEN r.release_date IS NULL THEN 1 ELSE 0 END, r.release_date, g.title,
                      CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, e.name, e.id, o.price, o.store_product_id
