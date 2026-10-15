@@ -1,6 +1,6 @@
 """Lançamentos (release_service.upcoming_releases): one card per game, with what the page needs to merge its
 platforms, rank the most anticipated and fill the calendar."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -47,6 +47,14 @@ def releases(app_on_test_db):
     # a real date to come stays, also where a store sells it without the pre-order mark
     soon = product("PS5", "Tomorrow Game", "Standard", 59.99)
     product("PS5", "Tomorrow Game", "Standard", 58.99, released=None, store="cstech", preorder=False, game_id=soon)
+    # IGDB's date for the platform (2026-10-15), only where no store gives a real one
+    igdb = lambda game_id, day, exact: cursor.execute(
+        "UPDATE games SET igdb_platform_release = ?, igdb_platform_release_exact = ? WHERE id = ?", day, exact, game_id)
+    igdb(product("PS5", "Tba Game", "Standard", 49.99, released=placeholder), SOON + timedelta(days=20), True)
+    igdb(product("PS5", "Undated Game", "Standard", 44.99, released=None), SOON + timedelta(days=30), True)
+    igdb(product("PS5", "Store Dated Game", "Standard", 39.99), SOON + timedelta(days=40), True)
+    igdb(product("PS5", "Port Game", "Standard", 29.99, released=placeholder), date.today() - timedelta(days=10), True)
+    igdb(product("PS5", "Year Game", "Standard", 54.99, released=placeholder), date(date.today().year + 1, 12, 31), False)
 
     yield release_service.upcoming_releases()
 
@@ -74,6 +82,31 @@ def test_most_anticipated_numbers_and_only_upcoming(releases):
     assert "Out Game" not in by_name and "Tomorrow Game" in by_name
     assert not any(g["name"] == "Out Game" for g in release_service.preorders())
     assert release_service.game_release_date(by_name["Tomorrow Game"]["game_id"])["release_date"] == SOON.isoformat()
+
+
+def test_igdb_dates_only_where_the_stores_have_none(releases):
+    """User, 2026-10-15: a game the stores have "por anunciar" gets IGDB's day for its platform; a store's real
+    date always wins; IGDB's year doesn't replace a store's "31/12"; a past IGDB date changes nothing."""
+    by_name = {g["name"]: g for g in releases}
+    day = lambda name: (by_name[name]["release_date"], by_name[name]["date_is_estimate"])
+    assert day("Tba Game") == ((SOON + timedelta(days=20)).isoformat(), False)
+    assert day("Undated Game") == ((SOON + timedelta(days=30)).isoformat(), False)       # pre-order, no store date
+    assert day("Store Dated Game") == (SOON.isoformat(), False)
+    assert day("Port Game") == (date(date.today().year, 12, 31).isoformat(), True)
+    assert day("Year Game") == (date(date.today().year, 12, 31).isoformat(), True)
+
+
+def test_igdb_platform_release_picks_europe_and_a_day():
+    from pipeline.igdb import platform_release
+    row = lambda platform, day, fmt=0, region=8, status="Full Release": {
+        "platform": platform, "date": int(datetime(*day, tzinfo=timezone.utc).timestamp()),
+        "date_format": {"id": fmt}, "release_region": {"id": region}, "status": {"name": status}}
+    rows = [row(167, (2027, 3, 1)), row(167, (2027, 2, 20), region=1), row(167, (2026, 12, 31), fmt=2, region=1),
+            row(167, (2026, 11, 1), status="Early Access"), row(167, (2026, 10, 30), fmt=7), row(130, (2026, 11, 5))]
+    assert platform_release(rows, 167) == ("2027-02-20", True)              # Europe's day: not a year, early access, TBD
+    assert platform_release(rows, 130) == ("2026-11-05", True)              # the port's own date
+    assert platform_release([row(167, (2027, 12, 31), fmt=2)], 167) == ("2027-12-31", False)
+    assert platform_release(rows, 6) == (None, None)
 
 
 def test_recent_releases_only_the_last_weeks(releases):

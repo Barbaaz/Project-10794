@@ -91,6 +91,13 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS steam_app_id integer NULL;
 -- How many IGDB users follow a game before it's out (IGDB's "hypes", 2026-10-14): Lançamentos' most
 -- anticipated. Refreshed with the critics' scores (pipeline/igdb.refresh_critic_scores); NULL = not asked yet
 ALTER TABLE games ADD COLUMN IF NOT EXISTS hypes integer NULL;
+-- IGDB's release date for the game's own platform (2026-10-15: a date for games the stores still have "por
+-- anunciar"), Europe's else worldwide's; exact = a day (else a month / quarter / year: the period's last day,
+-- shown as the year). Asked each day for the games the stores have on pre-order or dated
+-- (pipeline/igdb.refresh_release_dates); release_service uses it only where no store gives a real date
+ALTER TABLE games ADD COLUMN IF NOT EXISTS igdb_platform_release date NULL;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS igdb_platform_release_exact boolean NULL;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS igdb_dates_checked_at timestamp NULL;
 
 -- Editions of a game: Standard, Deluxe, Day One, Collector's, Game Key Card...
 CREATE TABLE IF NOT EXISTS game_editions (

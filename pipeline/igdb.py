@@ -10,6 +10,7 @@ screenshots, YouTube trailers, game modes, themes, time to beat) for the game pa
     python -m pipeline.igdb --names          # English names of games matched before they were kept
     python -m pipeline.igdb --critics        # critics' scores of matched games (also each full run)
     python -m pipeline.igdb --steam          # PC games' Steam app ids (also each full run)
+    python -m pipeline.igdb --release-dates  # release dates of upcoming games, per platform (also each full run)
 
 Credentials: a Twitch developer app, in the environment variables IGDB_CLIENT_ID and
 IGDB_CLIENT_SECRET (never in the code). IGDB allows 4 requests per second; we stay under it.
@@ -399,6 +400,75 @@ def refresh_critic_scores(client=None):
     return len(ids)
 
 
+# IGDB release_dates: date_format 0 = a day, 1 a month, 2 a year, 3-6 a quarter, 7 TBD (no date); regions 1 Europe,
+# 8 worldwide (the others: other countries' dates, used only when IGDB has nothing for those)
+EXACT_DAY, TBD = 0, 7
+REGION_ORDER = {1: 0, 8: 1}
+DATES_PER_REQUEST = 500      # release date rows per IGDB answer (its maximum); asked again with an offset
+GAMES_PER_REQUEST = 100      # games per question (a game has a row per platform and region)
+
+
+def platform_release(rows, platform_id):
+    """
+    (date "YYYY-MM-DD", exact) for one platform from a game's IGDB release_dates, or (None, None): Europe's
+    else worldwide's else another region's; a day before a month / quarter / year; the earliest of those. Not
+    TBD rows, nor releases IGDB marks other than a full release (early access, alpha, beta, cancelled).
+    """
+    picked = [r for r in rows if r.get("platform") == platform_id and r.get("date") is not None
+              and (r.get("date_format") or {}).get("id", EXACT_DAY) != TBD
+              and (r.get("status") or {}).get("name", "Full Release") == "Full Release"]
+    if not picked:
+        return None, None
+    rank = lambda r: (REGION_ORDER.get((r.get("release_region") or {}).get("id"), 2),
+                      (r.get("date_format") or {}).get("id", EXACT_DAY) != EXACT_DAY, r["date"])
+    best = min(picked, key=rank)
+    return time.strftime("%Y-%m-%d", time.gmtime(best["date"])), (best.get("date_format") or {}).get("id", EXACT_DAY) == EXACT_DAY
+
+
+def refresh_release_dates(client=None):
+    """
+    IGDB's release date of each game the stores have on pre-order or dated, for its own platform (2026-10-15:
+    a date for the games the stores still have "por anunciar"; a port's date, not the game's first release).
+    Asked each full run: release dates move. A game with no date there gets none (NULL).
+    """
+    with connection() as conn:
+        cursor = conn.cursor()
+        games = cursor.execute(
+            """
+            SELECT g.id, g.igdb_id, p.code FROM games g JOIN platforms p ON p.id = g.platform_id
+            WHERE g.igdb_id IS NOT NULL AND EXISTS (
+                SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active
+                  AND (sp.is_preorder OR sp.release_date >= CAST(utcnow() AS date)))
+            ORDER BY g.id
+            """).fetchall()
+        if not games:
+            return 0
+        client = client or IGDBClient()
+        ids = sorted({igdb_id for _, igdb_id, _ in games})
+        rows = {}
+        for start in range(0, len(ids), GAMES_PER_REQUEST):
+            batch, offset = ids[start:start + GAMES_PER_REQUEST], 0
+            while True:
+                answer = client.query(
+                    f"fields game,platform,date,date_format.id,release_region.id,status.name; "
+                    f"where game = ({','.join(map(str, batch))}); sort id asc; limit {DATES_PER_REQUEST}; offset {offset};",
+                    "release_dates")
+                for r in answer:
+                    rows.setdefault(r["game"], []).append(r)
+                if len(answer) < DATES_PER_REQUEST:
+                    break
+                offset += DATES_PER_REQUEST
+        dated = 0
+        for game_id, igdb_id, platform in games:
+            day, exact = platform_release(rows.get(igdb_id, []), IGDB_PLATFORMS.get(platform))
+            dated += day is not None
+            cursor.execute("UPDATE games SET igdb_platform_release = ?, igdb_platform_release_exact = ?, "
+                           "igdb_dates_checked_at = utcnow() WHERE id = ?", day, exact, game_id)
+        conn.commit()
+    log.info("IGDB: release dates asked for %d games, %d have one for their platform", len(games), dated)
+    return len(games)
+
+
 def english_title(title, igdb_name):
     """
     The English name shown for a game: IGDB's when the store's title is Portuguese ("The Last of Us
@@ -481,10 +551,13 @@ if __name__ == "__main__":
     parser.add_argument("--names", action="store_true", help="only fill the English names of matched games")
     parser.add_argument("--critics", action="store_true", help="only refresh the critics' scores of matched games")
     parser.add_argument("--steam", action="store_true", help="only fill PC games' Steam app ids")
+    parser.add_argument("--release-dates", action="store_true", help="only refresh upcoming games' release dates")
     args = parser.parse_args()
     setup_logging()
     if args.critics:
         refresh_critic_scores()
+    elif args.release_dates:
+        refresh_release_dates()
     elif args.steam:
         fill_steam_ids()
     elif args.names:
