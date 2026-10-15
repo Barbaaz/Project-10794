@@ -65,6 +65,16 @@ def test_picking_a_platform_creates_the_game_once(igdb):
     assert c.execute("SELECT created_by FROM games WHERE id = ?", made["game_id"]).fetchone()[0] is not None
 
 
+def test_games_per_day(igdb, monkeypatch):
+    client = igdb["client"]
+    sign_up(client, "retro_seller3")
+    monkeypatch.setattr(igdb_game_service, "MAX_PER_DAY", 1)
+    ok = client.post("/api/igdb/games", headers=HEADERS, json={"igdb_id": 9001, "platform": "PS2"})
+    assert ok.status_code == 200
+    again = client.post("/api/igdb/games", headers=HEADERS, json={"igdb_id": 9001, "platform": "Wii"})
+    assert again.status_code == 429 and again.get_json()["error"] == "games_per_day"
+
+
 # Okami's versions on IGDB (version_parent = 9001), as the edition list asks for them
 OKAMI_VERSIONS = [
     {"version_title": "Collector's Edition", "platforms": [8]},

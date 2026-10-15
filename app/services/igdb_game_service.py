@@ -8,10 +8,10 @@ works like any other (game page, collection, reviews); if a store starts selling
 processing finds it by its name. One created game nobody uses is removed by the next rematch.
 """
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.models import Game, GameEdition, Platform
@@ -20,6 +20,7 @@ from core.normalizer import normalize_name
 from db import session
 from pipeline.igdb import FIELDS, IGDB_PLATFORMS, IGDBClient, game_info
 
+MAX_PER_DAY = 500                  # games one user may create in 24 h (user, 2026-10-15: was 20, too few for a collection)
 MAX_RESULTS = 20
 # IGDB game_type: 0 main game, 4 standalone expansion, 8 remake, 9 remaster, 10 expanded game, 11 port
 GAME_TYPES = (0, 4, 8, 9, 10, 11)
@@ -106,6 +107,11 @@ def create(user_id, igdb_id, platform_code):
         game = s.scalars(select(Game).where(Game.normalized_title == key, Game.platform_id == platform.id)).first()
         if game:                       # the stores' copy of it: keep that one
             return _with_standard_edition(s, game)
+
+        since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)
+        made = s.scalar(select(func.count()).select_from(Game).where(Game.created_by == user_id, Game.created_at > since))
+        if made >= MAX_PER_DAY:
+            raise IGDBGameError("games_per_day", 429)
 
         info = game_info(g)
         game = _added(s, Game(platform_id=platform.id, title=g["name"][:300], normalized_title=key, created_by=user_id,
