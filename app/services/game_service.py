@@ -257,7 +257,7 @@ def editions_with_offers(edition_ids):
     # Two steps on purpose (see TWO_STEPS): filter current_offers by id, not by a join
     offers = fetch_all(
         f"""
-        SELECT {OFFER_COLUMNS}
+        SELECT {OFFER_COLUMNS}, o.release_date AS own_release_date
         FROM current_offers o JOIN stores s ON s.id = o.store_id
         WHERE o.is_active AND o.edition_id IN ({ids})
         ORDER BY o.in_stock DESC, o.price, o.store_product_id
@@ -289,11 +289,38 @@ def editions_with_offers(edition_ids):
 
     order = {edition_id: i for i, edition_id in enumerate(edition_ids)}
     used = used_summaries(edition_ids)
-    return mark_review_scores(mark_historical_lows([
+    return mark_review_scores(mark_historical_lows(mark_preorders([
         card_group(e, [o for o in offers if o["edition_id"] == e["edition_id"]],
                    image=e["image"], lowest_price=lowest.get(e["edition_id"]), used=used.get(e["edition_id"]))
         for e in sorted(editions, key=lambda e: order[e["edition_id"]])
-    ]))
+    ])))
+
+
+def mark_preorders(groups):
+    """
+    Games not out yet (user, 2026-10-15: also on the wishlist): `is_preorder` when every offer in stock is
+    a pre-order, and the game's release date, so the card can say so. Some stores keep the pre-order label
+    after the release, so a labelled offer whose date (its own, else the game's) has passed is out already:
+    the pre-orders tab's rule. The offers need `own_release_date` (taken off here).
+    """
+    stocked = lambda g: [o for o in g["offers"] if o["in_stock"]]
+    labelled = {g["game_id"] for g in groups if stocked(g) and all(o["is_preorder"] for o in stocked(g))}
+    dates = game_release_dates(list({o["game_id"] for g in groups for o in g["offers"] if o["is_preorder"]}))
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    def not_out(o):
+        return (o["own_release_date"] or dates.get(o["game_id"], {}).get("release_date") or "9999-12-31") >= today
+
+    pre_order_games = {g["game_id"] for g in groups if g["game_id"] in labelled and all(not_out(o) for o in stocked(g))}
+    for g in groups:
+        for o in g["offers"]:
+            o["is_preorder"] = o["is_preorder"] and not_out(o)
+            del o["own_release_date"]
+        g["is_preorder"] = g["game_id"] in pre_order_games
+        release = dates.get(g["game_id"]) or {}
+        g["release_date"] = release.get("release_date")
+        g["date_is_estimate"] = release.get("date_is_estimate", False)
+    return groups
 
 
 CATALOG_SORTS = {
@@ -421,29 +448,9 @@ def catalog(platform=None, sort="name", page=1, per_page=48, special_only=False,
             *ids,
         )
         used = used_summaries(ids)
-        groups = [card_group(e, [o for o in offers if o["edition_id"] == e["edition_id"]],
-                             image=e["image"], used=used.get(e["edition_id"]))
-                  for e in page_editions]
-
-        # Games not out yet: their release date, so the card can say so. Some stores keep the
-        # pre-order label after the release, so a labelled offer whose date (its own, else the
-        # game's) has passed is out already: the pre-orders tab's rule
-        labelled = {g["game_id"] for g in groups if g["offers"] and all(o["is_preorder"] for o in g["offers"])}
-        dates = game_release_dates(list({o["game_id"] for g in groups for o in g["offers"] if o["is_preorder"]}))
-        today = datetime.now(timezone.utc).date().isoformat()
-
-        def not_out(o):
-            return (o["own_release_date"] or dates.get(o["game_id"], {}).get("release_date") or "9999-12-31") >= today
-
-        pre_order_games = {g["game_id"] for g in groups if g["game_id"] in labelled and all(not_out(o) for o in g["offers"])}
-        for g in groups:
-            for o in g["offers"]:
-                o["is_preorder"] = o["is_preorder"] and not_out(o)
-                del o["own_release_date"]
-            g["is_preorder"] = g["game_id"] in pre_order_games
-            release = dates.get(g["game_id"]) or {}
-            g["release_date"] = release.get("release_date")
-            g["date_is_estimate"] = release.get("date_is_estimate", False)
+        groups = mark_preorders([card_group(e, [o for o in offers if o["edition_id"] == e["edition_id"]],
+                                            image=e["image"], used=used.get(e["edition_id"]))
+                                 for e in page_editions])
 
     groups = mark_review_scores(mark_historical_lows(groups))
     if by_game and groups:

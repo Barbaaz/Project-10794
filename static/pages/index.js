@@ -560,18 +560,6 @@ if (FRONT_TABS[tabFromUrl]) frontTab = tabFromUrl;
 const monthName = d => d.toLocaleDateString(LOCALE, { month: "long" });
 const weekdayName = d => d.toLocaleDateString(LOCALE, { weekday: "short" }).replace(".", "");
 
-// "2026-10-15" → Date at local midnight (new Date("2026-10-15") would be UTC)
-function parseDay(iso) {
-    const [y, m, d] = iso.split("-").map(Number);
-    return new Date(y, m - 1, d);
-}
-
-function releaseLabel(iso, isEstimate) {
-    if (!iso) return t("date_tba");
-    const day = parseDay(iso);
-    if (isEstimate) return t("date_tba_year", { year: day.getFullYear() });
-    return day.toLocaleDateString(LOCALE, { day: "numeric", month: "short", year: "numeric" }).replace(".", "");
-}
 
 // Keep the address bar in step with what's on screen (/?q=… or /?tab=…), and remember it
 // for this browser tab so the game page's back button returns exactly here
@@ -732,7 +720,11 @@ function renderWishlist(groups) {
         } else if (low) {
             lines.push(`<span class="text-body-secondary">${t("historical_low_short", { price: eur.format(low.price) })}</span>`);
         }
-        return makeCard(g, { extraLine: lines.join(" "), again: make });
+        // not out yet (user, 2026-10-15): "Pré-reserva" on the cover and the release date instead, as in the
+        // pre-orders tab (a historical low says little before the release)
+        if (!g.is_preorder) return makeCard(g, { extraLine: lines.join(" "), again: make });
+        return makeCard(g, { coverBadge: `<span class="badge badge-pre discount-badge">${t("preorder")}</span>`,
+                             extraLine: `${icon("calendar", 14)} ${esc(releaseLabel(g.release_date, g.date_is_estimate))}`, again: make });
     };
     groups.forEach(g => grid.appendChild(make(g)));
     return wrap;
