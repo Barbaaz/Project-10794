@@ -114,6 +114,7 @@ Read-only JSON, served from the database (nothing is scraped on request):
 | `GET /api/deals?limit=12&min_percent=15` | Editions clearly cheaper at one store than at the next cheapest (15–60% gap, a comparison, not a discount), one per game, the most money saved (`savings`) first; shown while there are no real discounts |
 | `GET /api/preorders?platform=` | Games on pre-order, one group per edition, soonest release first |
 | `GET /api/releases?platform=` | Games coming out from today on, by release date (`date_is_estimate` for "31/12" dates) |
+| `GET /api/releases/recent?platform=` | Games out in the last 45 days that a store sells new, newest first (the home page) |
 | `GET /api/games/catalog?platform=&sort=name\|price_asc\|price_desc&page=&per_page=48&editions=special&q=&store=&genre=&tags=&pegi=` | The whole catalogue (and the search): every edition with an offer in stock, paged. Without `platform`, one card per game and edition across platforms: the cheapest platform's group, the others in `alternatives`; `editions=special` = only editions above Standard; `q` = words in the title; `store` = only what that store has in stock; `genre` = only games in that category; `tags=coop,horror` = only games with all those tags; `pegi=12` = PEGI up to 12; `kind=hardware` (or `console`) = consoles instead of games |
 | `GET /api/genres` | Categories with games in stock (`{genre, count}`), from the IGDB genres; close genres share one (TBS / RTS / Tactical → `strategy`) |
 | `GET /api/tags` | Tags for the filter: game modes and themes from IGDB (with counts), price tags `on_sale`, `historical_low` (dropped to the lowest price ever), `used` |
@@ -186,16 +187,22 @@ An offer has `price`, `in_stock`, `condition` (`new`/`used`), `url`, and — onl
 discount is real — `was_price` and `discount_percent`. Errors are `{"error": "..."}`
 with status 400 or 404. `per_page` is at most 100.
 
-## Front page
+## Home page and tabs
 
-Tabs, the visitor's choice remembered in the browser (or opened with `/?tab=…`):
+The landing page, `/` (`templates/home.html`, `static/pages/home.js`): the most anticipated games in a slider
+(`static/slider.js`, shared with Lançamentos), then a sideways row each of the latest releases
+(`/api/releases/recent`), the biggest discounts (store gaps until real discounts exist) and the historical lows;
+one platform filter for all of them, remembered in the browser. Each "Ver tudo" opens the list's tab.
+
+The tabs and the search are at `/browse` (old `/?tab=…` and `/?q=…` links redirect there with their
+query). Tabs, the visitor's choice remembered in the browser (or opened with `/browse?tab=…`):
 `discounts` (featured real discounts, or best prices between stores until there are some),
 `preorders`, `releases` (calendar by month / day), `catalog` (everything in stock, by platform,
 sortable, 48 at a time), `special` (only editions above Standard), `hardware` (consoles) and `market` (used
 copies users sell). The wishlist is its own page, `/wishlist` (old `?tab=wishlist` / `?tab=favorites` links
 go there). Search uses the
 catalogue too: 48 editions per page, sort by name / price, and a store filter (also on the
-catalogue tabs); the address keeps them (`/?q=zelda&page=2&store=cstech`). The game page's back
+catalogue tabs); the address keeps them (`/browse?q=zelda&page=2&store=cstech`). The game page's back
 button returns to the search or tab the game was opened from. Wished editions that came back in
 stock show as a banner. Each card's ☆ opens a menu: ⭐ Quero (wishlist; ★ on the card) and
 📚 Tenho (collection; a small 📚 on the card). Favourites were folded into the wishlist

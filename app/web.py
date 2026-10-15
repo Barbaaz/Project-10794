@@ -100,8 +100,21 @@ def json_error(e):
 
 
 @app.route("/")
-def index():
-    """The front page; its wishlist tab was removed (user, 2026-10-15): old ?tab=wishlist / favorites links go to /wishlist."""
+def home_page():
+    """
+    The landing page (user, 2026-10-15): the most anticipated, latest releases, biggest discounts, historical
+    lows (static/pages/home.js). The tabs and the search moved to /browse: the old /?tab=… and /?q=… links go there.
+    """
+    if request.args.get("tab") in ("wishlist", "favorites"):
+        return redirect("/wishlist", 301)
+    if request.query_string:
+        return redirect(f"/browse?{request.query_string.decode()}", 301)
+    return render_template("home.html")
+
+
+@app.route("/browse")
+def browse_page():
+    """The tabs (best prices, pre-orders, releases, catalogue...) and the search; the wishlist tab became /wishlist."""
     if request.args.get("tab") in ("wishlist", "favorites"):
         return redirect("/wishlist", 301)
     return render_template("index.html")

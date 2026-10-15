@@ -616,10 +616,10 @@ function onThemeChange() {
 // search page for this browser tab); works after reloads and doesn't rely on browser history
 function setBackLink() {
     const last = saved("lastListPage", null, "sessionStorage");
-    if (!last || !last.startsWith("/?")) return;   // only our own pages
+    if (!last || !last.startsWith("/browse?")) return;   // only our own pages
     const link = document.getElementById("back-link");
     link.href = last;
-    if (new URLSearchParams(last.slice(1)).get("q")) link.textContent = t("back_search");
+    if (new URLSearchParams(last.split("?")[1]).get("q")) link.textContent = t("back_search");
 }
 
 // --- the user's collection: "Tenho" / "Quero" per edition (app/services/collection_service.py) ---
