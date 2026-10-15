@@ -124,6 +124,8 @@ def test_gaming_replay_names(name, game_key, edition_key):
 
 def test_coib_is_code_in_box():
     assert is_excluded("Sushi Bar Express (COIB) Switch")
+    assert is_excluded("Just Dance: Decades of Hits - Limited Edition COIB Switch")       # without brackets too
+    assert is_excluded("Switch Naruto Ultimate Ninja Storm Trilogy Code In The Box")      # Techinn
     assert not is_excluded("Coibra Racing PS5")
 
 
