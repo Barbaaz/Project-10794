@@ -101,6 +101,9 @@ def json_error(e):
 
 @app.route("/")
 def index():
+    """The front page; its wishlist tab was removed (user, 2026-10-15): old ?tab=wishlist / favorites links go to /wishlist."""
+    if request.args.get("tab") in ("wishlist", "favorites"):
+        return redirect("/wishlist", 301)
     return render_template("index.html")
 
 

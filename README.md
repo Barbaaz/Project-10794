@@ -191,8 +191,9 @@ with status 400 or 404. `per_page` is at most 100.
 Tabs, the visitor's choice remembered in the browser (or opened with `/?tab=…`):
 `discounts` (featured real discounts, or best prices between stores until there are some),
 `preorders`, `releases` (calendar by month / day), `catalog` (everything in stock, by platform,
-sortable, 48 at a time), `special` (only editions above Standard) and `wishlist` (the logged-in user's wished
-editions with their offers and historical low; `?tab=favorites` still opens it). Search uses the
+sortable, 48 at a time), `special` (only editions above Standard), `hardware` (consoles) and `market` (used
+copies users sell). The wishlist is its own page, `/wishlist` (old `?tab=wishlist` / `?tab=favorites` links
+go there). Search uses the
 catalogue too: 48 editions per page, sort by name / price, and a store filter (also on the
 catalogue tabs); the address keeps them (`/?q=zelda&page=2&store=cstech`). The game page's back
 button returns to the search or tab the game was opened from. Wished editions that came back in

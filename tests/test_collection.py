@@ -306,5 +306,7 @@ def test_the_wishlist_has_its_own_page(web_client):
     """User, 2026-10-13: the collection and the wishlist are two pages; old ?tab=wishlist links (e-mails) go on working."""
     assert 'data-kind="owned"' in web_client.get("/collection").get_data(as_text=True)
     assert 'data-kind="wishlist"' in web_client.get("/wishlist").get_data(as_text=True)
+    for front in ("/?tab=wishlist", "/?tab=favorites"):      # the front page's tab, removed 2026-10-15
+        assert web_client.get(front).headers["Location"].endswith("/wishlist")
     old = web_client.get("/collection?tab=wishlist")
     assert (old.status_code, old.headers["Location"]) == (301, "/wishlist")

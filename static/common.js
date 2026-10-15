@@ -185,8 +185,8 @@ async function renderAccountArea() {
            title="${esc(label)}" aria-label="${esc(label)}"><span class="icon">${icon}</span>${iconOnly ? "" : `<span class="d-none d-lg-inline">${esc(label)}</span>`}</a>`;
     box.innerHTML = `
         ${navButton("/sell", icon("tag"), t("nav_sell"))}
-        ${navButton("/collection", icon("library"), t("nav_collection"), 'id="collection-link"', true)}
         ${navButton("/wishlist", icon("star"), t("nav_wishlist"), 'id="wishlist-link"', true)}
+        ${navButton("/collection", icon("library"), t("nav_collection"), 'id="collection-link"', true)}
         ${navButton("/messages", icon("inbox"), t("messages"), 'id="messages-link"', true)}
         <div class="notifications position-relative">
             <button type="button" class="btn btn-sm header-link icon-only position-relative" id="notifications-btn" aria-expanded="false"
