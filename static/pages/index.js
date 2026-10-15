@@ -141,8 +141,9 @@ function usedLine(group) {
     return `<a href="${href}" class="used-line" title="${esc(t("used_title", { count }))}">${esc(t("used_from_price", { price: eur.format(price) }))}</a>`;
 }
 
-// A game edition users sell, like the catalogue cards: cover, platform, name, then the cheapest copy
-// large (seller and rating, condition) and the next sellers as lines, each opening that listing
+// A game edition users sell, like the catalogue cards: cover, platform (chips when sold on several:
+// /api/listings' `alternatives`), name, then the cheapest copy large (seller and rating, condition) and
+// how many sellers
 function marketCard(group) {
     const seller = l => `@${esc(l.seller_username)}${l.seller_rating_count ? ` ★${fmtNumber(l.seller_rating)}` : ""}`;
     const first = group.listings[0];
@@ -161,13 +162,20 @@ function marketCard(group) {
         <div class="h-100 game-card d-flex flex-column">
             <a href="/game/${group.game_id}#market" class="cover-link" tabindex="-1" aria-hidden="true"><img src="${esc(cover)}" alt="" loading="lazy"></a>
             <div class="card-text d-flex flex-column flex-grow-1">
-                <div class="card-platform">${esc(group.platform_name)}</div>
+                ${platformLine(group)}
                 <a href="/game/${group.game_id}#market" class="link-body-emphasis text-decoration-none game-title"
                    title="${esc(localName(group))}">${esc(title)}</a>
                 <div class="card-edition">${esc(edition) || "&nbsp;"}</div>
                 <div class="mt-auto pt-2">${lead}${more}</div>
             </div>
         </div>`;
+    col.querySelectorAll("[data-platform-index]").forEach(chip => chip.onclick = () => {
+        const all = platformsOf(group);
+        const i = Number(chip.dataset.platformIndex);
+        const card = marketCard({ ...all[i], alternatives: [], _all: all });
+        col.replaceWith(card);
+        card.querySelector(`[data-platform-index="${i}"]`)?.focus();
+    });
     return col;
 }
 

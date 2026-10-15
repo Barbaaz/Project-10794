@@ -252,7 +252,6 @@ const STRINGS = {
         sell_igdb_searching: "A procurar…",
         sell_igdb_empty: "Nenhum jogo encontrado no IGDB. Experimente outro nome.",
         error_igdb_unavailable: "A pesquisa no IGDB não está disponível agora. Tente mais tarde.",
-        error_games_per_day: "Já acrescentou muitos jogos hoje. Tente amanhã.",
         error_steam_profile_invalid: "Não reconhecemos esse perfil Steam. Cole a ligação do seu perfil.",
         error_steam_profile_not_found: "Esse perfil Steam não existe.",
         error_steam_private: "O perfil Steam esconde os jogos. Na Steam, em Privacidade, ponha os «Detalhes do jogo» como públicos e tente de novo.",
@@ -705,7 +704,6 @@ const STRINGS = {
         error_play_status_invalid: "Estado inválido.",
         error_hours_invalid: "Horas inválidas.",
         error_notes_long: "Notas demasiado longas (máximo 1000 caracteres).",
-        error_collection_full: "A coleção chegou ao limite de 2000 jogos.",
 
         // reports and moderation
         report: "Denunciar",
@@ -1197,7 +1195,6 @@ const STRINGS = {
         sell_igdb_searching: "Searching…",
         sell_igdb_empty: "No game found on IGDB. Try another name.",
         error_igdb_unavailable: "The IGDB search isn't available right now. Try again later.",
-        error_games_per_day: "You've added a lot of games today. Try again tomorrow.",
         error_steam_profile_invalid: "We don't recognise that Steam profile. Paste your profile's link.",
         error_steam_profile_not_found: "That Steam profile doesn't exist.",
         error_steam_private: "The Steam profile hides its games. On Steam, under Privacy, set \"Game details\" to public and try again.",
@@ -1650,7 +1647,6 @@ const STRINGS = {
         error_play_status_invalid: "Invalid status.",
         error_hours_invalid: "Invalid hours.",
         error_notes_long: "Notes too long (at most 1000 characters).",
-        error_collection_full: "The collection reached its limit of 2000 games.",
 
         // reports and moderation
         report: "Report",
