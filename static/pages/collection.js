@@ -139,8 +139,9 @@ function progressBar(item) {
             <span class="small text-body-secondary">${share}%</span></div>`;
 }
 
+// The trophies / achievements and the platinum come only from the Steam and PSN imports (user, 2026-10-15):
+// shown here, not edited (the API takes them only from the imports)
 function ownedControls(item) {
-    const playstation = (item.platform_name || "").startsWith("PlayStation");
     const statuses = STATUSES.map(s => ({ value: s, css: STATUS_LOOK[s].css,
                                           label: `${STATUS_LOOK[s].icon ? `${icon(STATUS_LOOK[s].icon, 14)} ` : ""}${esc(t(`status_play_${s}`))}` }));
     return `
@@ -154,16 +155,13 @@ function ownedControls(item) {
                         <input id="edit-hours" type="text" inputmode="decimal" class="form-control" data-field="hours"
                                value="${item.hours === null ? "" : fmtNumber(item.hours)}" placeholder="0"><span class="input-group-text">h</span></div></div>
                 <div class="col-7"><span class="small text-body-secondary d-block">${esc(t("collection_trophies"))}</span>
-                    <div class="input-group input-group-sm">
-                        <input type="number" min="0" class="form-control" data-field="achievements" value="${item.achievements ?? ""}" placeholder="0"
-                               aria-label="${esc(t("collection_achievements_done"))}">
-                        <span class="input-group-text">/</span>
-                        <input type="number" min="0" class="form-control" data-field="achievements_total" value="${item.achievements_total ?? ""}"
-                               placeholder="—" aria-label="${esc(t("collection_achievements_total"))}"></div></div>
+                    <div class="fw-semibold">${item.achievements_total
+                        ? `${icon("trophy", 14)} ${fmtNumber(item.achievements ?? 0)} / ${fmtNumber(item.achievements_total)}`
+                          + (item.platinum ? ` <span class="badge cover-platinum ms-1">${esc(t("collection_platinum"))}</span>` : "")
+                        : "—"}</div></div>
             </div>
-            <div data-progress>${progressBar(item)}</div>
-            ${playstation ? `<button type="button" class="choice mt-2" data-toggle="platinum" data-on="cover-platinum"
-                                     aria-pressed="${!!item.platinum}">${icon("trophy", 14)} ${esc(t("collection_platinum"))}</button>` : ""}`)}
+            ${progressBar(item)}
+            <div class="small text-body-secondary mt-1">${esc(t("collection_trophies_from_import"))}</div>`)}
         ${section(t("collection_your_score"), `
             ${choices("score", [{ value: "", label: "—" }, ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))],
                       item.score ? String(item.score) : "", t("collection_your_score"))}
@@ -341,8 +339,7 @@ function openEditor(id) {
     const save = async (field, value) => {
         const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { [field]: value } });
         if (!ok) { done(t(`error_${answer?.error || "unknown"}`)); return false; }
-        const numeric = ["hours", "achievements", "achievements_total"].includes(field);
-        item[field] = typeof value === "boolean" ? value : numeric ? (value ? Number(String(value).replace(",", ".")) : null) : value || null;
+        item[field] = field === "hours" ? (value ? Number(String(value).replace(",", ".")) : null) : value || null;
         data.stats = recount();
         renderStats();
         done(true);
@@ -352,7 +349,7 @@ function openEditor(id) {
         button.setAttribute("aria-pressed", on);
         button.classList.toggle(button.dataset.on, on);
     };
-    body.querySelectorAll("[data-choice] , [data-toggle]").forEach(b => press(b, b.getAttribute("aria-pressed") === "true"));
+    body.querySelectorAll("[data-choice]").forEach(b => press(b, b.getAttribute("aria-pressed") === "true"));
     body.querySelectorAll("[data-choice]").forEach(button => button.onclick = async () => {
         const field = button.dataset.choice, group = body.querySelectorAll(`[data-choice="${field}"]`);
         const before = [...group].find(b => b.getAttribute("aria-pressed") === "true");
@@ -360,15 +357,7 @@ function openEditor(id) {
         const ok = field === "score" ? await saveScore(button.dataset.value) : await save(field, button.dataset.value);
         if (!ok) group.forEach(b => press(b, b === before));
     });
-    body.querySelectorAll("[data-toggle]").forEach(button => button.onclick = async () => {
-        const on = button.getAttribute("aria-pressed") !== "true";
-        press(button, on);
-        if (!await save(button.dataset.toggle, on)) press(button, !on);
-    });
-    body.querySelectorAll("[data-field]").forEach(input => input.onchange = async () => {
-        if (await save(input.dataset.field, input.value) && input.dataset.field.startsWith("achievements"))
-            body.querySelector("[data-progress]").innerHTML = progressBar(item);
-    });
+    body.querySelectorAll("[data-field]").forEach(input => input.onchange = () => save(input.dataset.field, input.value));
     // the score is the user's review of the game (game page): one per game, kept in step on every item of it
     const saveScore = async value => {
         if (item.score_locked) return false;

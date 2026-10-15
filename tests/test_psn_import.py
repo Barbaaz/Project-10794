@@ -175,7 +175,8 @@ def test_a_game_taken_out_is_not_imported_again(psn):
     assert items_of(client)["Astro Bot"]["platinum"] is True
 
 
-def test_the_platinum_can_be_ticked_by_hand(psn):
+def test_the_platinum_cannot_be_ticked_by_hand(psn):
+    """User, 2026-10-15: trophies and the platinum come only from the imports."""
     client = psn["client"]
     sign_up(client, "by_hand")
     edition = psn["db"].execute("SELECT id FROM game_editions WHERE game_id = ?", psn["games"][0]).fetchone()
@@ -183,8 +184,8 @@ def test_the_platinum_can_be_ticked_by_hand(psn):
         edition = psn["db"].execute("INSERT INTO game_editions (game_id, edition_key, name) VALUES (?, '', 'Standard') "
                                     "RETURNING id", psn["games"][0]).fetchone()
     item_id = client.post("/api/collection", json={"edition_id": edition[0], "kind": "owned"}, headers=HEADERS).get_json()["id"]
-    client.patch(f"/api/collection/{item_id}", json={"platinum": True}, headers=HEADERS)
-    assert items_of(client)["Bloodborne"]["platinum"] is True
+    assert client.patch(f"/api/collection/{item_id}", json={"platinum": True}, headers=HEADERS).status_code == 200
+    assert not items_of(client)["Bloodborne"]["platinum"]
 
 
 def test_trophy_list_names_become_game_names():
