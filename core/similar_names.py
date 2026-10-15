@@ -33,9 +33,17 @@ ROMAN = re.compile(r"[ivxlc]+")
 JOINED = re.compile(r"\s[+&/]\s|\s\+|\+\s")
 
 
+def _one_letter_apart(a, b):
+    """One letter changed, added or left out: "neber" / "never" (a store's typo; 0.8 alike, under TYPO_RATIO)."""
+    if len(a) == len(b):
+        return sum(x != y for x, y in zip(a, b)) == 1
+    shorter, longer = sorted((a, b), key=len)
+    return len(longer) - len(shorter) == 1 and any(longer[:i] + longer[i + 1:] == shorter for i in range(len(longer)))
+
+
 def _same_word(a, b):
     return a == b or (len(a) >= MIN_TYPO_LENGTH and len(b) >= MIN_TYPO_LENGTH
-                      and SequenceMatcher(None, a, b).ratio() >= TYPO_RATIO)
+                      and (SequenceMatcher(None, a, b).ratio() >= TYPO_RATIO or _one_letter_apart(a, b)))
 
 
 def similar(key_a, key_b, title_a="", title_b=""):
