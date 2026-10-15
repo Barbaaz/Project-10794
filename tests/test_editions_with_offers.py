@@ -102,6 +102,26 @@ def test_not_a_pre_order_once_its_release_date_has_passed(app_on_test_db, editio
     assert not any(o["is_preorder"] for o in group["offers"])
 
 
+def test_a_store_date_a_year_early_is_a_typo(app_on_test_db, edition_id):
+    # Mega Mania's "2026-02-18" for a 2027 game: the other stores' date counts, it's still a pre-order
+    set_preorder(app_on_test_db, edition_id, 30, ["restocked 2 days ago", "never sold out", "restocked long ago"])
+    set_preorder(app_on_test_db, edition_id, 30 - 365, ["never sold out"])
+    [group] = editions_with_offers([edition_id])
+    assert group["is_preorder"]
+    assert all(o["is_preorder"] for o in group["offers"] if o["in_stock"])
+
+
+def test_pre_orders_tab_keeps_an_offer_with_a_typo_date(app_on_test_db, edition_id):
+    from app.services.common import clear_cache
+    from app.services.release_service import preorders
+    set_preorder(app_on_test_db, edition_id, 30, ["restocked 2 days ago", "never sold out", "restocked long ago"])
+    set_preorder(app_on_test_db, edition_id, 30 - 365, ["never sold out"])
+    clear_cache()
+    [group] = [g for g in preorders() if g["edition_id"] == edition_id]
+    assert {o["external_name"] for o in group["offers"]} == {"restocked 2 days ago", "never sold out", "restocked long ago"}
+    clear_cache()
+
+
 def test_unknown_editions_are_ignored(app_on_test_db):
     assert editions_with_offers([999999]) == []
     assert editions_with_offers([]) == []

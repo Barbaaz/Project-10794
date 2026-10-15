@@ -10,7 +10,7 @@ from app.services.genre_service import genre_filter
 from app.services.listing_service import used_summaries
 from app.services.review_service import mark_review_scores
 from app.services.tag_service import mark_historical_lows, pegi_filter, tag_filters
-from app.services.release_service import game_release_date, game_release_dates
+from app.services.release_service import game_release_date, game_release_dates, offer_release_date
 from db import fetch_all, fetch_one, placeholders
 
 # A special edition whose game is a download code, not a disc ("Jogo Completo (Download Digital)")
@@ -309,7 +309,8 @@ def mark_preorders(groups):
     today = datetime.now(timezone.utc).date().isoformat()
 
     def not_out(o):
-        return (o["own_release_date"] or dates.get(o["game_id"], {}).get("release_date") or "9999-12-31") >= today
+        day = offer_release_date(o["own_release_date"], dates.get(o["game_id"], {}).get("release_date"))
+        return str(day or "9999-12-31") >= today
 
     pre_order_games = {g["game_id"] for g in groups if g["game_id"] in labelled and all(not_out(o) for o in stocked(g))}
     for g in groups:
