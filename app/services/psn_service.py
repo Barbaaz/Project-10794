@@ -73,6 +73,9 @@ QUOTES = str.maketrans("‘’“”", "''\"\"")
 # "Control Ultimate Edition", "God of War III Remastered", "Darksiders Warmastered Edition": IGDB's game is "Control"…
 EDITION_WORDS = {"the", "edition", "remastered", "remaster", "definitive", "special", "complete", "ultimate",
                  "deluxe", "goty", "hd", "deathinitive", "warmastered", "trophy", "trophies"}
+# a played game can be named as its series' product: "Devil May Cry 5 Series" is the "Devil May Cry 5" trophy list
+# (PS4) and "Devil May Cry 5 Special Edition" (PS5); only for joining played games to lists
+PLAYED_WORDS = {"series"}
 
 _last = {}                       # user id → when they last imported
 _last_lock = threading.Lock()
@@ -240,7 +243,7 @@ def games_of(lists, played):
         key = (p["platforms"][0], key_of(p["name"]))
         game = by_key.get(key)
         if game is None:               # "Hitman World of Assassination Deluxe": that list, when only one has the words
-            same = by_words.get((key[0], frozenset(words(clean(p["name"])))), [])
+            same = by_words.get((key[0], frozenset(words(clean(p["name"])) - PLAYED_WORDS)), [])
             game = same[0] if len(same) == 1 else None
         if game is None:
             game = by_key[key] = {"id": p["id"], "name": p["name"], "platforms": p["platforms"],
@@ -444,8 +447,8 @@ def import_games(user_id, name=None, ps_plus=False):
             try:
                 item_id = collection_service.add(user_id, edition_id, "owned", format="digital", **trophies,
                                                  **({"hours": str(hours)} if hours else {}))
-            except collection_service.CollectionError:      # the collection is full
-                break
+            except collection_service.CollectionError:      # an edition gone meanwhile (no size limit since 2026-10-15)
+                continue
             added += 1
         else:
             old_hours, *old_trophies, old_list = had[item_id]
