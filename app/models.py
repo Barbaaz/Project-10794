@@ -25,7 +25,8 @@ NOW = func.utcnow()      # the database's clock, in UTC (database/schema.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages", "message_photos",
                  "user_ratings", "reports", "moderation_log", "match_overrides",
                  "collection_items", "game_reviews", "duplicate_dismissals", "steam_skips",
-                 "psn_skips", "follows", "igdb_addons"}
+                 "psn_skips", "follows", "igdb_addons", "push_subscriptions",
+                 "contact_messages"}
 
 # The header bell's notifications (collection_service.good_deals): on at all; which wish deals count (a real
 # discount, the historical low, cheaper than when added); the smallest discount / drop, in %, that counts
@@ -419,6 +420,36 @@ class Follow(Base):
     created_at = created_at()
 
 
+class PushSubscription(Base):
+    """A browser / installed app a user gets push notifications on (push_service; user, 2026-10-16): what the
+    browser's push service gave it (its address and keys). Gone with the user, or when the browser says so."""
+    __tablename__ = "push_subscriptions"
+    __table_args__ = (Index("ix_push_subscriptions_user", "user_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    endpoint: Mapped[str] = mapped_column(String(1000), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    created_at = created_at()
+
+
+class ContactMessage(Base):
+    """A message to the site's team from the Contactos page (contact_service; user, 2026-10-16): anyone may
+    write; read and marked handled by moderators / admins in /admin. Gone with the account that wrote it."""
+    __tablename__ = "contact_messages"
+    __table_args__ = (Index("ix_contact_messages_handled", "handled_at", "id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))   # logged in when sent
+    name: Mapped[str] = mapped_column(Unicode(100))
+    email: Mapped[str] = mapped_column(Unicode(255))
+    topic: Mapped[str] = mapped_column(String(20))                      # CONTACT_TOPICS
+    body: Mapped[str] = mapped_column(Unicode(4000))
+    created_at = created_at()
+    handled_at = mapped_column(DateTime)
+    handled_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+
+
+CONTACT_TOPICS = ("question", "problem", "store", "suggestion", "other")
 COLLECTION_KINDS = ("owned", "wishlist")
 FORMATS = ("physical", "digital")
 # the user's order (2026-10-11); "owned" = no other, what an owned item starts as
@@ -452,8 +483,12 @@ class CollectionItem(Base):
     # wishlist alerts: the best new price at the last check (None: none in stock), and when
     alert_price = mapped_column(Numeric(10, 2))
     alert_checked_at = mapped_column(DateTime)
-    alert_used = mapped_column(Boolean)
-    favourite_rank: Mapped[int | None] = mapped_column(SmallInteger)   # 1-10: the profile's top 10 (owned)       # a user was selling a copy at the last check (None: not checked)
+    alert_used = mapped_column(Boolean)                                # a user was selling a copy at the last check (None: not checked)
+    # the price the user waits for (user, 2026-10-16): the bell and an e-mail when the best new or used
+    # price gets to it; target_met: it had at the last e-mail check, so it's sent once until it's above again
+    target_price = mapped_column(Numeric(10, 2))
+    target_met: Mapped[bool | None] = mapped_column(Boolean)
+    favourite_rank: Mapped[int | None] = mapped_column(SmallInteger)   # 1-10: the profile's top 10 (owned)
     # the game's DLC / expansions the user owns: JSON list of IGDB ids, from IgdbAddons' list (dlc_service)
     dlc_owned: Mapped[str | None] = mapped_column(UnicodeText)
     created_at = created_at()

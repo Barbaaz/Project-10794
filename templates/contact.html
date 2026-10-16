@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SaveOnGames</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <!-- installable on a phone (static/manifest.webmanifest, static/sw.js) -->
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <meta name="theme-color" content="#2346d0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+    <link href="/static/common.css" rel="stylesheet">
+    <script src="/static/common.js"></script>
+    <script src="/static/i18n.js"></script>
+</head>
+<body class="bg-body-tertiary">
+
+{% include "_header.html" %}
+
+<!-- Contactos (user, 2026-10-16): a message to the site's team (contact_service), read in /admin -->
+<main class="container pb-4" style="max-width: 640px;">
+    <h1 class="h3 mb-1" data-i18n="contact_title"></h1>
+    <p class="text-body-secondary mb-3" data-i18n="contact_intro"></p>
+
+    <form id="contact-form" class="card shadow-sm" novalidate>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-sm-6">
+                    <label class="form-label small mb-1" for="contact-name" data-i18n="contact_name"></label>
+                    <input id="contact-name" name="name" class="form-control" maxlength="100" autocomplete="name" required>
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label small mb-1" for="contact-email" data-i18n="contact_email"></label>
+                    <input id="contact-email" name="email" type="email" class="form-control" maxlength="255" autocomplete="email"
+                           required aria-describedby="contact-email-help">
+                    <div id="contact-email-help" class="form-text" data-i18n="contact_email_help"></div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small mb-1" for="contact-topic" data-i18n="contact_topic"></label>
+                    <select id="contact-topic" name="topic" class="form-select">
+                        <option value="question" data-i18n="contact_topic_question"></option>
+                        <option value="problem" data-i18n="contact_topic_problem"></option>
+                        <option value="store" data-i18n="contact_topic_store"></option>
+                        <option value="suggestion" data-i18n="contact_topic_suggestion"></option>
+                        <option value="other" data-i18n="contact_topic_other"></option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label small mb-1" for="contact-body" data-i18n="contact_body"></label>
+                    <textarea id="contact-body" name="body" class="form-control" rows="6" maxlength="4000" required
+                              aria-describedby="contact-count"></textarea>
+                    <div id="contact-count" class="form-text text-end"></div>
+                </div>
+                <!-- Not for people (hidden; bots fill it in): contact_service drops such messages -->
+                <div class="visually-hidden" aria-hidden="true">
+                    <label for="contact-website">Website</label>
+                    <input id="contact-website" name="website" tabindex="-1" autocomplete="off">
+                </div>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                <button type="submit" class="btn btn-primary" data-i18n="contact_send" data-icon="mail"></button>
+                <span id="contact-error" class="small text-danger" role="alert"></span>
+            </div>
+        </div>
+    </form>
+
+    <div id="contact-done" class="card shadow-sm d-none" tabindex="-1">
+        <div class="card-body">
+            <h2 class="h5" data-i18n="contact_done_title"></h2>
+            <p class="mb-3" data-i18n="contact_done"></p>
+            <a href="/" class="btn btn-secondary btn-sm" data-i18n="contact_back"></a>
+        </div>
+    </div>
+</main>
+
+{% include "_footer.html" %}
+<script src="/static/pages/contact.js"></script>
+</body>
+</html>

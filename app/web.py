@@ -15,7 +15,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.config import BEHIND_PROXY, COOKIE_SECURE, SECRET_KEY
 from app.routes import (
-    auth, chat, collection, follows, games, igdb_games, listings, moderation, prices, ratings, reviews, stores,
+    auth, chat, collection, contact, follows, games, igdb_games, listings, moderation, prices, push, ratings, reviews, stores,
 )
 from app.services.game_service import game_exists, merged_into
 from app.services.photo_storage import MAX_UPLOAD_BYTES, storage
@@ -33,8 +33,8 @@ app.config.update(
 )
 if BEHIND_PROXY:
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
-for blueprint in (auth.bp, chat.bp, collection.bp, follows.bp, games.bp, igdb_games.bp, listings.bp, moderation.bp, prices.bp,
-                  ratings.bp, reviews.bp, stores.bp):
+for blueprint in (auth.bp, chat.bp, collection.bp, contact.bp, follows.bp, games.bp, igdb_games.bp, listings.bp, moderation.bp, prices.bp,
+                  push.bp, ratings.bp, reviews.bp, stores.bp):
     app.register_blueprint(blueprint)
 
 CHANGING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -175,6 +175,12 @@ def collection_page():
 def wishlist_page():
     """The user's wishlist: the collection page's grid with the wished games (collection.js)."""
     return render_template("collection.html", kind="wishlist")
+
+
+@app.route("/contact")
+def contact_page():
+    """Contactos (user, 2026-10-16): a message to the site's team"""
+    return render_template("contact.html")
 
 
 @app.route("/admin")

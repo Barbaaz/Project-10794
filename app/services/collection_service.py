@@ -2,8 +2,8 @@
 A user's game collection: editions they own (physical / digital, play status, hours,
 achievements, notes) and a wishlist. Each item shows the edition's current prices (stores, used
 copies, a real discount, the historical low); a wish also remembers the price it was added at, so
-a drop shows. A wish on sale, at its historical low or cheaper than when added is a good deal
-(counted in the header's notifications). Statistics: per platform and
+a drop shows, and may have a target price (user, 2026-10-16). A wish on sale, at its historical low,
+cheaper than when added or at its target price is a good deal (counted in the header's notifications). Statistics: per platform and
 status, hours, and what the owned games are worth today. Private unless the user makes it
 public (it then shows on their profile). When games / editions are merged, items follow
 (pipeline/rematch.py).
@@ -33,6 +33,8 @@ SHOWCASE_SIZE = 5           # games in each section but the favourites
 MAX_FAVOURITES = 10
 # An edition the user names (user, 2026-10-11: "Lumière Edition", which neither the stores nor IGDB list)
 MIN_EDITION_NAME, MAX_EDITION_NAME = 2, 100
+# A wish's target price (user, 2026-10-16), as a listing's price
+MIN_TARGET, MAX_TARGET = Decimal("0.50"), Decimal("10000")
 
 
 class CollectionError(Exception):
@@ -49,7 +51,7 @@ def collection(user_id):
         items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id)
                           .order_by(CollectionItem.kind, CollectionItem.updated_at.desc(), CollectionItem.id.desc())).all()
         rows = [fields(i, "id", "kind", "format", "status", "hours", "notes", "achievements", "achievements_total",
-                       "platinum", "psn_id", "favourite_rank", "wish_price", "edition_id", "game_id", "created_at", "updated_at",
+                       "platinum", "psn_id", "favourite_rank", "wish_price", "target_price", "edition_id", "game_id", "created_at", "updated_at",
                        "dlc_owned") for i in items]
         public, alerts, sections = user.collection_public, user.wish_alerts, sections_of(user.profile_sections)
         # the user's review score of each game (one per game, as on the game page); a hidden one can't change
@@ -89,16 +91,24 @@ def with_prices(rows):
                  date_is_estimate=g.get("date_is_estimate", False))
         wished = r.get("wish_price")
         r["price_drop"] = round(wished - r["best_price"], 2) if wished and best and best["price"] < wished else None
-        r["good_deal"] = r["kind"] == "wishlist" and bool(r["on_sale"] or r["at_historical_low"] or r["price_drop"])
+        r["target_hit"] = target_hit(r)
+        r["good_deal"] = r["kind"] == "wishlist" and bool(r["on_sale"] or r["at_historical_low"] or r["price_drop"] or r["target_hit"])
     return rows
 
 
+def target_hit(row):
+    """Whether a wish's best new or used price is at its target price or below (no target: False)."""
+    target = row.get("target_price")
+    prices = [p for p in (row.get("best_price"), (row.get("used") or {}).get("price")) if p is not None]
+    return bool(target and prices and min(prices) <= target)
+
+
 def good_deals(user_id):
-    """{count, items}: the wishes that are a good deal now (on sale, at the historical low, cheaper than
-    when added), for the header's notifications (user, 2026-10-13): what and why, cheapest first."""
+    """{count, items}: the wishes that are a good deal now (at the target price, on sale, at the historical
+    low, cheaper than when added), for the header's notifications (user, 2026-10-13): what and why, cheapest first."""
     with session() as s:
         notify = s.get(User, user_id).notify
-        rows = [fields(i, "id", "kind", "edition_id", "game_id", "wish_price") for i in s.scalars(
+        rows = [fields(i, "id", "kind", "edition_id", "game_id", "wish_price", "target_price") for i in s.scalars(
             select(CollectionItem).where(CollectionItem.user_id == user_id, CollectionItem.kind == "wishlist"))]
     if not notify["bell"]:
         return {"count": 0, "items": [], "off": True}
@@ -109,14 +119,16 @@ def good_deals(user_id):
             deals.append(r)
     deals.sort(key=lambda r: (r["best_price"] is None, r["best_price"] or 0, r["id"]))
     keys = ("id", "game_id", "edition_id", "name", "name_en", "platform", "image", "best_price", "best_store",
-            "price_drop", "on_sale", "discount", "at_historical_low", "reason")
+            "price_drop", "on_sale", "discount", "at_historical_low", "target_price", "used", "reason")
     return {"count": len(deals), "items": [{k: r[k] for k in keys} for r in deals]}
 
 
 def deal_reason(row, notify):
-    """Why a wish is in the bell, by the user's settings (user, 2026-10-13: not to be bombarded): "sale" (a real
-    discount of at least min_discount %), "low" (the historical low), "drop" (that much below the price when
-    added), or None."""
+    """Why a wish is in the bell, by the user's settings (user, 2026-10-13: not to be bombarded): "target" (at
+    the price the user chose, new or used: always, the user asked for it), "sale" (a real discount of at least
+    min_discount %), "low" (the historical low), "drop" (that much below the price when added), or None."""
+    if row["target_hit"]:
+        return "target"
     least = notify["min_discount"]
     if notify["sale"] and row["on_sale"] and (row["discount"] or 0) >= least:
         return "sale"
@@ -251,6 +263,7 @@ def update(user_id, item_id, changes):
                 s.delete(item)                   # already owned: the wish is just done
                 return None
             item.kind, item.format, item.status, item.wish_price = "owned", "physical", "owned", None
+            item.target_price = item.target_met = None
         if item.kind == "owned" and changes.get("format") in FORMATS and _other(s, item, "owned", changes["format"]):
             raise CollectionError("already_in_collection", 409)     # that copy is there already
         _apply(item, changes)
@@ -431,6 +444,10 @@ def _apply(item, changes):
         item.achievements, item.achievements_total = (done, total) if item.kind == "owned" else (None, None)
     if "platinum" in changes:                  # PlayStation (None: the game has none, or not said)
         item.platinum = None if changes["platinum"] in (None, "") or item.kind != "owned" else bool(changes["platinum"])
+    if "target_price" in changes and item.kind == "wishlist":
+        target = _target(changes["target_price"])
+        if target != item.target_price:
+            item.target_price, item.target_met = target, None      # a new target: its e-mail can be sent again
     if "notes" in changes:
         notes = (changes["notes"] or "").strip() or None
         if notes and len(notes) > MAX_NOTES:
@@ -448,6 +465,19 @@ def _hours(value):
     if not hours.is_finite() or not 0 <= hours <= MAX_HOURS:            # "NaN" gets past quantize()
         raise CollectionError("hours_invalid")
     return hours
+
+
+def _target(value):
+    """A target price in euros (MIN_TARGET to MAX_TARGET, "12,50" too), or None when empty."""
+    if value in (None, ""):
+        return None
+    try:
+        price = Decimal(str(value).replace(",", ".").replace("€", "").strip()).quantize(Decimal("0.01"))
+    except InvalidOperation:
+        raise CollectionError("target_invalid")
+    if not price.is_finite() or not MIN_TARGET <= price <= MAX_TARGET:
+        raise CollectionError("target_invalid")
+    return price
 
 
 def _count(value):

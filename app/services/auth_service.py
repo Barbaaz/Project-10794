@@ -20,7 +20,10 @@ from sqlalchemy import delete, or_, select
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import config
-from app.models import NOW, CollectionItem, Conversation, Follow, Listing, Message, PsnSkip, SteamSkip, User, fields
+from app.models import (
+    NOW, CollectionItem, ContactMessage, Conversation, Follow, Listing, Message, PsnSkip, PushSubscription, SteamSkip, User,
+    fields,
+)
 from app.services import mail_service
 from app.services.photo_storage import process_avatar, storage
 from db import session
@@ -227,6 +230,8 @@ def delete_account(user_id, password, ip="?"):
         s.execute(delete(SteamSkip).where(SteamSkip.user_id == user_id))
         s.execute(delete(PsnSkip).where(PsnSkip.user_id == user_id))
         s.execute(delete(Follow).where(or_(Follow.follower_id == user_id, Follow.followed_id == user_id)))
+        s.execute(delete(PushSubscription).where(PushSubscription.user_id == user_id))
+        s.execute(delete(ContactMessage).where(ContactMessage.user_id == user_id))      # they hold the e-mail address
 
         logins = {(user.username or "").lower(), user.email}
         user.username = user.password_hash = user.location = user.steam_id = user.accounts_json = None

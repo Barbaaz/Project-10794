@@ -309,8 +309,58 @@ document.getElementById("staff-form").onsubmit = e => {
     e.target.reset();
 };
 
+// --- messages from the Contactos page (contact_service) ---------------------------------------
+let contactHandled = false;
+async function loadContact() {
+    const { items = [], open = 0 } = await getJSON(`/api/mod/contact${contactHandled ? "?handled=1" : ""}`);
+    showContactCount(open);
+    document.querySelectorAll("[data-contact-handled]").forEach(b => {
+        const on = (b.dataset.contactHandled === "1") === contactHandled;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", on);
+    });
+    const list = document.getElementById("contact-messages");
+    list.innerHTML = items.map(m => `
+        <div class="card" data-message="${m.id}">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+                    <span><span class="badge text-bg-primary">${esc(t(`contact_topic_${m.topic}`))}</span>
+                        <strong class="ms-1">${esc(m.name)}</strong>
+                        <a href="mailto:${esc(m.email)}" class="small">${esc(m.email)}</a>
+                        ${m.username ? `<span class="small">· ${userLink(m.username)}</span>` : ""}</span>
+                    <span class="small text-body-secondary">${date(m.created_at)}</span>
+                </div>
+                <div style="white-space: pre-line; overflow-wrap: anywhere;">${esc(m.body)}</div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                    <a class="btn btn-sm btn-secondary" href="mailto:${esc(m.email)}?subject=${encodeURIComponent(t("mod_contact_reply_subject"))}">${icon("mail", 14)} ${esc(t("mod_contact_reply"))}</a>
+                    <button type="button" class="btn btn-sm ${m.handled_at ? "btn-secondary" : "btn-success"}" data-handled="${m.handled_at ? 0 : 1}">
+                        ${esc(t(m.handled_at ? "mod_contact_reopen" : "mod_contact_mark"))}</button>
+                    ${m.handled_at ? `<span class="small text-body-secondary">${esc(t("mod_contact_handled_by", { user: userLabel(m.handled_by || "?"), date: date(m.handled_at) }))}</span>` : ""}
+                </div>
+            </div>
+        </div>`).join("");
+    document.getElementById("no-contact").classList.toggle("d-none", items.length > 0);
+    list.querySelectorAll("[data-handled]").forEach(b => b.onclick = async () => {
+        const id = b.closest("[data-message]").dataset.message;
+        const { ok, data } = await api(`/api/mod/contact/${id}`, { body: { handled: b.dataset.handled === "1" } });
+        if (!ok) return showMessage(false, t(`error_${data?.error || "unknown"}`));
+        loadContact();
+    });
+}
+
+function showContactCount(open) {
+    const badge = document.getElementById("contact-open");
+    badge.textContent = open;
+    badge.classList.toggle("d-none", !open);
+}
+
+document.querySelectorAll("[data-contact-handled]").forEach(b => b.onclick = () => {
+    contactHandled = b.dataset.contactHandled === "1";
+    loadContact();
+});
+
 // --- tabs -------------------------------------------------------------------------------------
-const LOADERS = { reports: loadReports, problems: loadProblems, log: loadLog,
+const LOADERS = { reports: loadReports, problems: loadProblems, log: loadLog, contact: loadContact,
                   matches: () => { loadPins(); loadDuplicates(); },
                   staff: async () => renderStaff(await getJSON("/api/mod/staff")) };
 
@@ -318,6 +368,8 @@ function showTab(name) {
     document.querySelectorAll("[data-tab]").forEach(b => {
         b.classList.toggle("active", b.dataset.tab === name);
         b.setAttribute("aria-selected", b.dataset.tab === name);
+        // a phone scrolls the tabs sideways: the open one in view (e.g. Mensagens from an e-mail's link)
+        if (b.dataset.tab === name) b.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
     document.querySelectorAll("[id^=tab-]").forEach(s => s.classList.toggle("d-none", s.id !== `tab-${name}`));
     document.getElementById("message").classList.add("d-none");
@@ -334,7 +386,8 @@ async function load() {
     }
     document.getElementById("staff-tab").classList.toggle("d-none", currentUser.role !== "admin");
     document.getElementById("tools").classList.remove("d-none");
-    showTab("reports");
+    showTab(location.hash === "#contact" ? "contact" : "reports");      // the link in a contact e-mail
+    getJSON("/api/mod/contact").then(d => showContactCount(d.open || 0));
 }
 
 applyI18n();

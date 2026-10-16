@@ -174,74 +174,158 @@ function showShowcase(sections) {
         </section>`).join("");
 }
 
-// The user's own profile: which sections, in what order, and the top 10 (from their owned games)
-let editor = null;          // {order: [{section, shown}], favourites: [item], owned: [item]}
+// The user's own profile: which sections, in what order, and the top 10 (from their owned games), in a window
+// (user, 2026-10-16): the top 10 as covers, games added by searching the collection, both lists in order by
+// dragging their handle (or with the arrow buttons: keyboards, small screens). Nothing is kept until "Guardar"
+let savedShowcase = null;          // {order: [{section, shown}], favourites: [item]} as last saved
+let editor = null;          // the same, being changed, and owned: [item]
+const dialog = document.getElementById("showcase-editor");
+
 async function loadShowcaseEditor(isPublic) {
     const response = await fetch("/api/collection");
     if (!response.ok) return;
     const data = await response.json();
     const owned = data.items.filter(i => i.kind === "owned")
         .sort((a, b) => (localName(a) || "").localeCompare(localName(b) || "", LOCALE));
-    editor = {
+    savedShowcase = {
         order: [...data.profile_sections.map(s => ({ section: s, shown: true })),
                 ...SECTIONS.filter(s => !data.profile_sections.includes(s)).map(s => ({ section: s, shown: false }))],
         favourites: owned.filter(i => i.favourite_rank).sort((a, b) => a.favourite_rank - b.favourite_rank),
         owned,
     };
     document.getElementById("showcase-private").classList.toggle("d-none", isPublic);
-    document.getElementById("showcase-editor").classList.remove("d-none");
+    const toggle = document.getElementById("showcase-toggle");
+    toggle.classList.remove("d-none");
+    toggle.onclick = openEditor;
+}
+
+function openEditor() {
+    editor = { order: savedShowcase.order.map(o => ({ ...o })), favourites: [...savedShowcase.favourites], owned: savedShowcase.owned };
+    document.getElementById("showcase-saved").textContent = "";
+    document.getElementById("showcase-search").value = "";
+    renderEditor();
+    dialog.showModal();
+}
+
+dialog.querySelector(".input-group-text").innerHTML = icon("search", 14);
+dialog.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
+dialog.onclick = event => { if (event.target === dialog) dialog.close(); };          // a click outside the window
+dialog.onclose = () => document.getElementById("showcase-toggle").focus();
+
+function move(list, from, to) {
+    if (to < 0 || to >= list.length || from === to) return;
+    list.splice(to, 0, list.splice(from, 1)[0]);
     renderEditor();
 }
 
-function moveButtons(kind, i, last) {
-    return `<button type="button" class="btn btn-sm btn-secondary" data-${kind}-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="${esc(t("showcase_up"))}">↑</button>
-            <button type="button" class="btn btn-sm btn-secondary" data-${kind}-down="${i}" ${i === last ? "disabled" : ""} aria-label="${esc(t("showcase_down"))}">↓</button>`;
-}
-
-function swap(list, i, j) {
-    [list[i], list[j]] = [list[j], list[i]];
-    renderEditor();
+function arrowButton(kind, i, step, name, label, disabled) {
+    return `<button type="button" class="btn btn-sm btn-secondary icon-btn" data-${kind}-move="${i}" data-step="${step}"
+                    aria-label="${esc(label)}" title="${esc(label)}" ${disabled ? "disabled" : ""}>${icon(name, 14)}</button>`;
 }
 
 function renderEditor() {
     const sections = document.getElementById("showcase-section-list");
+    const lastSection = editor.order.length - 1;
     sections.innerHTML = editor.order.map((o, i) => `
-        <li class="list-group-item d-flex align-items-center gap-2 py-1">
-            <label class="form-check-label d-flex align-items-center gap-2 flex-grow-1">
+        <li class="sort-row" data-index="${i}">
+            <button type="button" class="drag-handle" tabindex="-1" aria-hidden="true">${icon("grip", 16)}</button>
+            <label class="form-check-label d-flex align-items-center gap-2 flex-grow-1 min-w-0">
                 <input type="checkbox" class="form-check-input mt-0" data-shown="${i}" ${o.shown ? "checked" : ""}>
                 ${esc(t(`showcase_${o.section}`))}</label>
-            ${moveButtons("section", i, editor.order.length - 1)}
+            ${arrowButton("section", i, -1, "up", t("showcase_up"), i === 0)}
+            ${arrowButton("section", i, 1, "down", t("showcase_down"), i === lastSection)}
         </li>`).join("");
     sections.querySelectorAll("[data-shown]").forEach(b => b.onchange = () => editor.order[b.dataset.shown].shown = b.checked);
-    sections.querySelectorAll("[data-section-up]").forEach(b => b.onclick = () => swap(editor.order, +b.dataset.sectionUp, +b.dataset.sectionUp - 1));
-    sections.querySelectorAll("[data-section-down]").forEach(b => b.onclick = () => swap(editor.order, +b.dataset.sectionDown, +b.dataset.sectionDown + 1));
+    sections.querySelectorAll("[data-section-move]").forEach(b => b.onclick = () =>
+        move(editor.order, +b.dataset.sectionMove, +b.dataset.sectionMove + +b.dataset.step));
+    sortable(sections, editor.order);
 
     const favourites = document.getElementById("showcase-favourite-list");
+    const lastFavourite = editor.favourites.length - 1;
     favourites.innerHTML = editor.favourites.map((f, i) => `
-        <li class="list-group-item d-flex align-items-center gap-2 py-1">
-            <span class="flex-grow-1 text-truncate">${esc(localName(f) || "")} <span class="small text-body-secondary">${esc(f.platform_name || "")}</span></span>
-            ${moveButtons("favourite", i, editor.favourites.length - 1)}
-            <button type="button" class="btn btn-sm btn-danger" data-remove="${i}" aria-label="${esc(t("showcase_remove"))}">✕</button>
-        </li>`).join("");
-    favourites.querySelectorAll("[data-favourite-up]").forEach(b => b.onclick = () => swap(editor.favourites, +b.dataset.favouriteUp, +b.dataset.favouriteUp - 1));
-    favourites.querySelectorAll("[data-favourite-down]").forEach(b => b.onclick = () => swap(editor.favourites, +b.dataset.favouriteDown, +b.dataset.favouriteDown + 1));
+        <li class="fav-tile" data-index="${i}">
+            ${f.image ? `<img src="${esc(f.image)}" alt="" class="${coverClass(f.image)}" loading="lazy">` : `<div class="fav-none"></div>`}
+            <span class="badge text-bg-dark fav-rank">#${i + 1}</span>
+            <button type="button" class="btn btn-sm btn-danger icon-btn fav-remove" data-remove="${i}"
+                    aria-label="${esc(t("showcase_remove_game", { game: localName(f) || "" }))}" title="${esc(t("showcase_remove"))}">${icon("x", 14)}</button>
+            <button type="button" class="drag-handle" tabindex="-1" aria-hidden="true">${icon("grip", 16)}</button>
+            <div class="small fw-semibold text-truncate mt-1" title="${esc(localName(f) || "")}">${esc(localName(f) || "")}</div>
+            <div class="d-flex align-items-center gap-1">
+                <span class="small text-body-secondary text-truncate flex-grow-1">${esc(f.platform_name || "")}</span>
+                ${arrowButton("favourite", i, -1, "left", t("showcase_earlier"), i === 0)}
+                ${arrowButton("favourite", i, 1, "right", t("showcase_later"), i === lastFavourite)}
+            </div>
+        </li>`).join("") + (lastFavourite + 1 < MAX_FAVOURITES     // a free place: to the search
+            ? `<li><button type="button" class="fav-empty w-100 bg-transparent" data-to-search
+                           aria-label="${esc(t("showcase_add_label"))}">${icon("plus", 20)}</button></li>` : "");
+    favourites.querySelector("[data-to-search]")?.addEventListener("click", () => document.getElementById("showcase-search").focus());
+    favourites.querySelectorAll("[data-favourite-move]").forEach(b => b.onclick = () =>
+        move(editor.favourites, +b.dataset.favouriteMove, +b.dataset.favouriteMove + +b.dataset.step));
     favourites.querySelectorAll("[data-remove]").forEach(b => b.onclick = () => { editor.favourites.splice(+b.dataset.remove, 1); renderEditor(); });
-
-    const chosen = new Set(editor.favourites.map(f => f.id));
-    const choices = editor.owned.filter(i => !chosen.has(i.id));
-    document.getElementById("showcase-add").innerHTML = choices.map(i =>
-        `<option value="${i.id}">${esc(localName(i) || "")} · ${esc(i.platform_name || "")}</option>`).join("");
-    const full = editor.favourites.length >= MAX_FAVOURITES || !choices.length;
-    document.getElementById("showcase-add").disabled = full;
-    document.getElementById("showcase-add-button").disabled = full;
+    sortable(favourites, editor.favourites);
+    renderResults();
 }
 
-document.getElementById("showcase-add-button").onclick = () => {
-    const id = Number(document.getElementById("showcase-add").value);
-    const item = editor.owned.find(i => i.id === id);
-    if (item && editor.favourites.length < MAX_FAVOURITES) editor.favourites.push(item);
-    renderEditor();
-};
+// Dragging by the handle (mouse, finger or pen): the item follows the pointer over the others; let go, and
+// the list takes that order
+function sortable(list, items) {
+    // followed on the whole page: moving the item in the list would lose a pointer capture on its handle
+    list.querySelectorAll(".drag-handle").forEach(handle => handle.onpointerdown = down => {
+        if (down.button !== 0) return;
+        down.preventDefault();               // no text selection while dragging
+        const dragged = handle.closest("[data-index]");
+        const from = +dragged.dataset.index;
+        dragged.classList.add("dragging");
+        const follow = event => {
+            if (event.pointerId !== down.pointerId) return;
+            const over = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-index]");
+            if (!over || over === dragged || over.parentElement !== list) return;
+            const box = over.getBoundingClientRect();
+            const after = list.classList.contains("fav-grid") ? event.clientX > box.left + box.width / 2
+                                                              : event.clientY > box.top + box.height / 2;
+            list.insertBefore(dragged, after ? over.nextSibling : over);
+        };
+        const drop = event => {
+            if (event.pointerId !== down.pointerId) return;
+            document.removeEventListener("pointermove", follow);
+            document.removeEventListener("pointerup", drop);
+            document.removeEventListener("pointercancel", drop);
+            const to = [...list.querySelectorAll("[data-index]")].indexOf(dragged);
+            dragged.classList.remove("dragging");
+            if (to !== from) move(items, from, to); else renderEditor();
+        };
+        document.addEventListener("pointermove", follow);
+        document.addEventListener("pointerup", drop);
+        document.addEventListener("pointercancel", drop);
+    });
+}
+
+// The owned games matching the search (every word in the name), not in the top 10 yet
+function renderResults() {
+    const box = document.getElementById("showcase-results"), search = document.getElementById("showcase-search");
+    const full = editor.favourites.length >= MAX_FAVOURITES;
+    search.disabled = full;
+    search.placeholder = t(full ? "showcase_full" : "showcase_search");
+    const words = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+    const chosen = new Set(editor.favourites.map(f => f.id));
+    const found = full || !words.length ? [] : editor.owned.filter(i => !chosen.has(i.id)
+        && words.every(w => `${i.name || ""} ${i.name_en || ""}`.toLowerCase().includes(w))).slice(0, 8);
+    box.innerHTML = found.map(i => `
+        <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-1" data-add="${i.id}">
+            ${i.image ? `<img src="${esc(i.image)}" alt="" class="${coverClass(i.image)}" loading="lazy">` : ""}
+            <span class="min-w-0 text-truncate">${esc(localName(i) || "")} <span class="small text-body-secondary">${esc(i.platform_name || "")}</span></span>
+            <span class="ms-auto">${icon("plus", 16)}</span>
+        </button>`).join("") + (words.length && !found.length && !full
+            ? `<div class="small text-body-secondary px-1">${esc(t("no_results"))}</div>` : "");
+    box.querySelectorAll("[data-add]").forEach(b => b.onclick = () => {
+        const item = editor.owned.find(i => i.id === Number(b.dataset.add));
+        if (item && editor.favourites.length < MAX_FAVOURITES) editor.favourites.push(item);
+        search.value = "";
+        renderEditor();
+        search.disabled ? dialog.querySelector("#showcase-save").focus() : search.focus();
+    });
+}
+document.getElementById("showcase-search").oninput = renderResults;
 
 document.getElementById("showcase-save").onclick = async () => {
     const status = document.getElementById("showcase-saved");
@@ -249,9 +333,12 @@ document.getElementById("showcase-save").onclick = async () => {
         sections: editor.order.filter(o => o.shown).map(o => o.section),
         favourites: editor.favourites.map(f => f.id),
     } });
-    status.className = `small ${ok ? "text-success" : "text-danger"}`;
+    status.className = `small me-auto ${ok ? "text-success" : "text-danger"}`;
     status.textContent = ok ? t("showcase_saved") : t(`error_${data?.error || "unknown"}`);
-    if (ok) loadCollection();
+    if (!ok) return;
+    savedShowcase = { ...savedShowcase, order: editor.order.map(o => ({ ...o })), favourites: [...editor.favourites] };
+    loadCollection();
+    setTimeout(() => dialog.close(), 600);
 };
 
 applyI18n();

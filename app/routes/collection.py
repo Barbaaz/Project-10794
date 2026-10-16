@@ -9,7 +9,7 @@ from app.services.steam_service import SteamError
 
 bp = Blueprint("collection", __name__, url_prefix="/api")
 
-EDITABLE = ("format", "status", "hours", "achievements", "achievements_total", "platinum", "notes")
+EDITABLE = ("format", "status", "hours", "achievements", "achievements_total", "platinum", "notes", "target_price")
 
 
 @bp.errorhandler(CollectionError)
@@ -103,7 +103,7 @@ def import_from_psn():
 @bp.patch("/collection/<int:item_id>")
 @login_required
 def update(item_id):
-    """{format?, status?, hours?, notes?, kind: owned (a wishlist item bought), edition_id | new_edition}"""
+    """{format?, status?, hours?, notes?, target_price? (a wish), kind: owned (a wishlist item bought), edition_id | new_edition}"""
     data = body()
     changes = {k: data[k] for k in (*EDITABLE, "kind", "edition_id", "new_edition") if k in data}
     return jsonify(id=collection_service.update(current_user()["id"], item_id, changes))

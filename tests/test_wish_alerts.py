@@ -51,10 +51,10 @@ def test_drop_and_back_in_stock_once(market, store):
     wish(client, market["edition"])
     wish(client, market["other_edition"])                       # out of stock when wished
 
-    assert wish_alert_service.check_all() == {"users": 0, "items": 0, "sent": 0}
+    assert wish_alert_service.check_all() == {"users": 0, "items": 0, "sent": 0, "pushed": 0}
     prices[market["edition"]] = 44.99
     prices[market["other_edition"]] = 20.00
-    assert wish_alert_service.check_all() == {"users": 1, "items": 2, "sent": 1}
+    assert wish_alert_service.check_all() == {"users": 1, "items": 2, "sent": 1, "pushed": 0}
     to, subject, text = sent[0]
     assert to == "wisher@example.pt" and subject == "Lista de desejos: 2 jogos com novidades"
     assert "desceu de 59,99 € para 44,99 € na Loja" in text and "à venda: 20,00 € na Loja" in text
@@ -119,6 +119,50 @@ def test_a_user_selling_a_wished_game(market, store):
     assert wish_alert_service.check_all()["sent"] == 0
     sign_up(client, "seller_of_it")
     assert new_listing(market, price="25").status_code == 201
-    assert wish_alert_service.check_all() == {"users": 1, "items": 1, "sent": 1}
+    assert wish_alert_service.check_all() == {"users": 1, "items": 1, "sent": 1, "pushed": 0}
     assert "à venda em segunda mão por um utilizador: 25,00 €" in sent[0][2]
     assert wish_alert_service.check_all()["sent"] == 0           # once
+
+
+def test_target_change_rules():
+    from app.services.wish_alert_service import target_change
+    assert target_change(None, None, True) == (None, None)                 # no target
+    assert target_change(Decimal("20"), None, True) == ("target_reached", True)
+    assert target_change(Decimal("20"), True, True) == (None, True)         # said already
+    assert target_change(Decimal("20"), True, False) == (None, False)       # above it again: may be sent again
+
+
+def test_a_target_price(market, store):
+    """User, 2026-10-16: tell me when it costs this much (new or used), in the bell and by e-mail, once."""
+    prices, sent = store
+    client = market["client"]
+    prices[market["edition"]] = 39.99
+    sign_up(client, "target")
+    item = wish(client, market["edition"]).get_json()["id"]
+    target = lambda value: client.patch(f"/api/collection/{item}", json={"target_price": value}, headers=HEADERS)
+    for wrong in ("abc", "0", "-5", "0,49", "10000.01", "NaN"):
+        assert target(wrong).get_json() == {"error": "target_invalid"}, wrong
+    assert target("30,00").status_code == 200
+    wish_alert_service.check_all()
+    assert client.get("/api/collection/deals").get_json()["count"] == 0 and not sent
+
+    prices[market["edition"]] = 29.99                       # at the target: the bell (always) and an e-mail
+    deals = client.get("/api/collection/deals").get_json()
+    assert [(d["reason"], d["target_price"]) for d in deals["items"]] == [("target", 30.0)]
+    assert wish_alert_service.check_all()["sent"] == 1
+    assert "chegou ao seu preço-alvo de 30,00 €: 29,99 € na Loja" in sent[0][2]
+    assert "desceu" not in sent[0][2]                       # the target says it all
+    assert wish_alert_service.check_all()["sent"] == 0       # once
+
+    assert target("25").status_code == 200                  # a new target: sent again once it's there
+    prices[market["edition"]] = None
+    assert wish_alert_service.check_all()["sent"] == 0
+    sign_up(client, "cheap_seller")
+    assert new_listing(market, price="22").status_code == 201      # a used copy under it counts too
+    wish_alert_service.check_all()
+    assert "chegou ao seu preço-alvo de 25,00 €: 22,00 € em segunda mão" in sent[-1][2]
+
+    log_in(client, "target")
+    assert target("").status_code == 200                    # cleared
+    assert client.get("/api/collection/deals").get_json()["count"] == 0
+    assert client.patch(f"/api/collection/{item}", json={"kind": "owned"}, headers=HEADERS).status_code == 200

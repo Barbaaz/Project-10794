@@ -85,6 +85,13 @@ const ICONS = {
     pencil: '<path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/>',
     alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
     flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>',
+    grip: '<circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/>',
+    search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    up: '<path d="m18 15-6-6-6 6"/>',
+    down: '<path d="m6 9 6 6 6-6"/>',
+    left: '<path d="m15 18-6-6 6-6"/>',
+    right: '<path d="m9 18 6-6-6-6"/>',
+    mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
 };
 
 // filled: the shape painted in too (a wished game's star)
@@ -217,6 +224,7 @@ async function renderAccountArea() {
     showNotifications();
     bindAccountMenu(box);
     box.querySelector("#logout-btn").onclick = async () => {
+        await pushOff().catch(() => {});      // the next person on this device doesn't get this user's news
         await api("/api/auth/logout");
         location.reload();
     };
@@ -265,7 +273,8 @@ async function showUnreadCount() {
 }
 
 // --- Notifications (user, 2026-10-13): the bell button lists what's waiting for the user ---------
-// Wishes that are a good deal now (on sale, at the historical low, cheaper than when added; collection_service.good_deals)
+// Wishes that are a good deal now (at the user's target price, on sale, at the historical low, cheaper than when
+// added; collection_service.good_deals)
 // and trades to rate. The number counts the deals not seen yet (this browser remembers which, by price)
 // plus the ratings to give; opening the panel marks the deals seen.
 const SEEN_DEALS = "seen-deals";
@@ -278,13 +287,14 @@ async function showNotifications() {
         fetch("/api/collection/deals").then(r => r.ok ? r.json() : { items: [] }).catch(() => ({ items: [] })),
         fetch("/api/ratings/pending").then(r => r.ok ? r.json() : []).catch(() => []),
     ]);
-    const key = d => `${d.id}:${d.best_price}`;
+    const key = d => `${d.id}:${d.best_price}:${d.reason}`;
     const seen = new Set(savedJSON(SEEN_DEALS, []));
     const fresh = deals.items.filter(d => !seen.has(key(d)));
     const count = fresh.length + ratings.length;
 
     // why it's there (collection_service.deal_reason, by the user's settings)
-    const why = d => d.reason === "sale" ? `−${d.discount}%`
+    const why = d => d.reason === "target" ? t("notif_target", { price: eur.format(d.target_price) })
+        : d.reason === "sale" ? `−${d.discount}%`
         : d.reason === "low" ? t("notif_low")
         : d.reason === "drop" ? t("notif_price_drop", { amount: eur.format(d.price_drop) }) : "";
     const deal = d => `
@@ -338,6 +348,38 @@ async function showNotifications() {
 // --- The app on a phone (static/sw.js, static/manifest.webmanifest) ---------------------------
 
 // The service worker: pages open on a weak connection or none, from what was saved on the last visit
+// --- Push notifications on this device (user, 2026-10-16; app/services/push_service.py, static/sw.js) ---------
+// "unsupported": this browser can't (an iPhone / iPad: only once the site is on the home screen)
+function pushSupport() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return "unsupported";
+    return Notification.permission;          // "default", "granted" or "denied" (blocked in the browser's settings)
+}
+
+async function pushSubscription() {
+    if (pushSupport() === "unsupported") return null;
+    const registration = await navigator.serviceWorker.getRegistration();
+    return registration ? registration.pushManager.getSubscription() : null;
+}
+
+// Ask the browser (it asks the user), then tell the server where to send; true when on
+async function pushOn() {
+    if (await Notification.requestPermission() !== "granted") return false;
+    const registration = await navigator.serviceWorker.register("/sw.js").then(() => navigator.serviceWorker.ready);
+    const { key } = await fetch("/api/push/key").then(r => r.json());
+    const raw = atob(key.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(key.length / 4) * 4, "="));
+    const subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({
+        userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, c => c.charCodeAt(0)) });
+    const { ok } = await api("/api/push/subscribe", { body: subscription.toJSON() });
+    return ok;
+}
+
+async function pushOff() {
+    const subscription = await pushSubscription();
+    if (!subscription) return;
+    await api("/api/push/unsubscribe", { body: { endpoint: subscription.endpoint } });
+    await subscription.unsubscribe();
+}
+
 if ("serviceWorker" in navigator) {
     addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
     navigator.serviceWorker.addEventListener("message", event => {
@@ -364,7 +406,7 @@ function showSavedNotice(savedAt) {
     notice.innerHTML = `<span>${icon("offline", 16)} ${esc(t("offline_notice", { time: when }))}</span>
         <button type="button" class="btn btn-sm btn-warning ms-auto">${esc(t("offline_retry"))}</button>`;
     notice.querySelector("button").onclick = () => location.reload();
-    const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl");
+    const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl:not(.header-search-row)");
     if (container) container.querySelector(":scope > div")?.after(notice);
     else document.body.prepend(notice);
 }
@@ -417,9 +459,30 @@ async function showPendingRatings() {
     banner.setAttribute("role", "status");
     banner.innerHTML = `<strong>${esc(t(overdue ? "ratings_overdue_title" : "ratings_pending_title", { count: pending.length }))}</strong>
         ${pending.map(p => `<a href="/messages?c=${p.conversation_id}" class="ms-2">${esc(t("rate_link", { user: userLabel(p.other_username), game: p.title }))}</a>`).join("")}`;
-    const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl");
+    const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl:not(.header-search-row)");
     container?.querySelector(":scope > div")?.after(banner);
 }
+
+// --- The header stays on screen (user, 2026-10-15) ------------------------------------------------
+// common.css makes it sticky; --header-h, its height, keeps sticky columns and jumps clear of it.
+// On a phone only its top row stays: the search moves to the row under the header, which scrolls away
+whenReady(() => {
+    const header = document.querySelector(".site-header");
+    if (!header) return;
+    const form = document.getElementById("search-form");
+    const below = document.querySelector(".header-search-row");
+    const phone = matchMedia("(max-width: 767.98px)");
+    const place = () => {
+        if (!form || !below) return;
+        if (phone.matches) below.append(form);
+        else header.querySelector(".header-tools").before(form);
+    };
+    phone.addEventListener("change", place);
+    place();
+    const measure = () => document.documentElement.style.setProperty("--header-h", `${header.offsetHeight}px`);
+    new ResizeObserver(measure).observe(header);
+    measure();
+});
 
 // --- Back to the top (user, 2026-10-13) ---------------------------------------------------------
 // A round button at the bottom right once the visitor has scrolled more than a screen and a half
