@@ -12,6 +12,8 @@ Each wish keeps the best price at the last check (alert_price), whether a user w
 (alert_used) and whether it was at its target (target_met), so the same change is sent once.
 Users switch them off on /collection or with the link in every message. Until an e-mail
 provider is set (mail_service), messages are only logged.
+The same news goes to the devices a user turned push notifications on for (push_service; user,
+2026-10-16), whether the e-mails are on or not: one notification per user, the first game and how many more.
 """
 import logging
 from decimal import Decimal
@@ -19,7 +21,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 
 from app import config
-from app.models import NOW, CollectionItem, StoreProduct, User
+from app.models import NOW, CollectionItem, PushSubscription, StoreProduct, User
 from app.services import mail_service
 from db import session
 
@@ -41,6 +43,8 @@ MAIL = {
         "target_reached": "chegou ao seu preço-alvo de {target}: {price} na {store}",
         "target_reached_used": "chegou ao seu preço-alvo de {target}: {price} em segunda mão, de um utilizador",
         "footer": "\nVer a lista de desejos: {wishlist}\n\nPara não receber estes emails: {off}\n",
+        "push_title": "Lista de desejos",
+        "push_more": {1: "{first}\ne mais 1 jogo", "n": "{first}\ne mais {n} jogos"},
     },
     "en": {
         "subject": {1: "Wishlist: news on 1 game", "n": "Wishlist: news on {n} games"},
@@ -53,6 +57,8 @@ MAIL = {
         "target_reached": "at your target price of {target}: {price} at {store}",
         "target_reached_used": "at your target price of {target}: {price} used, from a user",
         "footer": "\nSee your wishlist: {wishlist}\n\nTo stop these emails: {off}\n",
+        "push_title": "Wishlist",
+        "push_more": {1: "{first}\nand 1 more game", "n": "{first}\nand {n} more games"},
     },
 }
 
@@ -124,17 +130,20 @@ def first_sold(edition_ids):
 
 
 def check_all():
-    """Check every wish of users with alerts on, e-mail those with news. {users, items, sent}"""
+    """Check every wish of users with e-mails or push notifications on, send those with news.
+    {users, items, sent (e-mails), pushed (users whose devices took it)}"""
+    from app.services import push_service
     from app.services.collection_service import with_prices
     with session() as s:
+        pushing = set(s.scalars(select(PushSubscription.user_id).distinct()))
         rows = s.execute(
             select(CollectionItem.id, CollectionItem.user_id, CollectionItem.edition_id, CollectionItem.game_id,
                    CollectionItem.alert_price, CollectionItem.alert_checked_at, CollectionItem.alert_used,
                    CollectionItem.target_price, CollectionItem.target_met)
             .join(User, User.id == CollectionItem.user_id)
-            .where(CollectionItem.kind == "wishlist", User.is_active, User.wish_alerts)
+            .where(CollectionItem.kind == "wishlist", User.is_active, User.wish_alerts | User.id.in_(pushing))
             .order_by(CollectionItem.user_id, CollectionItem.id)).all()
-        users = {u.id: (u.email, u.display_name or u.username, u.lang) for u in s.scalars(
+        users = {u.id: (u.email, u.display_name or u.username, u.lang, u.wish_alerts) for u in s.scalars(
             select(User).where(User.id.in_({r.user_id for r in rows})))} if rows else {}
 
     items = [{"id": r.id, "user_id": r.user_id, "edition_id": r.edition_id, "game_id": r.game_id, "kind": "wishlist",
@@ -158,14 +167,21 @@ def check_all():
             if why:
                 news.setdefault(item["user_id"], []).append((why, item))
 
-    sent = 0
+    sent = pushed = 0
     for user_id, changed in news.items():
-        email, name, lang = users[user_id]
-        try:
-            mail_service.send(email, *message(user_id, name, lang, changed))
-            sent += 1
-        except Exception as e:          # one bad address mustn't stop the others; its news is sent next time
-            log.warning("Wishlist alert to user %s not sent: %s", user_id, e)
+        email, name, lang, mails = users[user_id]
+        delivered = False
+        if mails:
+            try:
+                mail_service.send(email, *message(user_id, name, lang, changed))
+                sent += 1
+                delivered = True
+            except Exception as e:      # one bad address mustn't stop the others
+                log.warning("Wishlist alert to user %s not sent: %s", user_id, e)
+        if user_id in pushing and push_service.send(user_id, *notification(lang, changed)):
+            pushed += 1
+            delivered = True
+        if not delivered:               # its news is sent next time
             for _, item in changed:
                 remember[item["id"]], listed[item["id"]], met[item["id"]] = item["old"], item["was_listed"], item["was_met"]
 
@@ -174,7 +190,7 @@ def check_all():
             s.query(CollectionItem).filter(CollectionItem.id == item_id).update(
                 {"alert_price": price, "alert_checked_at": NOW, "alert_used": listed[item_id], "target_met": met[item_id]},
                 synchronize_session=False)
-    return {"users": len(news), "items": sum(len(c) for c in news.values()), "sent": sent}
+    return {"users": len(news), "items": sum(len(c) for c in news.values()), "sent": sent, "pushed": pushed}
 
 
 def message(user_id, name, lang, changed):
@@ -184,17 +200,33 @@ def message(user_id, name, lang, changed):
     subject = words["subject"][1] if n == 1 else words["subject"]["n"].format(n=n)
     lines = [words["hello"].format(name=name)]
     for reason, item in changed:
-        title = (item.get("name_en") or item["name"]) if lang == "en" else item["name"]
-        platform = f" ({item['platform_name']})" if item.get("platform_name") else ""
-        used = (item.get("used") or {}).get("price")
-        if reason == "target_reached" and used is not None and (item["best_price"] is None or used < item["best_price"]):
-            reason = "target_reached_used"           # the used copy is the one at the target
-        price = used if reason in ("used_for_sale", "target_reached_used") else item["best_price"]
-        detail = words[reason].format(price=money(price, lang), old=money(item["old"], lang),
-                                      store=item["best_store"], target=money(item.get("target_price"), lang))
-        lines.append(f"- {title}{platform}: {detail}\n  {config.SITE_URL}/game/{item['game_id']}")
+        lines.append(f"- {news_line(lang, reason, item)}\n  {config.SITE_URL}/game/{item['game_id']}")
     lines.append(words["footer"].format(wishlist=f"{config.SITE_URL}/wishlist", off=off_link(user_id)))
     return subject, "\n".join(lines)
+
+
+def news_line(lang, reason, item):
+    """"Game (Platform): what happened", in the user's language."""
+    words = MAIL.get(lang, MAIL["pt"])
+    title = (item.get("name_en") or item["name"]) if lang == "en" else item["name"]
+    platform = f" ({item['platform_name']})" if item.get("platform_name") else ""
+    used = (item.get("used") or {}).get("price")
+    if reason == "target_reached" and used is not None and (item["best_price"] is None or used < item["best_price"]):
+        reason = "target_reached_used"           # the used copy is the one at the target
+    price = used if reason in ("used_for_sale", "target_reached_used") else item["best_price"]
+    detail = words[reason].format(price=money(price, lang), old=money(item["old"], lang),
+                                  store=item["best_store"], target=money(item.get("target_price"), lang))
+    return f"{title}{platform}: {detail}"
+
+
+def notification(lang, changed):
+    """(title, text, address, tag) of one user's push notification: the first news, and how many more."""
+    words = MAIL.get(lang, MAIL["pt"])
+    reason, item = changed[0]
+    first, more = news_line(lang, reason, item), len(changed) - 1
+    text = first if not more else words["push_more"][1 if more == 1 else "n"].format(first=first, n=more)
+    url = f"/game/{item['game_id']}" if not more else "/wishlist"
+    return words["push_title"], text, url, "wishlist"
 
 
 def money(value, lang):

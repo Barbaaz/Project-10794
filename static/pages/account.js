@@ -138,6 +138,52 @@ async function load() {
 
 // The collection's privacy, the e-mails and the Steam / PSN accounts (collection_service.settings,
 // steam_service / psn_service.saved_profile); each switch saved as it changes
+// Push notifications on this device: the switch asks the browser, then the server keeps where to send
+// (common.js pushOn / pushOff); "Enviar um teste" shows one at once
+async function setUpPush() {
+    const box = document.getElementById("push-on"), state = document.getElementById("push-state");
+    const test = document.getElementById("push-test");
+    const show = (on, note = "", error = false) => {
+        box.checked = on;
+        test.classList.toggle("d-none", !on);
+        state.className = `small mt-1 ${error ? "text-danger" : "text-body-secondary"}`;
+        state.textContent = note;
+    };
+    const support = pushSupport();
+    if (support === "unsupported") {
+        box.disabled = true;
+        const apple = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        return show(false, t(apple ? "push_ios" : "push_unsupported"));
+    }
+    if (support === "denied") {
+        box.disabled = true;
+        return show(false, t("push_blocked"));
+    }
+    const subscription = await pushSubscription().catch(() => null);
+    // on already: the server is told again (it may have been another user's on this device, or forgotten)
+    show(!!subscription && support === "granted" && await pushOn().catch(() => false));
+    box.onchange = async () => {
+        box.disabled = true;
+        try {
+            if (box.checked) {
+                const on = await pushOn();
+                show(on, on ? t("push_on") : t(pushSupport() === "denied" ? "push_blocked" : "push_not_allowed"), !on);
+                if (pushSupport() === "denied") return;
+            } else {
+                await pushOff();
+                show(false, t("push_off"));
+            }
+        } catch (e) {
+            show(false, t("push_failed"), true);
+        }
+        box.disabled = false;
+    };
+    test.onclick = async () => {
+        const { ok, data } = await api("/api/push/test");
+        show(true, ok && data.sent ? t("push_test_sent") : t("push_failed"), !(ok && data.sent));
+    };
+}
+
 async function loadSettings(user) {
     const settings = await fetch("/api/collection/settings").then(r => r.ok ? r.json() : null).catch(() => null);
     if (!settings) return;
@@ -186,6 +232,7 @@ async function loadSettings(user) {
     document.querySelectorAll("[data-bell]").forEach(box => box.onchange = () => saveBell(box.dataset.bell, box.checked));
     document.getElementById("bell-min").onchange = e => saveBell("min_discount", Number(e.target.value));
     showBell();
+    setUpPush();
 
     const [steam, psn] = await Promise.all(["steam", "psn"].map(key =>
         fetch(`/api/collection/${key}`).then(r => r.ok ? r.json() : {}).catch(() => ({}))));

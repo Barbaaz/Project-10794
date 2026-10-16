@@ -202,6 +202,7 @@ async function renderAccountArea() {
     showNotifications();
     bindAccountMenu(box);
     box.querySelector("#logout-btn").onclick = async () => {
+        await pushOff().catch(() => {});      // the next person on this device doesn't get this user's news
         await api("/api/auth/logout");
         location.reload();
     };
@@ -325,6 +326,38 @@ async function showNotifications() {
 // --- The app on a phone (static/sw.js, static/manifest.webmanifest) ---------------------------
 
 // The service worker: pages open on a weak connection or none, from what was saved on the last visit
+// --- Push notifications on this device (user, 2026-10-16; app/services/push_service.py, static/sw.js) ---------
+// "unsupported": this browser can't (an iPhone / iPad: only once the site is on the home screen)
+function pushSupport() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return "unsupported";
+    return Notification.permission;          // "default", "granted" or "denied" (blocked in the browser's settings)
+}
+
+async function pushSubscription() {
+    if (pushSupport() === "unsupported") return null;
+    const registration = await navigator.serviceWorker.getRegistration();
+    return registration ? registration.pushManager.getSubscription() : null;
+}
+
+// Ask the browser (it asks the user), then tell the server where to send; true when on
+async function pushOn() {
+    if (await Notification.requestPermission() !== "granted") return false;
+    const registration = await navigator.serviceWorker.register("/sw.js").then(() => navigator.serviceWorker.ready);
+    const { key } = await fetch("/api/push/key").then(r => r.json());
+    const raw = atob(key.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(key.length / 4) * 4, "="));
+    const subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({
+        userVisibleOnly: true, applicationServerKey: Uint8Array.from(raw, c => c.charCodeAt(0)) });
+    const { ok } = await api("/api/push/subscribe", { body: subscription.toJSON() });
+    return ok;
+}
+
+async function pushOff() {
+    const subscription = await pushSubscription();
+    if (!subscription) return;
+    await api("/api/push/unsubscribe", { body: { endpoint: subscription.endpoint } });
+    await subscription.unsubscribe();
+}
+
 if ("serviceWorker" in navigator) {
     addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
     navigator.serviceWorker.addEventListener("message", event => {

@@ -35,6 +35,8 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      # Optional: push notifications (app/services/push_service.py); the same key for the site and the scheduler
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
     ports:
       - "5000:5000"
     volumes:

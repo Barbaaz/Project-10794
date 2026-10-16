@@ -269,6 +269,19 @@
                             <option value="pt">Português</option><option value="en">English</option>
                         </select>
                     </div>
+                    <!-- Push notifications on this device (push_service, static/sw.js; user, 2026-10-16) -->
+                    <div id="push-settings" class="border-top mt-3 pt-3">
+                        <div class="setting-line">
+                            <div class="flex-grow-1">
+                                <label class="fw-semibold d-block" for="push-on" data-i18n="push_title"></label>
+                                <div id="push-text" class="small text-body-secondary" data-i18n="push_help"></div>
+                            </div>
+                            <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch"
+                                 id="push-on" aria-describedby="push-text push-state"></div>
+                        </div>
+                        <div id="push-state" class="small text-body-secondary mt-1" role="status"></div>
+                        <button type="button" id="push-test" class="btn btn-sm btn-secondary mt-2 d-none" data-i18n="push_test"></button>
+                    </div>
                     <!-- The header's bell (collection_service.deal_reason): on / off, which deals, the smallest discount -->
                     <div id="bell-settings" class="border-top mt-3 pt-3">
                         <div class="setting-line">

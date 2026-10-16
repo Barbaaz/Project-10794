@@ -51,10 +51,10 @@ def test_drop_and_back_in_stock_once(market, store):
     wish(client, market["edition"])
     wish(client, market["other_edition"])                       # out of stock when wished
 
-    assert wish_alert_service.check_all() == {"users": 0, "items": 0, "sent": 0}
+    assert wish_alert_service.check_all() == {"users": 0, "items": 0, "sent": 0, "pushed": 0}
     prices[market["edition"]] = 44.99
     prices[market["other_edition"]] = 20.00
-    assert wish_alert_service.check_all() == {"users": 1, "items": 2, "sent": 1}
+    assert wish_alert_service.check_all() == {"users": 1, "items": 2, "sent": 1, "pushed": 0}
     to, subject, text = sent[0]
     assert to == "wisher@example.pt" and subject == "Lista de desejos: 2 jogos com novidades"
     assert "desceu de 59,99 € para 44,99 € na Loja" in text and "à venda: 20,00 € na Loja" in text
@@ -119,7 +119,7 @@ def test_a_user_selling_a_wished_game(market, store):
     assert wish_alert_service.check_all()["sent"] == 0
     sign_up(client, "seller_of_it")
     assert new_listing(market, price="25").status_code == 201
-    assert wish_alert_service.check_all() == {"users": 1, "items": 1, "sent": 1}
+    assert wish_alert_service.check_all() == {"users": 1, "items": 1, "sent": 1, "pushed": 0}
     assert "à venda em segunda mão por um utilizador: 25,00 €" in sent[0][2]
     assert wish_alert_service.check_all()["sent"] == 0           # once
 

@@ -5,7 +5,7 @@
 #   (or COMPOSE_FILE=docker-compose.yml:docker-compose.production.yml in .env, as DEPLOY.md does)
 #
 # Needs in .env, besides DB_PASSWORD and SECRET_KEY: DOMAIN; IGDB_* for new games' information;
-# SMTP_* and ALERT_EMAIL for e-mails. Photos, logs and backups are folders next to this file.
+# SMTP_* and ALERT_EMAIL for e-mails; VAPID_PRIVATE_KEY for push notifications. Photos, logs and backups are folders next to this file.
 services:
   db:
     restart: unless-stopped
@@ -42,6 +42,8 @@ services:
       MAIL_FROM: ${MAIL_FROM:-}
       # A store failing or half-broken is e-mailed here (needs SMTP_HOST)
       ALERT_EMAIL: ${ALERT_EMAIL:-}
+      # Optional: push notifications (app/services/push_service.py); the same key for the site and the scheduler
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
     volumes:
       - ./instance/uploads:/app/instance/uploads
       - ./logs:/app/logs

@@ -117,3 +117,26 @@ async function tellSaved(clientId, savedAt) {
     const client = clientId && await self.clients.get(clientId);
     client?.postMessage({ type: "saved-answer", savedAt });
 }
+
+// Push notifications (app/services/push_service.py; user, 2026-10-16): {title, body, url, tag} from the
+// server, shown even with the site closed; a click opens the address, in a tab of ours if one is open
+self.addEventListener("push", event => {
+    let message = {};
+    try { message = event.data ? event.data.json() : {}; } catch (e) { /* not ours: shown plain */ }
+    event.waitUntil(self.registration.showNotification(message.title || "SaveOnGames", {
+        body: message.body || "",
+        icon: "/static/icons/icon-192.png",
+        tag: message.tag || undefined,          // a newer one of the same kind replaces the old
+        data: { url: message.url || "/" },
+    }));
+});
+
+self.addEventListener("notificationclick", event => {
+    event.notification.close();
+    const url = new URL(event.notification.data?.url || "/", location.origin);
+    if (url.origin !== location.origin) return;        // only our own pages
+    event.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(windows => {
+        const ours = windows.find(w => new URL(w.url).origin === location.origin);
+        return ours ? ours.focus().then(w => w.navigate(url.href)) : self.clients.openWindow(url.href);
+    }));
+});

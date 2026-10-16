@@ -25,7 +25,7 @@ NOW = func.utcnow()      # the database's clock, in UTC (database/schema.sql)
 MARKET_TABLES = {"users", "user_listings", "listing_photos", "conversations", "messages", "message_photos",
                  "user_ratings", "reports", "moderation_log", "match_overrides",
                  "collection_items", "game_reviews", "duplicate_dismissals", "steam_skips",
-                 "psn_skips", "follows", "igdb_addons"}
+                 "psn_skips", "follows", "igdb_addons", "push_subscriptions"}
 
 # The header bell's notifications (collection_service.good_deals): on at all; which wish deals count (a real
 # discount, the historical low, cheaper than when added); the smallest discount / drop, in %, that counts
@@ -416,6 +416,19 @@ class Follow(Base):
     __table_args__ = (Index("ix_follows_followed", "followed_id"),)
     follower_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     followed_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    created_at = created_at()
+
+
+class PushSubscription(Base):
+    """A browser / installed app a user gets push notifications on (push_service; user, 2026-10-16): what the
+    browser's push service gave it (its address and keys). Gone with the user, or when the browser says so."""
+    __tablename__ = "push_subscriptions"
+    __table_args__ = (Index("ix_push_subscriptions_user", "user_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    endpoint: Mapped[str] = mapped_column(String(1000), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
     created_at = created_at()
 
 
