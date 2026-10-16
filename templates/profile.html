@@ -37,9 +37,9 @@
                     <span id="follow-counts" class="small text-body-secondary"></span>
                     <button type="button" id="follow-button" class="btn btn-sm btn-primary d-none"></button>
                     <a id="edit-profile" href="/account#profile" class="btn btn-sm btn-secondary d-none" data-i18n="edit_profile"></a>
-                    <!-- opens the showcase editor below (user, 2026-10-16: a button next to Editar perfil) -->
-                    <button type="button" id="showcase-toggle" class="btn btn-sm btn-secondary d-none" aria-expanded="false"
-                            aria-controls="showcase-editor" data-i18n="showcase_edit" data-icon="pencil"></button>
+                    <!-- opens the showcase editor's window (user, 2026-10-16: a button next to Editar perfil) -->
+                    <button type="button" id="showcase-toggle" class="btn btn-sm btn-secondary d-none" aria-haspopup="dialog"
+                            data-i18n="showcase_edit" data-icon="pencil"></button>
                     <a id="compare-link" class="btn btn-sm btn-secondary d-none" data-i18n="compare_collections"></a>
                 </div>
             </div>
@@ -54,24 +54,33 @@
         <div id="gaming-accounts" class="d-flex flex-wrap gap-1 mb-3 d-none" data-i18n-aria-label="gaming_accounts" role="list"></div>
 
         <!-- The showcase (collection_service.showcase): the sections the user chose, in their order;
-             only with a public collection. On their own profile, "Personalizar o perfil" (by Editar perfil) edits it -->
-        <section id="showcase-editor" class="card card-body py-2 mb-3 d-none" aria-labelledby="showcase-editor-title">
-            <h2 id="showcase-editor-title" class="h6 fw-semibold mt-1 mb-0" data-i18n="showcase_edit"></h2>
+             only with a public collection. On their own profile, "Personalizar o perfil" (by Editar perfil) opens its editor -->
+        <dialog id="showcase-editor" class="item-dialog" aria-labelledby="showcase-editor-title">
+            <div class="d-flex align-items-start gap-2">
+                <h2 id="showcase-editor-title" class="h5 mb-0 flex-grow-1" data-i18n="showcase_edit"></h2>
+                <button type="button" class="btn-close" data-close data-i18n-aria-label="cancel"></button>
+            </div>
             <p id="showcase-private" class="small text-body-secondary mt-2 mb-0 d-none" data-i18n="showcase_private"></p>
-            <h3 class="h6 mt-3 mb-1" data-i18n="showcase_sections"></h3>
-            <ul id="showcase-section-list" class="list-group mb-3"></ul>
-            <h3 class="h6 mb-1" data-i18n="showcase_favourites"></h3>
-            <p class="small text-body-secondary mb-1" data-i18n="showcase_favourites_help"></p>
-            <ol id="showcase-favourite-list" class="list-group list-group-numbered mb-2"></ol>
-            <div class="input-group input-group-sm mb-3">
-                <select id="showcase-add" class="form-select" data-i18n-aria-label="showcase_add"></select>
-                <button type="button" id="showcase-add-button" class="btn btn-secondary" data-i18n="showcase_add"></button>
+            <h3 class="h6 mt-3 mb-0" data-i18n="showcase_sections"></h3>
+            <p class="small text-body-secondary mb-2" data-i18n="showcase_drag_hint"></p>
+            <ul id="showcase-section-list" class="list-unstyled mb-3"></ul>
+            <h3 class="h6 mb-0" data-i18n="showcase_favourites"></h3>
+            <p class="small text-body-secondary mb-2" data-i18n="showcase_favourites_help"></p>
+            <ol id="showcase-favourite-list" class="fav-grid mb-3"></ol>
+            <!-- a game from the collection, by name (user, 2026-10-16: not a long list to scroll) -->
+            <label for="showcase-search" class="form-label small mb-1" data-i18n="showcase_add_label"></label>
+            <div class="input-group input-group-sm">
+                <span class="input-group-text" aria-hidden="true"></span>
+                <input id="showcase-search" type="search" class="form-control" autocomplete="off"
+                       data-i18n-placeholder="showcase_search" aria-controls="showcase-results">
             </div>
-            <div class="d-flex align-items-center gap-2">
+            <div id="showcase-results" class="list-group pick-results mt-1"></div>
+            <div class="d-flex align-items-center gap-2 border-top pt-2 mt-3">
+                <span id="showcase-saved" class="small me-auto" role="status"></span>
+                <button type="button" class="btn btn-secondary btn-sm" data-close data-i18n="cancel"></button>
                 <button type="button" id="showcase-save" class="btn btn-primary btn-sm" data-i18n="showcase_save"></button>
-                <span id="showcase-saved" class="small" role="status"></span>
             </div>
-        </section>
+        </dialog>
         <div id="showcase" class="mb-2"></div>
 
         <!-- Their own profile only: who they follow (only they see it) -->
