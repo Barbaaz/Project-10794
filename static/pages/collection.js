@@ -108,6 +108,9 @@ function priceLine(item) {
         item.on_sale ? `<span class="badge text-bg-danger">${t("tag_on_sale")}${item.discount ? ` −${Math.round(item.discount)}%` : ""}</span>` : "",
         item.at_historical_low ? `<span class="badge text-bg-success">${t("low_badge")}</span>` : "",
         item.price_drop ? `<span class="badge text-bg-warning" title="${esc(t("collection_wished_at", { price: eur.format(item.wish_price) }))}">${t("collection_price_drop", { amount: eur.format(item.price_drop) })}</span>` : "",
+        // the price the user waits for (user, 2026-10-16): green once the best new or used price gets there
+        item.target_price ? `<span class="badge ${item.target_hit ? "text-bg-success" : "text-bg-secondary"}">${esc(t(item.target_hit
+            ? "target_hit_badge" : "target_badge", { price: eur.format(item.target_price) }))}</span>` : "",
     ].join("");
     return lines + `<div class="item-facts small">${badges}</div>`;
 }
@@ -195,7 +198,9 @@ function itemRow(item) {
                         ${owned
                             // only physical copies can be sold (a digital game can't be handed over)
                             ? (item.format === "digital" ? "" : `<a class="btn btn-sm btn-success" href="/sell?game_id=${item.game_id}&edition_id=${item.edition_id}">${t("collection_sell")}</a>`)
-                            : `<button type="button" class="btn btn-sm btn-success" data-action="bought">${t("collection_bought")}</button>`}
+                            : `<button type="button" class="btn btn-sm btn-success" data-action="bought">${t("collection_bought")}</button>
+                               <button type="button" class="btn btn-sm btn-secondary" data-action="target" aria-haspopup="dialog"
+                                       aria-label="${esc(t("target_title"))}" title="${esc(t("target_title"))}">${icon("bell", 14)}</button>`}
                         <button type="button" class="btn btn-sm btn-danger ms-auto" data-action="remove"
                                 aria-label="${esc(t("collection_remove"))}" title="${esc(t("collection_remove"))}">✕</button>
                     </div>
@@ -274,6 +279,8 @@ function renderItems() {
         const id = row.dataset.id;
         const editButton = row.querySelector("[data-action=edit]");
         if (editButton) editButton.onclick = () => openEditor(id);
+        const targetButton = row.querySelector("[data-action=target]");
+        if (targetButton) targetButton.onclick = () => openTarget(id);
         row.querySelector("[data-action=remove]").onclick = () => removeItem(data.items.find(i => String(i.id) === id));
         const bought = row.querySelector("[data-action=bought]");
         if (bought) bought.onclick = async () => {
@@ -386,6 +393,54 @@ function openEditor(id) {
     dialog.showModal();
     loadEditionChange(item);
     loadDlc(item, body, done);
+}
+
+// A wish's target price (user, 2026-10-16: custom alerts) in the edit window: the bell and an e-mail when
+// the best new or used price gets to it (collection_service.deal_reason, wish_alert_service)
+function openTarget(id) {
+    const item = data.items.find(i => String(i.id) === id);
+    editing = id;
+    const body = document.getElementById("item-dialog-body");
+    const value = item.target_price ? fmtNumber(item.target_price) : "";
+    const prices = [item.best_price, item.used?.price].filter(p => p != null);
+    const now = prices.length ? Math.min(...prices) : null;          // what the target is compared with
+    body.innerHTML = `
+        <div class="d-flex gap-3 align-items-start">
+            <img class="dialog-cover ${coverClass(item.image)}" src="${esc(item.image || "")}" alt="">
+            <div class="flex-grow-1 min-w-0">
+                <h2 id="item-dialog-title" class="h5 mb-0">${esc(t("target_title"))}</h2>
+                <div class="small">${esc(localName(item) || "")}</div>
+                <div class="small text-body-secondary">${esc(item.platform_name || "")}${now !== null
+                    ? ` · ${esc(t("target_now", { price: eur.format(now) }))}` : ""}</div>
+            </div>
+            <button type="button" class="btn-close" data-close aria-label="${esc(t("collection_edit_done"))}"></button>
+        </div>
+        <form class="mt-3" novalidate>
+            <label class="form-label small mb-1" for="target-price">${esc(t("target_label"))}</label>
+            <div class="input-group input-group-sm" style="max-width: 14rem;">
+                <input id="target-price" name="target" type="text" inputmode="decimal" class="form-control" value="${esc(value)}"
+                       placeholder="${esc(fmtNumber(20))}" aria-describedby="target-help"><span class="input-group-text">€</span></div>
+            <div id="target-help" class="small text-body-secondary mt-1">${esc(t("target_help"))}</div>
+            <div class="d-flex align-items-center gap-2 border-top pt-2 mt-3">
+                ${item.target_price ? `<button type="button" class="btn btn-link btn-sm text-danger px-0" data-clear>${esc(t("target_clear"))}</button>` : ""}
+                <span class="small text-danger ms-auto" data-error role="status"></span>
+                <button type="submit" class="btn btn-primary btn-sm">${esc(t("target_save"))}</button>
+            </div>
+        </form>`;
+    const form = body.querySelector("form");
+    const save = async target => {
+        const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { target_price: target } });
+        if (!ok) return body.querySelector("[data-error]").textContent = t(`error_${answer?.error || "unknown"}`);
+        reloadOnClose = true;          // the server says whether it's there already
+        showMessage(true, t(target ? "target_saved" : "target_cleared"));
+        dialog.close();
+        showNotifications();           // the header's bell counts again
+    };
+    form.onsubmit = event => { event.preventDefault(); save(form.target.value.trim() || null); };
+    body.querySelector("[data-clear]")?.addEventListener("click", () => save(null));
+    body.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
+    dialog.showModal();
+    form.target.focus();
 }
 
 // The game's DLC and expansions from IGDB (dlc_service), ticked as owned; each tick is saved at once

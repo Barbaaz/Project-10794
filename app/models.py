@@ -452,8 +452,12 @@ class CollectionItem(Base):
     # wishlist alerts: the best new price at the last check (None: none in stock), and when
     alert_price = mapped_column(Numeric(10, 2))
     alert_checked_at = mapped_column(DateTime)
-    alert_used = mapped_column(Boolean)
-    favourite_rank: Mapped[int | None] = mapped_column(SmallInteger)   # 1-10: the profile's top 10 (owned)       # a user was selling a copy at the last check (None: not checked)
+    alert_used = mapped_column(Boolean)                                # a user was selling a copy at the last check (None: not checked)
+    # the price the user waits for (user, 2026-10-16): the bell and an e-mail when the best new or used
+    # price gets to it; target_met: it had at the last e-mail check, so it's sent once until it's above again
+    target_price = mapped_column(Numeric(10, 2))
+    target_met: Mapped[bool | None] = mapped_column(Boolean)
+    favourite_rank: Mapped[int | None] = mapped_column(SmallInteger)   # 1-10: the profile's top 10 (owned)
     # the game's DLC / expansions the user owns: JSON list of IGDB ids, from IgdbAddons' list (dlc_service)
     dlc_owned: Mapped[str | None] = mapped_column(UnicodeText)
     created_at = created_at()

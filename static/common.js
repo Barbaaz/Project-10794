@@ -250,7 +250,8 @@ async function showUnreadCount() {
 }
 
 // --- Notifications (user, 2026-10-13): the bell button lists what's waiting for the user ---------
-// Wishes that are a good deal now (on sale, at the historical low, cheaper than when added; collection_service.good_deals)
+// Wishes that are a good deal now (at the user's target price, on sale, at the historical low, cheaper than when
+// added; collection_service.good_deals)
 // and trades to rate. The number counts the deals not seen yet (this browser remembers which, by price)
 // plus the ratings to give; opening the panel marks the deals seen.
 const SEEN_DEALS = "seen-deals";
@@ -263,13 +264,14 @@ async function showNotifications() {
         fetch("/api/collection/deals").then(r => r.ok ? r.json() : { items: [] }).catch(() => ({ items: [] })),
         fetch("/api/ratings/pending").then(r => r.ok ? r.json() : []).catch(() => []),
     ]);
-    const key = d => `${d.id}:${d.best_price}`;
+    const key = d => `${d.id}:${d.best_price}:${d.reason}`;
     const seen = new Set(savedJSON(SEEN_DEALS, []));
     const fresh = deals.items.filter(d => !seen.has(key(d)));
     const count = fresh.length + ratings.length;
 
     // why it's there (collection_service.deal_reason, by the user's settings)
-    const why = d => d.reason === "sale" ? `−${d.discount}%`
+    const why = d => d.reason === "target" ? t("notif_target", { price: eur.format(d.target_price) })
+        : d.reason === "sale" ? `−${d.discount}%`
         : d.reason === "low" ? t("notif_low")
         : d.reason === "drop" ? t("notif_price_drop", { amount: eur.format(d.price_drop) }) : "";
     const deal = d => `
