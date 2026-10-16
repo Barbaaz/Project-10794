@@ -29,6 +29,8 @@
             <li class="nav-item" role="presentation"><button class="nav-link active" data-tab="reports" role="tab" data-i18n="mod_tab_reports"></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="problems" role="tab" data-i18n="mod_tab_problems"></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="matches" role="tab" data-i18n="mod_tab_matches"></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-tab="contact" role="tab"><span data-i18n="mod_tab_contact"></span>
+                <span id="contact-open" class="badge rounded-pill text-bg-danger d-none"></span></button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-tab="log" role="tab" data-i18n="mod_tab_log"></button></li>
             <li class="nav-item d-none" id="staff-tab" role="presentation"><button class="nav-link" data-tab="staff" role="tab" data-i18n="mod_tab_staff"></button></li>
         </ul>
@@ -45,6 +47,16 @@
             <div id="problems" class="list-group"></div>
             <p id="no-problems" class="text-body-secondary d-none" data-i18n="mod_no_problems"></p>
             <div id="conversation" class="card mt-3 d-none"><div class="card-body"></div></div>
+        </section>
+
+        <!-- Messages from the Contactos page (contact_service): open ones first; replies go by e-mail -->
+        <section id="tab-contact" role="tabpanel" class="d-none">
+            <div class="btn-group btn-group-sm mb-3" role="group" data-i18n-aria-label="mod_tab_contact">
+                <button type="button" class="btn btn-secondary active" data-contact-handled="0" aria-pressed="true" data-i18n="mod_contact_open"></button>
+                <button type="button" class="btn btn-secondary" data-contact-handled="1" aria-pressed="false" data-i18n="mod_contact_handled"></button>
+            </div>
+            <div id="contact-messages" class="d-flex flex-column gap-3"></div>
+            <p id="no-contact" class="text-body-secondary d-none" data-i18n="mod_no_contact"></p>
         </section>
 
         <section id="tab-log" role="tabpanel" class="d-none">
@@ -90,6 +102,7 @@
     </div>
 </div>
 
+{% include "_footer.html" %}
 <script src="/static/pages/admin.js"></script>
 </body>
 </html>

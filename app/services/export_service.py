@@ -1,7 +1,7 @@
 """
 A user's own data as one JSON file (GDPR: right of access and portability): the account, listings,
 conversations with their messages, ratings given and received, game reviews, the collection and
-wishlist, reports they made and, for staff, their moderation actions. Never the password hash, and
+wishlist, reports they made, messages to the team (Contactos) and, for staff, their moderation actions. Never the password hash, and
 nothing that names who reported them. Photos are listed by address (listing photos are public,
 chat photos open for the two sides while logged in).
 """
@@ -10,7 +10,7 @@ import json
 from sqlalchemy import or_, select
 
 from app.models import (
-    CollectionItem, Conversation, Follow, GameReview, Listing, Message, ModerationLog, PsnSkip, Rating, Report, SteamSkip, User,
+    CollectionItem, ContactMessage, Conversation, Follow, GameReview, Listing, Message, ModerationLog, PsnSkip, Rating, Report, SteamSkip, User,
     fields,
 )
 from app.services.chat_service import message_dicts
@@ -96,5 +96,7 @@ def export_user(user_id):
             "psn_skipped_lists": [k.psn_id for k in s.scalars(select(PsnSkip).where(PsnSkip.user_id == user_id)
                                                              .order_by(PsnSkip.psn_id))],
             "reports_made": reports,
+            "contact_messages": [fields(m, "name", "email", "topic", "body", "created_at") for m in s.scalars(
+                select(ContactMessage).where(ContactMessage.user_id == user_id).order_by(ContactMessage.id))],
             "moderation_actions": moderation,
         }
