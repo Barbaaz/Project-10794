@@ -349,7 +349,7 @@ function showSavedNotice(savedAt) {
     notice.innerHTML = `<span>${icon("offline", 16)} ${esc(t("offline_notice", { time: when }))}</span>
         <button type="button" class="btn btn-sm btn-warning ms-auto">${esc(t("offline_retry"))}</button>`;
     notice.querySelector("button").onclick = () => location.reload();
-    const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl");
+    const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl:not(.header-search-row)");
     if (container) container.querySelector(":scope > div")?.after(notice);
     else document.body.prepend(notice);
 }
@@ -402,9 +402,30 @@ async function showPendingRatings() {
     banner.setAttribute("role", "status");
     banner.innerHTML = `<strong>${esc(t(overdue ? "ratings_overdue_title" : "ratings_pending_title", { count: pending.length }))}</strong>
         ${pending.map(p => `<a href="/messages?c=${p.conversation_id}" class="ms-2">${esc(t("rate_link", { user: userLabel(p.other_username), game: p.title }))}</a>`).join("")}`;
-    const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl");
+    const container = document.querySelector("body > .container, body > .container-xl, body > .container-xxl:not(.header-search-row)");
     container?.querySelector(":scope > div")?.after(banner);
 }
+
+// --- The header stays on screen (user, 2026-10-15) ------------------------------------------------
+// common.css makes it sticky; --header-h, its height, keeps sticky columns and jumps clear of it.
+// On a phone only its top row stays: the search moves to the row under the header, which scrolls away
+whenReady(() => {
+    const header = document.querySelector(".site-header");
+    if (!header) return;
+    const form = document.getElementById("search-form");
+    const below = document.querySelector(".header-search-row");
+    const phone = matchMedia("(max-width: 767.98px)");
+    const place = () => {
+        if (!form || !below) return;
+        if (phone.matches) below.append(form);
+        else header.querySelector(".header-tools").before(form);
+    };
+    phone.addEventListener("change", place);
+    place();
+    const measure = () => document.documentElement.style.setProperty("--header-h", `${header.offsetHeight}px`);
+    new ResizeObserver(measure).observe(header);
+    measure();
+});
 
 // --- Back to the top (user, 2026-10-13) ---------------------------------------------------------
 // A round button at the bottom right once the visitor has scrolled more than a screen and a half

@@ -17,7 +17,7 @@
     <style>
         /* the settings (account.js): sections under one another, a menu beside them from large screens up */
         .settings-section { scroll-margin-top: 1rem; }
-        .settings-nav { position: sticky; top: 1rem; }
+        .settings-nav { position: sticky; top: calc(var(--header-h, 0px) + 1rem); }
         .settings-nav .list-group-item.active { background: var(--bs-secondary-bg); color: var(--bs-emphasis-color);
                                                 border-color: var(--bs-border-color); font-weight: 600; }
         .setting-line { display: flex; align-items: flex-start; gap: .75rem; }

@@ -115,7 +115,7 @@
         .release-layout { display: grid; gap: 1.5rem; }
         @media (min-width: 992px) {
             .release-layout { grid-template-columns: 20rem 1fr; align-items: start; }
-            .release-calendar { position: sticky; top: 1rem; }
+            .release-calendar { position: sticky; top: calc(var(--header-h, 0px) + 1rem); }
         }
         /* the calendar: a week a row from Monday; a day with releases shows how many */
         .first-cap::first-letter { text-transform: uppercase; }
