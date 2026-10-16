@@ -189,7 +189,14 @@ async function loadShowcaseEditor(isPublic) {
         owned,
     };
     document.getElementById("showcase-private").classList.toggle("d-none", isPublic);
-    document.getElementById("showcase-editor").classList.remove("d-none");
+    // "Personalizar o perfil" by Editar perfil opens and closes the editor
+    const toggle = document.getElementById("showcase-toggle"), box = document.getElementById("showcase-editor");
+    toggle.classList.remove("d-none");
+    toggle.onclick = () => {
+        const open = box.classList.toggle("d-none") === false;
+        toggle.setAttribute("aria-expanded", open);
+        if (open) box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    };
     renderEditor();
 }
 

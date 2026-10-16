@@ -37,6 +37,9 @@
                     <span id="follow-counts" class="small text-body-secondary"></span>
                     <button type="button" id="follow-button" class="btn btn-sm btn-primary d-none"></button>
                     <a id="edit-profile" href="/account#profile" class="btn btn-sm btn-secondary d-none" data-i18n="edit_profile"></a>
+                    <!-- opens the showcase editor below (user, 2026-10-16: a button next to Editar perfil) -->
+                    <button type="button" id="showcase-toggle" class="btn btn-sm btn-secondary d-none" aria-expanded="false"
+                            aria-controls="showcase-editor" data-i18n="showcase_edit" data-icon="pencil"></button>
                     <a id="compare-link" class="btn btn-sm btn-secondary d-none" data-i18n="compare_collections"></a>
                 </div>
             </div>
@@ -51,9 +54,9 @@
         <div id="gaming-accounts" class="d-flex flex-wrap gap-1 mb-3 d-none" data-i18n-aria-label="gaming_accounts" role="list"></div>
 
         <!-- The showcase (collection_service.showcase): the sections the user chose, in their order;
-             only with a public collection. On their own profile, "Personalizar" edits it -->
-        <details id="showcase-editor" class="card card-body py-2 mb-3 d-none">
-            <summary class="fw-semibold" data-i18n="showcase_edit" data-icon="pencil"></summary>
+             only with a public collection. On their own profile, "Personalizar o perfil" (by Editar perfil) edits it -->
+        <section id="showcase-editor" class="card card-body py-2 mb-3 d-none" aria-labelledby="showcase-editor-title">
+            <h2 id="showcase-editor-title" class="h6 fw-semibold mt-1 mb-0" data-i18n="showcase_edit"></h2>
             <p id="showcase-private" class="small text-body-secondary mt-2 mb-0 d-none" data-i18n="showcase_private"></p>
             <h3 class="h6 mt-3 mb-1" data-i18n="showcase_sections"></h3>
             <ul id="showcase-section-list" class="list-group mb-3"></ul>
@@ -68,7 +71,7 @@
                 <button type="button" id="showcase-save" class="btn btn-primary btn-sm" data-i18n="showcase_save"></button>
                 <span id="showcase-saved" class="small" role="status"></span>
             </div>
-        </details>
+        </section>
         <div id="showcase" class="mb-2"></div>
 
         <!-- Their own profile only: who they follow (only they see it) -->
