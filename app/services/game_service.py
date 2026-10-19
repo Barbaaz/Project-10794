@@ -3,10 +3,11 @@ import re
 from datetime import datetime, timezone
 
 from app.services.common import (
-    CARD_KEY, EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, card_cover, card_group, edition_en, lowest_prices, page_result,
-    title_word_filters,
+    CARD_KEY, EDITION_CARD_COLUMNS, LATEST_PRICE, OFFER_COLUMNS, better_title, cached, card_cover, card_group, edition_en,
+    lowest_prices, page_result, title_en, title_word_filters,
 )
 from app.services.genre_service import genre_filter
+from core.normalizer import normalize_name
 from app.services.listing_service import used_summaries
 from app.services.review_service import mark_review_scores
 from app.services.tag_service import mark_historical_lows, pegi_filter, tag_filters
@@ -56,6 +57,54 @@ def list_games(q=None, platform=None, page=1, per_page=20):
         game.update(summaries.get(game["id"], {}))
 
     return page_result(page, per_page, total, games=games)
+
+
+# The header's search suggests games while the name is typed (user, 2026-10-20): what Enter would find
+SUGGEST_MIN_CHARS = 2
+SUGGEST_LIMIT = 8
+
+
+def suggest(q):
+    """
+    Up to SUGGEST_LIMIT games whose title has every word of q (as the search), one per game across platforms
+    (card_key): games before consoles, titles starting with q first, then a word starting with it, then those
+    more stores sell, then the most followed. Each:
+    game_id (its first platform's), name, name_en, cover, platforms, price (the lowest new in stock, or None).
+    """
+    if len(normalize_name(q or "").replace(" ", "")) < SUGGEST_MIN_CHARS:
+        return []
+
+    def compute():
+        where, params = search_filters(q, None)
+        rows = fetch_all(f"""
+            SELECT g.id, g.title, g.title_en, g.cover_image_id, g.image_url, p.code AS platform,
+                   COALESCE(g.card_key, g.normalized_title) AS card,
+                   (SELECT MIN(o.price) FROM current_offers o
+                    WHERE o.game_id = g.id AND o.is_active AND o.condition = 'new' AND o.in_stock) AS price
+            FROM games g JOIN platforms p ON p.id = g.platform_id
+            WHERE {where}
+            ORDER BY CASE WHEN g.kind = 'game' THEN 0 ELSE 1 END,
+                     CASE WHEN g.normalized_title LIKE ? THEN 0 WHEN g.normalized_title LIKE ? THEN 1 ELSE 2 END,
+                     (SELECT COUNT(*) FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active) DESC,
+                     COALESCE(g.hypes, 0) DESC, g.title, p.sort_order, g.id
+            LIMIT ?
+        """, *params, normalize_name(q) + "%", "% " + normalize_name(q) + "%", SUGGEST_LIMIT * 5)
+        games = {}
+        for r in rows:
+            game = games.get(r["card"])
+            if game is None:
+                if len(games) == SUGGEST_LIMIT:
+                    continue
+                game = games[r["card"]] = {
+                    "game_id": r["id"], "name": better_title(r), "name_en": title_en(r),
+                    "cover": card_cover(r) or r["image_url"], "platforms": [], "price": None}
+            if r["platform"] not in game["platforms"]:
+                game["platforms"].append(r["platform"])
+            if r["price"] is not None and (game["price"] is None or r["price"] < game["price"]):
+                game["price"] = r["price"]
+        return list(games.values())
+
+    return cached(("suggest", normalize_name(q)), compute)
 
 
 def offer_summaries(game_ids):

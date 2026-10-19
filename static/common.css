@@ -127,6 +127,22 @@ html { scroll-padding-top: calc(var(--header-h, 0px) + .5rem); }
 .site-header .header-tools { margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 767.98px) { .header-search { order: 3; flex-basis: 100%; max-width: none; } }
 /* On a phone the search sits under the header (common.js moves it there), so only the top row stays on screen */
+/* Suggestions under the search while a name is typed (common.js; user, 2026-10-20) */
+.header-search { position: relative; }
+.search-suggest { position: absolute; top: calc(100% + .35rem); left: 0; right: 0; z-index: 1050; list-style: none; margin: 0;
+                  padding: .3rem; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .75rem;
+                  box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .18); max-height: min(70vh, 32rem); overflow-y: auto; }
+.search-suggest a { display: flex; align-items: center; gap: .6rem; padding: .35rem .5rem; border-radius: .5rem;
+                    color: inherit; text-decoration: none; }
+.search-suggest [aria-selected="true"] a, .search-suggest a:hover { background: var(--bs-tertiary-bg); }
+.search-suggest img, .search-suggest .suggest-none { width: 2rem; aspect-ratio: 3 / 4; object-fit: cover; border-radius: .25rem;
+                                                     flex: none; background: var(--bs-secondary-bg); }
+.search-suggest img.store-photo { padding: 2px; }     /* store-photo's 6 % padding is of the list's width */
+.suggest-text { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.suggest-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggest-price { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; font-size: .9rem; }
+.suggest-all { border-top: 1px solid var(--bs-border-color); margin-top: .3rem; padding-top: .3rem; }
+.suggest-all a { color: var(--bs-link-color); }
 .header-search-row { display: none; }
 @media (max-width: 767.98px) {
     .header-search-row { display: block; padding-block: .6rem; background: var(--bs-body-bg); border-bottom: 1px solid var(--bs-border-color); }
