@@ -55,6 +55,23 @@ def releases(app_on_test_db):
     igdb(product("PS5", "Store Dated Game", "Standard", 39.99), SOON + timedelta(days=40), True)
     igdb(product("PS5", "Port Game", "Standard", 29.99, released=placeholder), date.today() - timedelta(days=10), True)
     igdb(product("PS5", "Year Game", "Standard", 54.99, released=placeholder), date(date.today().year + 1, 12, 31), False)
+    # pre-orders out already (user, 2026-10-20): one store left the label on ("31/12") after the release
+    long_ago = date.today() - timedelta(days=release_service.RECENT_DAYS + 5)      # not in "Acabados de sair"
+    late = product("PS5", "Late Label Game", "Standard", 49.99, released=long_ago, store="gaming_replay", preorder=False)
+    product("PS5", "Late Label Game", "Standard", 54.99, released=placeholder, store="radio_popular", game_id=late)
+    # CSTech's "pre-venda" tag, no date anywhere, out on IGDB
+    igdb(product("PS5", "Sticky Tag Game", "Standard", 29.99, released=None, store="cstech"),
+         date.today() - timedelta(days=7), True)
+    # the game is out, its collector's edition comes later: the card has the edition's date
+    collector = product("PS5", "Collector Game", "Standard", 59.99, released=long_ago, preorder=False)
+    cursor.execute("INSERT INTO game_editions (game_id, edition_key, name) VALUES (?, 'Collector''s Edition', 'Collector''s Edition')",
+                   collector)
+    product("PS5", "Collector Game", "Collector's Edition", 149.99, released=SOON + timedelta(days=5),
+            store="press_start", game_id=collector)
+    # one store each, a typo a year early: IGDB's day picks (Romancing SaGa 3)
+    tie = product("PS5", "Tie Game", "Standard", 49.99, released=SOON + timedelta(days=60))
+    product("PS5", "Tie Game", "Standard", 48.99, released=SOON + timedelta(days=60 - 365), store="press_start", game_id=tie)
+    igdb(tie, SOON + timedelta(days=60), True)
 
     yield release_service.upcoming_releases()
 
@@ -82,6 +99,17 @@ def test_most_anticipated_numbers_and_only_upcoming(releases):
     assert "Out Game" not in by_name and "Tomorrow Game" in by_name
     assert not any(g["name"] == "Out Game" for g in release_service.preorders())
     assert release_service.game_release_date(by_name["Tomorrow Game"]["game_id"])["release_date"] == SOON.isoformat()
+
+
+def test_pre_orders_out_already_are_left_out(releases):
+    """User, 2026-10-20: games out already were on the pre-orders tab."""
+    cards = {g["name"]: g for g in release_service.preorders()}
+    assert "Late Label Game" not in cards and "Sticky Tag Game" not in cards
+    [collector] = [g for name, g in cards.items() if name.startswith("Collector Game") and "Collector's" in name]
+    assert (collector["release_date"], collector["date_is_estimate"]) == ((SOON + timedelta(days=5)).isoformat(), False)
+    tie = cards["Tie Game"]
+    assert tie["release_date"] == (SOON + timedelta(days=60)).isoformat()
+    assert [g["release_date"] for g in cards.values()] == sorted(g["release_date"] for g in cards.values())
 
 
 def test_igdb_dates_only_where_the_stores_have_none(releases):

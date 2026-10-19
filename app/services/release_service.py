@@ -12,20 +12,23 @@ from db import fetch_all, placeholders
 # candidate below every store date of its kind: a store's real date wins over IGDB's day (the Portuguese
 # release), IGDB's day over the stores' "31/12", a store's "31/12" over IGDB's year. Only a date to come, for a
 # game the stores have on pre-order or dated: IGDB gives a date, it never takes a game out of the upcoming ones.
+# Stores tied on two dates: the one nearer IGDB's (user, 2026-10-20: Mega Mania's Romancing SaGa 3 "2026-02-16"
+# against Press Start's 2027-02-16, one store each, made it a game out in February).
 # out_already: games with only a "31/12" placeholder that a store already sells new, in stock, not as a
 # pre-order and with no date to come: they're out, whatever the others still say (user, 2026-10-14: Silent
 # Hill: Townfall came out the month before, two stores still had it "31/12"). A real date isn't overruled:
 # stores sell games out tomorrow without the pre-order mark.
 GAME_RELEASE_DATES = f"""
 game_dates AS (
-    SELECT game_id, release_date,
-           (EXTRACT(MONTH FROM release_date) = 12 AND EXTRACT(DAY FROM release_date) = 31) AS date_is_estimate,
-           COUNT(*) AS stores, 0 AS from_igdb
-    FROM store_products
-    WHERE is_active AND release_date IS NOT NULL AND game_id IS NOT NULL
-    GROUP BY game_id, release_date
+    SELECT sp.game_id, sp.release_date,
+           (EXTRACT(MONTH FROM sp.release_date) = 12 AND EXTRACT(DAY FROM sp.release_date) = 31) AS date_is_estimate,
+           COUNT(*) AS stores, 0 AS from_igdb, ABS(sp.release_date - g.igdb_platform_release) AS igdb_gap
+    FROM store_products sp
+    JOIN games g ON g.id = sp.game_id
+    WHERE sp.is_active AND sp.release_date IS NOT NULL
+    GROUP BY sp.game_id, sp.release_date, g.igdb_platform_release
     UNION ALL
-    SELECT g.id, g.igdb_platform_release, NOT g.igdb_platform_release_exact, 0, 1
+    SELECT g.id, g.igdb_platform_release, NOT g.igdb_platform_release_exact, 0, 1, 0
     FROM games g
     WHERE g.igdb_platform_release >= CAST(utcnow() AS date)
       AND EXISTS (SELECT 1 FROM store_products sp WHERE sp.game_id = g.id AND sp.is_active
@@ -34,7 +37,7 @@ game_dates AS (
 game_release AS (
     SELECT game_id, release_date, date_is_estimate
     FROM (
-        SELECT *, ROW_NUMBER() OVER (PARTITION BY game_id ORDER BY date_is_estimate, from_igdb, stores DESC, release_date) AS rn
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY game_id ORDER BY date_is_estimate, from_igdb, stores DESC, igdb_gap NULLS LAST, release_date) AS rn
         FROM game_dates
     ) x
     WHERE rn = 1
@@ -85,14 +88,17 @@ def preorders():
     """
     Games that can be pre-ordered, one group per edition with its pre-order offers
     (same shape as /search groups), soonest release first; unknown dates last.
-    Sold-out pre-orders (limited editions whose allocation ran out) and pre-orders whose
-    release date has passed are left out.
+    Sold-out pre-orders (limited editions whose allocation ran out) and pre-orders out already are left out:
+    their release date has passed, another store sells the edition as out with the game's date gone (or none),
+    or no date comes from anywhere and IGDB has the game out (user, 2026-10-20: CSTech's "pre-venda" tag stays
+    on for years, Rádio Popular still had Castlevania "31/12" a week after it came out). A card's date is the
+    soonest of its offers' (a collector's edition can come out after the game).
     """
     def compute():
         rows = fetch_all(f"""
             WITH {GAME_RELEASE_DATES}
             SELECT {EDITION_CARD_COLUMNS},
-                   r.release_date AS game_release_date, r.date_is_estimate,
+                   {OFFER_RELEASE_DATE} AS offer_release_date,
                    {OFFER_COLUMNS}
             FROM current_offers o
             JOIN stores s ON s.id = o.store_id
@@ -106,19 +112,31 @@ def preorders():
               -- not one far earlier: a typo, OFFER_RELEASE_DATE)
               AND COALESCE({OFFER_RELEASE_DATE}, '9999-12-31') >= CAST(utcnow() AS date)
               AND g.id NOT IN (SELECT game_id FROM out_already)
+              -- the edition sold as out, the game's day gone: a store that left the label on
+              AND NOT ((r.release_date IS NULL OR r.date_is_estimate OR r.release_date < CAST(utcnow() AS date))
+                       AND EXISTS (SELECT 1 FROM current_offers n
+                                   WHERE n.edition_id = o.edition_id AND n.is_active AND n.condition = 'new'
+                                     AND NOT n.is_preorder AND n.in_stock
+                                     AND (n.release_date IS NULL OR n.release_date <= CAST(utcnow() AS date))))
+              -- no date from any store, out on its platform says IGDB
+              AND NOT ({OFFER_RELEASE_DATE} IS NULL AND g.igdb_platform_release < CAST(utcnow() AS date))
             ORDER BY CASE WHEN r.release_date IS NULL THEN 1 ELSE 0 END, r.release_date, g.title,
                      CASE WHEN e.edition_key = '' THEN 0 ELSE 1 END, e.name, e.id, o.price, o.store_product_id
         """)
 
         groups, first = {}, {}
         for r in rows:
-            group = groups.setdefault(r["edition_id"], card_group(
-                r, [], release_date=r["game_release_date"], date_is_estimate=r["date_is_estimate"]))
+            day = r.pop("offer_release_date")
+            group = groups.setdefault(r["edition_id"], card_group(r, [], release_date=None, date_is_estimate=None))
             first.setdefault(r["edition_id"], r)
             group["offers"].append(r)
+            if day and (group["release_date"] is None or str(day) < str(group["release_date"])):
+                group["release_date"], group["date_is_estimate"] = day, str(day)[5:] == "12-31"
         for edition_id, group in groups.items():          # the picture by store, now the offers are in
             group["cover"] = card_cover(first[edition_id], group["offers"])
-        return mark_review_scores(mark_historical_lows(list(groups.values())))
+        # soonest first, unknown dates last (sorted() keeps the query's order within a day)
+        cards = sorted(groups.values(), key=lambda g: (g["release_date"] is None, str(g["release_date"] or "")))
+        return mark_review_scores(mark_historical_lows(cards))
 
     return cached("preorders", compute)
 

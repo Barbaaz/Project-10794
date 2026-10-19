@@ -279,10 +279,12 @@ img.store-photo { object-fit: contain !important; background: #fff !important; p
     .slide-title { font-size: 1.15rem; }
     .slide-price { font-size: 1.2rem; }
 }
-/* the dots: a finger-sized button, the current one a longer bar */
-.slider-dots { display: flex; flex-wrap: wrap; }
-.slider-dots .dot { width: 1.6rem; height: 1.6rem; display: inline-flex; align-items: center; justify-content: center;
-                    background: none; border: 0; padding: 0; }
+/* the dots: a finger-sized button, the current one a longer bar; on one line with the buttons, narrower when
+   there's no room (user, 2026-10-20: the home page's 12 took two rows on a phone) */
+.slider-dots { display: flex; min-width: 0; }
+.slider-dots .dot { flex: 0 1 1.6rem; min-width: .9rem; height: 1.6rem; display: inline-flex; align-items: center;
+                    justify-content: center; background: none; border: 0; padding: 0; }
+.slider-dots .dot[aria-current="true"] { flex-shrink: 0; }
 .slider-dots .dot::before { content: ""; width: .55rem; height: .55rem; border-radius: 1rem; background: var(--bs-secondary-color);
                             opacity: .45; transition: width .2s; }
 .slider-dots .dot[aria-current="true"]::before { width: 1.3rem; opacity: 1; background: var(--brand-btn); }
