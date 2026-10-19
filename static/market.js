@@ -1,6 +1,6 @@
 /*
  * The pre-owned marketplace's shared pieces (game page, listing page, sell page, account page):
- * condition names, status badges, the small listing card and the report dialog. Needs common.js
+ * condition names, status badges, the small listing card, the report dialog and a wish's target price. Needs common.js
  * and i18n.js.
  */
 
@@ -169,4 +169,51 @@ function gamePicker(els, onPick, onError) {
         els.results.innerHTML = els.igdbResults.innerHTML = "";
         els.igdbButton.classList.add("d-none");
     };
+}
+
+// --- a wish's target price (user, 2026-10-16): the wishlist page and the game page's "Quero" ---
+// The window's content: the game, what it costs now (the cheapest, new or used: what the target is compared
+// with, collection_service.target_hit) and the price; bindTargetForm saves it
+function targetForm({ image, name, platform, now, target }) {
+    return `
+        <div class="d-flex gap-3 align-items-start">
+            ${image ? `<img class="dialog-cover ${coverClass(image)}" src="${esc(image)}" alt="">` : ""}
+            <div class="flex-grow-1 min-w-0">
+                <h2 id="item-dialog-title" class="h5 mb-0">${esc(t("target_title"))}</h2>
+                <div class="small">${esc(name || "")}</div>
+                <div class="small text-body-secondary">${esc(platform || "")}${now != null
+                    ? ` · ${esc(t("target_now", { price: eur.format(now) }))}` : ""}</div>
+            </div>
+            <button type="button" class="btn-close" data-close aria-label="${esc(t("collection_edit_done"))}"></button>
+        </div>
+        <form class="mt-3" novalidate>
+            <label class="form-label small mb-1" for="target-price">${esc(t("target_label"))}</label>
+            <div class="input-group input-group-sm" style="max-width: 14rem;">
+                <input id="target-price" name="target" type="text" inputmode="decimal" class="form-control"
+                       value="${esc(target ? fmtNumber(target) : "")}"
+                       placeholder="${esc(fmtNumber(20))}" aria-describedby="target-help"><span class="input-group-text">€</span></div>
+            <div id="target-help" class="small text-body-secondary mt-1">${esc(t("target_help"))}</div>
+            <div class="d-flex align-items-center gap-2 border-top pt-2 mt-3">
+                ${target ? `<button type="button" class="btn btn-link btn-sm text-danger px-0" data-clear>${esc(t("target_clear"))}</button>` : ""}
+                <span class="small text-danger ms-auto" data-error role="status"></span>
+                <button type="submit" class="btn btn-primary btn-sm">${esc(t("target_save"))}</button>
+            </div>
+        </form>`;
+}
+
+// Saves the target (or clears it) on the wish; done(target) after, the window then closes
+function bindTargetForm(dialog, body, itemId, done) {
+    const form = body.querySelector("form");
+    const save = async target => {
+        const { ok, data } = await api(`/api/collection/${itemId}`, { method: "PATCH", body: { target_price: target } });
+        if (!ok) return body.querySelector("[data-error]").textContent = t(`error_${data?.error || "unknown"}`);
+        done(target);
+        dialog.close();
+        showNotifications();           // the header's bell counts again
+    };
+    form.onsubmit = event => { event.preventDefault(); save(form.target.value.trim() || null); };
+    body.querySelector("[data-clear]")?.addEventListener("click", () => save(null));
+    body.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
+    dialog.showModal();
+    form.target.focus();
 }

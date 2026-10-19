@@ -395,52 +395,19 @@ function openEditor(id) {
     loadDlc(item, body, done);
 }
 
-// A wish's target price (user, 2026-10-16: custom alerts) in the edit window: the bell and an e-mail when
-// the best new or used price gets to it (collection_service.deal_reason, wish_alert_service)
+// A wish's target price (user, 2026-10-16: custom alerts) in the edit window (market.js targetForm): the bell
+// and an e-mail when the best new or used price gets to it (collection_service.deal_reason, wish_alert_service)
 function openTarget(id) {
     const item = data.items.find(i => String(i.id) === id);
     editing = id;
     const body = document.getElementById("item-dialog-body");
-    const value = item.target_price ? fmtNumber(item.target_price) : "";
     const prices = [item.best_price, item.used?.price].filter(p => p != null);
-    const now = prices.length ? Math.min(...prices) : null;          // what the target is compared with
-    body.innerHTML = `
-        <div class="d-flex gap-3 align-items-start">
-            <img class="dialog-cover ${coverClass(item.image)}" src="${esc(item.image || "")}" alt="">
-            <div class="flex-grow-1 min-w-0">
-                <h2 id="item-dialog-title" class="h5 mb-0">${esc(t("target_title"))}</h2>
-                <div class="small">${esc(localName(item) || "")}</div>
-                <div class="small text-body-secondary">${esc(item.platform_name || "")}${now !== null
-                    ? ` · ${esc(t("target_now", { price: eur.format(now) }))}` : ""}</div>
-            </div>
-            <button type="button" class="btn-close" data-close aria-label="${esc(t("collection_edit_done"))}"></button>
-        </div>
-        <form class="mt-3" novalidate>
-            <label class="form-label small mb-1" for="target-price">${esc(t("target_label"))}</label>
-            <div class="input-group input-group-sm" style="max-width: 14rem;">
-                <input id="target-price" name="target" type="text" inputmode="decimal" class="form-control" value="${esc(value)}"
-                       placeholder="${esc(fmtNumber(20))}" aria-describedby="target-help"><span class="input-group-text">€</span></div>
-            <div id="target-help" class="small text-body-secondary mt-1">${esc(t("target_help"))}</div>
-            <div class="d-flex align-items-center gap-2 border-top pt-2 mt-3">
-                ${item.target_price ? `<button type="button" class="btn btn-link btn-sm text-danger px-0" data-clear>${esc(t("target_clear"))}</button>` : ""}
-                <span class="small text-danger ms-auto" data-error role="status"></span>
-                <button type="submit" class="btn btn-primary btn-sm">${esc(t("target_save"))}</button>
-            </div>
-        </form>`;
-    const form = body.querySelector("form");
-    const save = async target => {
-        const { ok, data: answer } = await api(`/api/collection/${id}`, { method: "PATCH", body: { target_price: target } });
-        if (!ok) return body.querySelector("[data-error]").textContent = t(`error_${answer?.error || "unknown"}`);
+    body.innerHTML = targetForm({ image: item.image, name: localName(item), platform: item.platform_name,
+                                  now: prices.length ? Math.min(...prices) : null, target: item.target_price });
+    bindTargetForm(dialog, body, id, target => {
         reloadOnClose = true;          // the server says whether it's there already
         showMessage(true, t(target ? "target_saved" : "target_cleared"));
-        dialog.close();
-        showNotifications();           // the header's bell counts again
-    };
-    form.onsubmit = event => { event.preventDefault(); save(form.target.value.trim() || null); };
-    body.querySelector("[data-clear]")?.addEventListener("click", () => save(null));
-    body.querySelectorAll("[data-close]").forEach(b => b.onclick = () => dialog.close());
-    dialog.showModal();
-    form.target.focus();
+    });
 }
 
 // The game's DLC and expansions from IGDB (dlc_service), ticked as owned; each tick is saved at once
