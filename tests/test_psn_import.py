@@ -274,6 +274,26 @@ def test_a_series_named_played_game_is_its_trophy_list():
     assert games == {"PS4LIST": 710, "PS5LIST": 575, "DMC1": 0}
 
 
+def test_a_played_game_named_longer_is_its_trophy_list():
+    """User's PSN, 2026-10-19: played games named with more words than their list, or renamed, get its hours;
+    a collection, a remake or a sequel named like a list stays its own played game."""
+    lists = [{"id": name.upper(), "name": name, "platforms": [console], "earned": 1, "total": 50, "platinum": False}
+             for name, console in [("FIFA 23 Trophies", "PS5"), ("Genshin Impact", "PS4"), ("WRC GENERATIONS", "PS5"),
+                                   ("HITMAN 3", "PS4"), ("Devil May Cry", "PS4"), ("FINAL FANTASY VII", "PS4"),
+                                   ("Crash Bandicoot", "PS4")]]
+    played = [{"id": f"P{i}", "name": name, "platforms": [console], "minutes": 10, "plus": False}
+              for i, (name, console) in enumerate([
+                  ("EA SPORTS™ FIFA 23", "PS5"), ("Genshin Impact 6th Anniversary", "PS4"),
+                  ("WRC Generations – The FIA WRC Official Game", "PS5"), ("HITMAN World of Assassination", "PS4"),
+                  ("Devil May Cry HD Collection", "PS4"), ("FINAL FANTASY VII REMAKE", "PS4"),
+                  ("Crash Bandicoot 2: Cortex Strikes Back", "PS4"), ("FIFA 23 Ultimate", "PS4")])]
+    games = {g["name"]: g["minutes"] for g in psn_service.games_of(lists, played)}
+    assert games == {"FIFA 23 Trophies": 10, "Genshin Impact": 10, "WRC GENERATIONS": 10, "HITMAN 3": 10,
+                     "Devil May Cry": 0, "FINAL FANTASY VII": 0, "Crash Bandicoot": 0,
+                     "Devil May Cry HD Collection": 10, "FINAL FANTASY VII REMAKE": 10,
+                     "Crash Bandicoot 2: Cortex Strikes Back": 10, "FIFA 23 Ultimate": 10}     # another console: not joined
+
+
 def test_the_newest_console_of_a_shared_list_comes_first(psn):
     psn["player"]["lists"] = [{"npCommunicationId": "NPWR1", "trophyTitleName": "Bastion", "trophyTitlePlatform": "PSVITA,PS4",
                                "definedTrophies": trophies(20, 2, 1, 0), "earnedTrophies": trophies(1, 0, 0, 0)}]

@@ -76,6 +76,17 @@ EDITION_WORDS = {"the", "edition", "remastered", "remaster", "definitive", "spec
 # a played game can be named as its series' product: "Devil May Cry 5 Series" is the "Devil May Cry 5" trophy list
 # (PS4) and "Devil May Cry 5 Special Edition" (PS5); only for joining played games to lists
 PLAYED_WORDS = {"series"}
+# a played game can also be named with more words than its trophy list, before or after (user, 2026-10-19):
+# "EA SPORTS FIFA 23" / "FIFA 23", "Genshin Impact 6th Anniversary", "WRC Generations – The FIA WRC Official
+# Game", "Sea of Stars: Sunset Edition"; not a collection, whose name starts like one of its games' lists
+# ("Devil May Cry HD Collection" / "Devil May Cry", "Crash Bandicoot N. Sane Trilogy" / "Crash Bandicoot"):
+# its hours can't be split between its games, it stays its own played game
+COLLECTION_WORDS = {"collection", "trilogy", "remix", "anthology", "bundle", "pack", "series", "origins", "legacy"}
+# ... nor another game: "FINAL FANTASY VII REMAKE" isn't the "FINAL FANTASY VII" list, "Crash Bandicoot 2" isn't
+# "Crash Bandicoot" (a number or numeral right after the list's name; "Genshin Impact 6th Anniversary" is the game)
+OTHER_GAME_WORDS = {"remake", "rebirth", "reborn", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"}
+# renamed games: the played game's name now → the trophy list's (keys)
+PLAYED_NAMES = {"hitman world of assassination": "hitman 3"}
 
 _last = {}                       # user id → when they last imported
 _last_lock = threading.Lock()
@@ -246,6 +257,8 @@ def games_of(lists, played):
             same = by_words.get((key[0], frozenset(words(clean(p["name"])) - PLAYED_WORDS)), [])
             game = same[0] if len(same) == 1 else None
         if game is None:
+            game = by_key.get((key[0], PLAYED_NAMES.get(key[1]))) or _named_longer(key, games[:len(lists)])
+        if game is None:
             game = by_key[key] = {"id": p["id"], "name": p["name"], "platforms": p["platforms"],
                                   "earned": None, "total": None, "platinum": None, "minutes": 0, "plus": []}
             games.append(game)
@@ -254,6 +267,28 @@ def games_of(lists, played):
         if p["minutes"] and game["platforms"][0] != key[0]:      # played there: that console first
             game["platforms"] = [key[0], *(c for c in game["platforms"] if c != key[0])]
     return games
+
+
+def _named_longer(key, lists):
+    """The one trophy list on the played game's console whose whole name (two words or more) starts or
+    ends its name ("fifa 23" in "ea sports fifa 23"), else None; never for a collection."""
+    console, name = key
+    played = name.split()
+    if COLLECTION_WORDS & set(played):
+        return None
+    found = []
+    for l in lists:
+        own = key_of(l["name"]).split()
+        if console not in l["platforms"] or not 2 <= len(own) < len(played):
+            continue
+        if own == played[:len(own)]:
+            after = played[len(own):]
+            if after[0] in OTHER_GAME_WORDS or (after[0].isdigit() and after[1:2] not in (["st"], ["nd"], ["rd"], ["th"])):
+                continue
+            found.append(l)
+        elif own == played[-len(own):] and not OTHER_GAME_WORDS & set(played[:-len(own)]):
+            found.append(l)
+    return found[0] if len(found) == 1 else None
 
 
 def clean(name):
