@@ -6,8 +6,8 @@ from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import case, func, select, tuple_
 
-from app.models import NOW, Conversation, Game, GameEdition, Listing, ListingPhoto, Platform, User, fields
-from app.services.common import card_group, page_result
+from app.models import NOW, Conversation, Game, GameEdition, Listing, ListingPhoto, Platform, Store, StoreProduct, User, fields
+from app.services.common import card_cover, card_group, page_result
 from app.services.photo_storage import PhotoError, process_photo, storage
 from app.services.rating_service import check_not_blocked, summaries
 from core.editions import key_of_edition_name
@@ -144,13 +144,22 @@ def browse(platform=None, sort="newest", page=1, per_page=48, kind=None):
         listings = as_dicts(s.scalars(select(Listing).where(Listing.status == "active", Listing.edition_id.in_(ids),
                                                           SELLER_ACTIVE)
                                       .order_by(Listing.price, Listing.created_at, Listing.id)).unique().all()) if ids else []
+        # the stores' photos of these editions: the card shows the picture the other tabs show (common.card_cover)
+        photos = {}
+        for edition_id, store, image in s.execute(
+                select(StoreProduct.edition_id, Store.slug, StoreProduct.image_url).join(Store)
+                .where(StoreProduct.edition_id.in_(ids), StoreProduct.is_active, StoreProduct.condition == "new",
+                       StoreProduct.image_url.is_not(None))
+                .order_by(StoreProduct.id)).all() if ids else []:
+            photos.setdefault(edition_id, []).append({"store": store, "image": image})
     by_card = {}
     for edition, game, platform_, _, _, card_key in rows:
         by_card.setdefault((card_key, edition.edition_key), []).append(card_group(
             {"edition_id": edition.id, "game_id": game.id, "title": game.title,
              "edition_key": edition.edition_key, "edition": edition.name, "card_key": card_key,
              "console": platform_.code, "platform_name": platform_.name, "kind": game.kind},
-            [], image=game.image_url, listings=[l for l in listings if l["edition_id"] == edition.id]))
+            [], image=game.image_url, cover=card_cover({"cover_image_id": game.cover_image_id}, photos.get(edition.id, [])),
+            listings=[l for l in listings if l["edition_id"] == edition.id]))
     groups = [{**first, "alternatives": others} for first, *others in (by_card[tuple(k)] for k in keys)]
     return page_result(page, per_page, total, groups=groups)
 
