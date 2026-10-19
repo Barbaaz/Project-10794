@@ -192,3 +192,24 @@ def test_the_market_tab_has_one_card_per_game_across_platforms(market):
         c.execute("DELETE FROM user_listings")
         c.execute("DELETE FROM game_editions WHERE id = ?", edition)
         c.execute("DELETE FROM games WHERE id = ?", game)
+
+
+def test_a_market_card_shows_the_stores_photo_in_their_order(market):
+    """User, 2026-10-19: the Usados cards show the picture the other tabs do (common.PICTURE_STORES), else
+    the game's IGDB cover."""
+    client, c = market["client"], market["db"]
+    platform = c.execute("SELECT platform_id FROM games WHERE id = ?", market["game"]).fetchone()[0]
+    c.execute("UPDATE games SET cover_image_id = 'co9' WHERE id IN (?, ?)", market["game"], market["other_game"])
+    for slug in ("cstech", "mega-mania"):          # Mega Mania comes first in PICTURE_STORES
+        c.execute("INSERT INTO store_products (store_id, game_id, edition_id, platform_id, url, external_name, image_url) "
+                  "SELECT id, ?, ?, ?, ?, 'x', ? FROM stores WHERE slug = ?", market["game"], market["edition"], platform,
+                  f"https://example.test/{slug}", f"https://example.test/{slug}.jpg", slug)
+    try:
+        sign_up(client, "seller_covers")
+        new_listing(market)
+        new_listing(market, game_id=market["other_game"], edition_id=market["other_edition"])
+        covers = {g["name"]: g["cover"] for g in client.get("/api/listings").get_json()["groups"]}
+        assert covers["Market Test Game"] == "https://example.test/mega-mania.jpg"
+        assert covers["Other Game"].endswith("/co9.jpg")
+    finally:
+        c.execute("DELETE FROM store_products WHERE edition_id = ?", market["edition"])

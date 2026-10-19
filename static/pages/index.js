@@ -130,7 +130,7 @@ function marketCard(group) {
         </a>`;
     const more = group.listings.length > 1
         ? `<a href="/game/${group.game_id}#market" class="used-line">${t("sellers_count", { count: group.listings.length })}</a>` : "";
-    const cover = group.image || first.photos[0]?.thumb_url || "";
+    const cover = group.cover || group.image || first.photos[0]?.thumb_url || "";      // as the other tabs' cards (listing_service.browse)
     const col = document.createElement("div");
     col.className = "col";
     col.innerHTML = `
