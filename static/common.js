@@ -484,6 +484,99 @@ whenReady(() => {
     measure();
 });
 
+// --- Suggestions while a game's name is typed (user, 2026-10-20) ----------------------------------
+// /api/games/suggest (what Enter would find, one row per game); a row opens its game page, the last one
+// runs the search as Enter does. Arrows move, Enter opens the highlighted row, Escape closes
+whenReady(() => {
+    const form = document.getElementById("search-form");
+    const input = document.getElementById("q");
+    if (!form || !input) return;
+    const list = document.createElement("ul");
+    list.id = "search-suggest";
+    list.className = "search-suggest";
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", t("search_suggestions"));
+    list.hidden = true;
+    form.append(list);
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-controls", list.id);
+    input.setAttribute("aria-expanded", "false");
+
+    let timer = null, asked = "", active = -1;
+    const options = () => [...list.querySelectorAll("[role=option]")];
+    const close = () => {
+        list.hidden = true;
+        active = -1;
+        input.setAttribute("aria-expanded", "false");
+        input.removeAttribute("aria-activedescendant");
+    };
+    const highlight = i => {
+        const all = options();
+        active = (i + all.length) % all.length;
+        all.forEach((o, n) => o.setAttribute("aria-selected", n === active));
+        input.setAttribute("aria-activedescendant", all[active].id);
+        all[active].scrollIntoView({ block: "nearest" });
+    };
+    const show = (q, games) => {
+        if (!games.length) return close();
+        list.innerHTML = games.map((g, i) => `
+            <li role="option" id="suggest-${i}" aria-selected="false">
+                <a href="/game/${g.game_id}" tabindex="-1">
+                    ${g.cover ? `<img src="${esc(g.cover)}" alt="" class="${coverClass(g.cover)}" loading="lazy">` : `<span class="suggest-none"></span>`}
+                    <span class="suggest-text">
+                        <span class="suggest-name">${esc(localName(g))}</span>
+                        <span class="small text-body-secondary">${esc(g.platforms.map(p => PLATFORM_SHORT[p] || p).join(" · "))}</span>
+                    </span>
+                    ${g.price != null ? `<span class="suggest-price">${esc(t("search_suggest_from", { price: eur.format(g.price) }))}</span>` : ""}
+                </a>
+            </li>`).join("") + `
+            <li role="option" id="suggest-all" aria-selected="false" class="suggest-all">
+                <a href="/browse?q=${encodeURIComponent(q)}" tabindex="-1">${icon("search", 16)} ${esc(t("search_suggest_all", { q }))}</a>
+            </li>`;
+        list.hidden = false;
+        active = -1;
+        input.setAttribute("aria-expanded", "true");
+    };
+    const ask = async () => {
+        const q = input.value.trim();
+        asked = q;
+        if (q.length < 2) return close();
+        try {
+            const response = await fetch(`/api/games/suggest?q=${encodeURIComponent(q)}`);
+            const games = response.ok ? await response.json() : [];
+            if (q === asked && document.activeElement === input) show(q, games);    // not an older answer
+        } catch (e) { close(); }
+    };
+
+    input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(ask, 180); });
+    input.addEventListener("focus", () => { if (input.value.trim().length >= 2) ask(); });
+    input.addEventListener("keydown", e => {
+        if (list.hidden) return;
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            highlight(active + (e.key === "ArrowDown" ? 1 : -1));
+        } else if (e.key === "Escape") {
+            close();
+        } else if (e.key === "Enter" && active >= 0) {
+            e.preventDefault();
+            options()[active].querySelector("a").click();
+        }
+    });
+    // the search itself (Enter, the last row on /browse): as before, the list closes
+    form.addEventListener("submit", close);
+    list.addEventListener("click", e => {
+        const all = e.target.closest(".suggest-all a");
+        if (all && typeof form.requestSubmit === "function") {
+            e.preventDefault();
+            form.requestSubmit();
+        }
+        close();
+    });
+    list.addEventListener("mousedown", e => e.preventDefault());      // the input keeps the focus until the click
+    input.addEventListener("blur", () => setTimeout(close, 150));
+});
+
 // --- Back to the top (user, 2026-10-13) ---------------------------------------------------------
 // A round button at the bottom right once the visitor has scrolled more than a screen and a half
 whenReady(() => {

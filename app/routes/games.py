@@ -17,6 +17,12 @@ def list_games():
     ))
 
 
+@bp.get("/suggest")
+def suggest():
+    """/api/games/suggest?q=zel: games for the header's search while the name is typed (game_service.suggest)."""
+    return jsonify(game_service.suggest(text_arg("q")))
+
+
 @bp.get("/catalog")
 def catalog():
     """
