@@ -441,7 +441,7 @@ function historyTable(edition) {
 }
 
 // The copies people sell for this game (render() runs again on theme changes: loaded once)
-let marketLoaded = false;
+let marketLoaded = false, marketListings = [];
 async function loadMarket() {
     document.getElementById("sell-link").href = `/sell?game_id=${GAME_ID}`;
     const wanted = document.getElementById("market-wanted");
@@ -449,7 +449,7 @@ async function loadMarket() {
     if (game.wanted_by) wanted.innerHTML = `<span class="badge text-bg-info">${t("in_demand")}</span> ${esc(t("in_demand_game", { n: game.wanted_by }))}`;
     if (marketLoaded) return;
     marketLoaded = true;
-    const listings = await fetch(`/api/listings?game_id=${GAME_ID}`).then(r => r.json()).catch(() => []);
+    const listings = marketListings = await fetch(`/api/listings?game_id=${GAME_ID}`).then(r => r.json()).catch(() => []);
     document.getElementById("market-listings").innerHTML = listings.map(l => listingCard(l)).join("");
     document.getElementById("market-empty").classList.toggle("d-none", listings.length > 0);
 }
@@ -624,7 +624,7 @@ function setBackLink() {
 
 // --- the user's collection: "Tenho" / "Quero" per edition (app/services/collection_service.py) ---
 const accountReady = renderAccountArea();
-let collectionIds = null;      // {edition_id: {owned?: item id, wishlist?: item id}}, loaded once
+let collectionIds = null;      // {edition_id: {owned?: item id, wishlist?: item id, target?: price}}, loaded once
 
 async function fillCollectionButtons() {
     await accountReady;
@@ -636,8 +636,30 @@ async function fillCollectionButtons() {
         box.innerHTML = ["owned", "wishlist"].map(kind => `
             <button type="button" class="btn btn-sm ${mine[kind] ? "btn-primary" : "btn-secondary"}" data-kind="${kind}"
                     aria-pressed="${!!mine[kind]}">${t(mine[kind] ? `collection_in_${kind}` : `collection_add_${kind}`)}</button>`).join("")
+            + (mine.wishlist ? `<button type="button" class="btn btn-sm btn-secondary" data-target aria-haspopup="dialog">${icon("bell", 14)}
+                ${esc(mine.target ? t("target_badge", { price: eur.format(mine.target) }) : t("target_title"))}</button>` : "")
             + (mine.owned || mine.wishlist ? `<a href="${mine.owned ? "/collection" : "/wishlist"}" class="btn btn-sm btn-link">${t("collection_open")}</a>` : "");
         box.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => toggleCollection(Number(box.dataset.collection), b.dataset.kind));
+        box.querySelector("[data-target]")?.addEventListener("click", () => openTarget(Number(box.dataset.collection)));
+    });
+}
+
+// A wish's target price from here too (user, 2026-10-19), in the wishlist page's window (market.js targetForm)
+function openTarget(editionId) {
+    const edition = game.editions.find(e => e.id === editionId);
+    const mine = collectionIds[editionId];
+    const prices = [...edition.offers.filter(o => o.in_stock && o.condition === "new").map(o => o.price),
+                    ...marketListings.filter(l => l.edition_id === editionId && l.status === "active").map(l => l.price)];
+    const dialog = document.getElementById("target-dialog"), body = document.getElementById("target-dialog-body");
+    dialog.onclick = event => { if (event.target === dialog) dialog.close(); };      // a click outside the window
+    const name = localName(game, "title") + (game.editions.length > 1 ? ` (${localName(edition)})` : "");
+    const cover = game.cover_image_id ? igdbImage(game.cover_image_id, "t_cover_small") : document.getElementById("cover")?.src;
+    body.innerHTML = targetForm({ image: cover, name,
+                                  platform: game.platform_name, now: prices.length ? Math.min(...prices) : null, target: mine.target });
+    bindTargetForm(dialog, body, mine.wishlist, async () => {
+        collectionIds = await fetch("/api/collection/editions").then(r => r.json());
+        await fillCollectionButtons();
+        document.querySelector(`[data-collection="${editionId}"] [data-target]`)?.focus();
     });
 }
 

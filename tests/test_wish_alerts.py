@@ -143,6 +143,8 @@ def test_a_target_price(market, store):
     for wrong in ("abc", "0", "-5", "0,49", "10000.01", "NaN"):
         assert target(wrong).get_json() == {"error": "target_invalid"}, wrong
     assert target("30,00").status_code == 200
+    edition = str(market["edition"])                        # the game page's "Quero" shows it too (user, 2026-10-19)
+    assert client.get("/api/collection/editions").get_json()[edition] == {"wishlist": item, "target": 30.0}
     wish_alert_service.check_all()
     assert client.get("/api/collection/deals").get_json()["count"] == 0 and not sent
 
@@ -164,5 +166,6 @@ def test_a_target_price(market, store):
 
     log_in(client, "target")
     assert target("").status_code == 200                    # cleared
+    assert "target" not in client.get("/api/collection/editions").get_json()[edition]
     assert client.get("/api/collection/deals").get_json()["count"] == 0
     assert client.patch(f"/api/collection/{item}", json={"kind": "owned"}, headers=HEADERS).status_code == 200

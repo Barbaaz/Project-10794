@@ -141,13 +141,17 @@ def deal_reason(row, notify):
 
 
 def item_ids(user_id):
-    """{edition_id: {kind: item id}}: what the user has, for the game page's Tenho / Quero buttons."""
+    """{edition_id: {kind: item id, target?: a wish's target price}}: what the user has, for the game page's
+    Tenho / Quero buttons and its Preço-alvo."""
     with session() as s:
-        rows = s.execute(select(CollectionItem.edition_id, CollectionItem.kind, CollectionItem.id)
+        rows = s.execute(select(CollectionItem.edition_id, CollectionItem.kind, CollectionItem.id, CollectionItem.target_price)
                          .where(CollectionItem.user_id == user_id)).all()
     result = {}
-    for edition_id, kind, item_id in rows:
-        result.setdefault(edition_id, {})[kind] = item_id
+    for edition_id, kind, item_id, target in rows:
+        mine = result.setdefault(edition_id, {})
+        mine[kind] = item_id
+        if kind == "wishlist" and target is not None:
+            mine["target"] = float(target)
     return result
 
 
