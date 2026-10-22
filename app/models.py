@@ -488,6 +488,9 @@ class CollectionItem(Base):
     # price gets to it; target_met: it had at the last e-mail check, so it's sent once until it's above again
     target_price = mapped_column(Numeric(10, 2))
     target_met: Mapped[bool | None] = mapped_column(Boolean)
+    # the bell's order (user, 2026-10-22: the newest first): the deal it is now ("reason:price") and since when
+    deal_key: Mapped[str | None] = mapped_column(String(30))
+    deal_since = mapped_column(DateTime)
     favourite_rank: Mapped[int | None] = mapped_column(SmallInteger)   # 1-10: the profile's top 10 (owned)
     # the game's DLC / expansions the user owns: JSON list of IGDB ids, from IgdbAddons' list (dlc_service)
     dlc_owned: Mapped[str | None] = mapped_column(UnicodeText)

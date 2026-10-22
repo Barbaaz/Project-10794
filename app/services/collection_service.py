@@ -10,6 +10,7 @@ public (it then shows on their profile). When games / editions are merged, items
 """
 import json
 from collections import Counter
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import delete, func, select
@@ -105,19 +106,31 @@ def target_hit(row):
 
 def good_deals(user_id):
     """{count, items}: the wishes that are a good deal now (at the target price, on sale, at the historical
-    low, cheaper than when added), for the header's notifications (user, 2026-10-13): what and why, cheapest first."""
+    low, cheaper than when added), for the header's notifications (user, 2026-10-13): what and why, the newest
+    first (user, 2026-10-22)."""
     with session() as s:
         notify = s.get(User, user_id).notify
-        rows = [fields(i, "id", "kind", "edition_id", "game_id", "wish_price", "target_price") for i in s.scalars(
-            select(CollectionItem).where(CollectionItem.user_id == user_id, CollectionItem.kind == "wishlist"))]
-    if not notify["bell"]:
-        return {"count": 0, "items": [], "off": True}
-    deals = []
-    for r in (with_prices(rows) if rows else []):
-        r["reason"] = deal_reason(r, notify)
-        if r["reason"]:
-            deals.append(r)
-    deals.sort(key=lambda r: (r["best_price"] is None, r["best_price"] or 0, r["id"]))
+        if not notify["bell"]:
+            return {"count": 0, "items": [], "off": True}
+        items = s.scalars(select(CollectionItem).where(CollectionItem.user_id == user_id,
+                                                       CollectionItem.kind == "wishlist")).all()
+        rows = [fields(i, "id", "kind", "edition_id", "game_id", "wish_price", "target_price") for i in items]
+        deals = []
+        for r in (with_prices(rows) if rows else []):
+            r["reason"] = deal_reason(r, notify)
+            if r["reason"]:
+                deals.append(r)
+        # since when: the first time the bell sees this reason at this price (a new price is news again);
+        # forgotten once it's no deal. Deals already there when this came in share one time: the newest wish first
+        keys = {r["id"]: f"{r['reason']}:{r['best_price']}" for r in deals}
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        since = {}
+        for item in items:
+            key = keys.get(item.id)
+            if item.deal_key != key:
+                item.deal_key, item.deal_since = key, now if key else None
+            since[item.id] = item.deal_since
+    deals.sort(key=lambda r: (since[r["id"]], r["id"]), reverse=True)
     keys = ("id", "game_id", "edition_id", "name", "name_en", "platform", "image", "best_price", "best_store",
             "price_drop", "on_sale", "discount", "at_historical_low", "target_price", "used", "reason")
     return {"count": len(deals), "items": [{k: r[k] for k in keys} for r in deals]}
