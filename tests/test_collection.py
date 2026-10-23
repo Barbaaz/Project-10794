@@ -192,6 +192,45 @@ def test_a_wish_remembers_its_price(market, monkeypatch):
     assert market["db"].execute("SELECT wish_price FROM collection_items WHERE id = ?", wish).fetchone()[0] is None
 
 
+def test_the_newest_deals_first(market, monkeypatch):
+    """The bell lists the wishes by when they became a deal, newest first (user, 2026-10-22: they looked sorted
+    by name); a new price or reason is news again; a wish that stops being a deal forgets when it was one."""
+    import app.services.game_service as games
+    real = games.editions_with_offers
+    prices = {market["edition"]: 59.99, market["other_edition"]: 39.99}
+
+    def with_a_store(ids):
+        groups = real(ids)
+        for g in groups:
+            g["offers"] = [{"price": prices[g["edition_id"]], "in_stock": True, "condition": "new", "store_name": "Loja",
+                            "is_discount": False}]
+        return groups
+    monkeypatch.setattr(games, "editions_with_offers", with_a_store)
+
+    client, c = market["client"], market["db"]
+    sign_up(client, "news_reader")
+    first = add(client, market["edition"], kind="wishlist").get_json()["id"]
+    second = add(client, market["other_edition"], kind="wishlist").get_json()["id"]
+    order = lambda: [d["id"] for d in client.get("/api/collection/deals").get_json()["items"]]
+    since = lambda item: c.execute("SELECT deal_since FROM collection_items WHERE id = ?", item).fetchone()[0]
+    backdate = lambda: c.execute("UPDATE collection_items SET deal_since = deal_since - interval '1 day' "
+                                 "WHERE deal_since IS NOT NULL")
+
+    prices[market["other_edition"]] = 29.99              # the second wish's price drops first
+    assert order() == [second]
+    backdate()
+    prices[market["edition"]] = 44.99                     # then the first's, cheaper than when wished too
+    assert order() == [first, second]
+    backdate()
+    prices[market["other_edition"]] = 24.99              # the second's drops again: news again
+    assert order() == [second, first]
+    was = since(first)
+    assert order() == [second, first] and since(first) == was    # looking again changes nothing
+
+    prices[market["edition"]] = 59.99                     # back at the price it was wished at
+    assert order() == [second] and since(first) is None
+
+
 def test_in_demand_from_two_wishers(market):
     """Games users look for (user, 2026-10-11), counts only: one wish alone is never shown."""
     client = market["client"]

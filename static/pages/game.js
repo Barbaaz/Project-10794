@@ -51,8 +51,16 @@ function render() {
     // the stores' photo in the site's order, else IGDB's cover (game_service: picture), else any photo
     const cover = game.picture || game.image || game.editions.flatMap(e => e.offers).find(o => o.image)?.image
         || (game.cover_image_id ? igdbImage(game.cover_image_id, "t_cover_big") : null);
-    if (cover) document.getElementById("cover").src = cover;
-    else document.getElementById("cover").remove();      // no empty space
+    const coverImg = document.getElementById("cover");
+    if (cover) {
+        coverImg.src = cover;
+        // opens the viewer (openViewer) as the other pictures, IGDB's cover at its full size
+        coverImg.tabIndex = 0;
+        coverImg.setAttribute("role", "button");
+        coverImg.setAttribute("aria-label", t("view_pictures"));
+        coverImg.dataset.view = cover.includes("/t_cover_big/") ? cover.replace("/t_cover_big/", "/t_original/") : cover;
+    }
+    else coverImg.remove();      // no empty space
     document.getElementById("game").classList.toggle("no-cover", !cover);
 
     renderFacts();
@@ -201,13 +209,14 @@ function renderAbout() {
     }
 
     // IGDB's screenshots; for games IGDB doesn't have, the stores' photos of the standard edition
-    const shots = (game.screenshot_ids || []).map(id => ({ full: igdbImage(id, "t_1080p"), small: igdbImage(id, "t_screenshot_med") }));
+    // full: the largest IGDB has, for the viewer's zoom
+    const shots = (game.screenshot_ids || []).map(id => ({ full: igdbImage(id, "t_original"), small: igdbImage(id, "t_screenshot_med") }));
     const standardPhotos = game.editions.find(e => e.name === "Standard")?.photos || [];
     const pictures = shots.length ? shots : standardPhotos.map(p => ({ full: p.url, small: p.url }));
     const grid = document.getElementById("screenshots");
     grid.classList.toggle("store-photos", !shots.length);
     grid.innerHTML = pictures.map((p, i) => `
-        <a href="${esc(p.full)}" target="_blank" rel="noopener" ${i >= SHOTS_SHOWN ? "hidden" : ""}>
+        <a href="${esc(p.full)}" data-view="${esc(p.full)}" target="_blank" rel="noopener" ${i >= SHOTS_SHOWN ? "hidden" : ""}>
             <img src="${esc(p.small)}" alt="${t("screenshot")}" loading="lazy"></a>`).join("");
     const more = document.getElementById("shots-more");
     more.textContent = t("more_pictures", { count: pictures.length - SHOTS_SHOWN });
@@ -218,7 +227,7 @@ function renderAbout() {
     };
     // the first pictures under the cover too, as small squares
     document.getElementById("cover-thumbs").innerHTML = shots.slice(0, 4).map(p => `
-        <a href="${esc(p.full)}" target="_blank" rel="noopener"><img src="${esc(p.small)}" alt="${t("screenshot")}" loading="lazy"></a>`).join("");
+        <a href="${esc(p.full)}" data-view="${esc(p.full)}" target="_blank" rel="noopener"><img src="${esc(p.small)}" alt="${t("screenshot")}" loading="lazy"></a>`).join("");
 
     renderVideos();
 
@@ -228,6 +237,183 @@ function renderAbout() {
     document.getElementById("about").classList.toggle("d-none", !hasFacts && !parts.length);
     document.getElementById("media").classList.toggle("d-none", !pictures.length && !game.videos.length);
     bindClampToggles(document.getElementById("about"));
+}
+
+// The picture viewer (user, 2026-10-22): a click on any picture of the page ([data-view]: the cover, IGDB's
+// pictures, the chosen edition's photos) opens them all large, from that one. A picture larger than the screen
+// zooms to its own size where it's clicked and is dragged around (a finger scrolls it); a ctrl / middle click
+// still opens it in a new tab.
+const viewer = { list: [], index: 0, opener: null };
+
+function viewerPictures() {
+    // in the page's order, once each (the thumbnails under the cover repeat the first pictures); an edition
+    // the chips hide doesn't count
+    const seen = new Map();
+    document.querySelectorAll("#game [data-view]").forEach(el => {
+        if (el.closest("[data-edition-index][hidden]") || seen.has(el.dataset.view)) return;
+        const img = el.tagName === "IMG" ? el : el.querySelector("img");
+        seen.set(el.dataset.view, { full: el.dataset.view, small: img?.src || el.dataset.view, alt: img?.alt || "" });
+    });
+    return [...seen.values()];
+}
+
+function openViewer(el) {
+    viewer.list = viewerPictures();
+    viewer.opener = el;
+    document.getElementById("viewer-thumbs").innerHTML = viewer.list.map((p, i) => `
+        <button type="button" data-picture="${i}" aria-label="${esc(t("picture_n", { n: i + 1 }))}">
+            <img src="${esc(p.small)}" alt="" loading="lazy"></button>`).join("");
+    const single = viewer.list.length < 2;
+    ["viewer-prev", "viewer-next", "viewer-thumbs"].forEach(id => document.getElementById(id).hidden = single);
+    document.getElementById("viewer").showModal();
+    showPicture(Math.max(0, viewer.list.findIndex(p => p.full === el.dataset.view)));
+    document.getElementById("viewer-close").focus();
+}
+
+function showPicture(i) {
+    const n = viewer.list.length;
+    viewer.index = (i + n) % n;
+    const picture = viewer.list[viewer.index];
+    const stage = document.getElementById("viewer-stage"), img = document.getElementById("viewer-img");
+    setZoom(false);
+    stage.classList.remove("zoomable");
+    document.getElementById("viewer-zoom").hidden = true;
+    img.removeAttribute("src");           // not the last picture while the next one loads
+    img.alt = picture.alt;
+    img.src = picture.full;
+    document.getElementById("viewer-count").textContent = n > 1 ? t("picture_count", { n: viewer.index + 1, count: n }) : "";
+    document.querySelectorAll("#viewer-thumbs [data-picture]").forEach(b => {
+        const current = Number(b.dataset.picture) === viewer.index;
+        b.setAttribute("aria-current", current);
+        if (current) b.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+}
+
+// zoomable: the picture has a good deal more pixels than the screen shows of it
+function checkZoomable() {
+    const stage = document.getElementById("viewer-stage"), img = document.getElementById("viewer-img");
+    if (stage.classList.contains("zoomed")) return;
+    const zoomable = img.naturalWidth > img.clientWidth * 1.2 || img.naturalHeight > img.clientHeight * 1.2;
+    stage.classList.toggle("zoomable", zoomable);
+    document.getElementById("viewer-zoom").hidden = !zoomable;
+    updateZoomButton();
+}
+
+// the magnifier with a plus (zoom in) or a minus (back)
+function updateZoomButton() {
+    const button = document.getElementById("viewer-zoom");
+    const zoomed = document.getElementById("viewer-stage").classList.contains("zoomed");
+    const sign = zoomed ? '<path d="M8 11h6"/>' : '<path d="M8 11h6"/><path d="M11 8v6"/>';
+    button.innerHTML = icon("search", 20).replace("</svg>", `${sign}</svg>`);
+    button.setAttribute("aria-label", t(zoomed ? "zoom_out" : "zoom_in"));
+    button.title = t(zoomed ? "zoom_out" : "zoom_in");
+}
+
+// zoom in to the picture's own size, the point (x, y) of the screen staying where it was; or back
+function setZoom(on, x, y) {
+    const stage = document.getElementById("viewer-stage"), img = document.getElementById("viewer-img");
+    if (!on) {
+        stage.classList.remove("zoomed");
+        img.style.width = img.style.height = "";
+        updateZoomButton();
+        return;
+    }
+    if (!stage.classList.contains("zoomable")) return;
+    const box = img.getBoundingClientRect(), view = stage.getBoundingClientRect();
+    x ??= view.left + view.width / 2;
+    y ??= view.top + view.height / 2;
+    const fx = Math.min(Math.max((x - box.left) / box.width, 0), 1);
+    const fy = Math.min(Math.max((y - box.top) / box.height, 0), 1);
+    stage.classList.add("zoomed");
+    img.style.width = `${img.naturalWidth}px`;
+    img.style.height = `${img.naturalHeight}px`;
+    stage.scrollLeft = img.offsetLeft + fx * img.offsetWidth - (x - view.left);
+    stage.scrollTop = img.offsetTop + fy * img.offsetHeight - (y - view.top);
+    updateZoomButton();
+}
+
+function bindViewer() {
+    const dialog = document.getElementById("viewer"), stage = document.getElementById("viewer-stage");
+    const img = document.getElementById("viewer-img");
+    const zoomed = () => stage.classList.contains("zoomed");
+    document.getElementById("viewer-close").innerHTML = icon("x", 20);
+    document.getElementById("viewer-prev").innerHTML = icon("left", 22);
+    document.getElementById("viewer-next").innerHTML = icon("right", 22);
+
+    document.addEventListener("click", event => {
+        const el = event.target.closest("#game [data-view]");
+        if (!el || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        event.preventDefault();
+        openViewer(el);
+    });
+    document.getElementById("cover").addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openViewer(event.currentTarget);
+        }
+    });
+    dialog.addEventListener("close", () => {
+        img.removeAttribute("src");
+        if (viewer.opener?.isConnected) viewer.opener.focus();
+    });
+    document.getElementById("viewer-close").onclick = () => dialog.close();
+    document.getElementById("viewer-prev").onclick = () => showPicture(viewer.index - 1);
+    document.getElementById("viewer-next").onclick = () => showPicture(viewer.index + 1);
+    document.getElementById("viewer-zoom").onclick = () => setZoom(!zoomed());
+    document.getElementById("viewer-thumbs").addEventListener("click", event => {
+        const b = event.target.closest("[data-picture]");
+        if (b) showPicture(Number(b.dataset.picture));
+    });
+    img.addEventListener("load", checkZoomable);
+    window.addEventListener("resize", () => { if (dialog.open) checkZoomable(); });
+    dialog.addEventListener("keydown", event => {
+        if (viewer.list.length < 2) return;
+        if (event.key === "ArrowLeft") showPicture(viewer.index - 1);
+        else if (event.key === "ArrowRight") showPicture(viewer.index + 1);
+        else return;
+        event.preventDefault();
+    });
+
+    // a mouse drags a zoomed picture; a finger swipes to the next one (a zoomed one it scrolls, natively);
+    // a click without a drag zooms in or out; a click on the dark around the picture closes
+    let down = null;
+    stage.addEventListener("pointerdown", event => {
+        if (event.button !== 0) return;
+        down = { x: event.clientX, y: event.clientY, left: stage.scrollLeft, top: stage.scrollTop, moved: false,
+                 mouse: event.pointerType === "mouse" };
+        if (down.mouse && zoomed()) {
+            stage.setPointerCapture(event.pointerId);
+            event.preventDefault();
+        }
+    });
+    stage.addEventListener("pointermove", event => {
+        if (!down) return;
+        const dx = event.clientX - down.x, dy = event.clientY - down.y;
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) down.moved = true;
+        if (down.mouse && down.moved && zoomed()) {
+            stage.classList.add("dragging");
+            stage.scrollLeft = down.left - dx;
+            stage.scrollTop = down.top - dy;
+        }
+    });
+    stage.addEventListener("pointerup", event => {
+        if (!down) return;
+        const start = down;
+        down = null;
+        stage.classList.remove("dragging");
+        const dx = event.clientX - start.x, dy = event.clientY - start.y;
+        if (!start.mouse && !zoomed() && viewer.list.length > 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+            showPicture(viewer.index + (dx < 0 ? 1 : -1));
+            return;
+        }
+        if (start.moved) return;
+        if (event.target === img) setZoom(!zoomed(), event.clientX, event.clientY);
+        else if (!zoomed()) dialog.close();
+    });
+    stage.addEventListener("pointercancel", () => {
+        down = null;
+        stage.classList.remove("dragging");
+    });
 }
 
 // IGDB's YouTube videos as thumbnails (i.ytimg.com); the player (youtube-nocookie) is only
@@ -345,7 +531,7 @@ function editionPhotos(photos) {
     const stores = [...new Set(photos.map(p => storeName(p.store)))].join(", ");
     return `
         <div class="screenshots mt-2">${photos.map(p => `
-            <a href="${esc(p.url)}" target="_blank" rel="noopener">
+            <a href="${esc(p.url)}" data-view="${esc(p.url)}" target="_blank" rel="noopener">
                 <img src="${esc(p.url)}" alt="${t("photo")}" loading="lazy"></a>`).join("")}</div>
         <div class="small text-body-secondary">${esc(t("photos_from", { store: stores }))}</div>`;
 }
@@ -811,4 +997,5 @@ async function deleteReview() {
 
 applyI18n();
 setBackLink();   // after applyI18n, which sets the default "← Voltar"
+bindViewer();
 load();

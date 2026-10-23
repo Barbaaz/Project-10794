@@ -155,6 +155,33 @@
         .review-bars { min-width: 12rem; max-width: 26rem; }
         .video-thumb .name { display: block; font-size: .8rem; margin-top: .2rem; color: var(--bs-body-color);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* The picture viewer (game.js openViewer; user, 2026-10-22): the whole screen, dark in both themes; a picture
+           larger than the screen zooms to its own size where it's clicked and is dragged around */
+        [data-view] { cursor: zoom-in; }
+        .viewer { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; padding: 0; border: 0;
+                  background: rgb(10 11 14); color: #fff; }
+        .viewer[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+        .viewer::backdrop { background: rgb(0 0 0 / .6); }
+        .viewer-bar { display: flex; align-items: center; gap: .5rem; padding: .5rem .75rem; }
+        .viewer-bar .count { flex: 1; font-variant-numeric: tabular-nums; font-size: .9rem; }
+        .viewer .vbtn { display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem;
+                        border: 0; border-radius: 50%; background: rgb(255 255 255 / .12); color: #fff; }
+        .viewer .vbtn:hover, .viewer .vbtn:focus-visible { background: rgb(255 255 255 / .25); }
+        .viewer .vbtn:disabled { opacity: .35; }
+        .viewer-main { position: relative; min-height: 0; }
+        .viewer-stage { position: absolute; inset: 0; display: flex; overflow: hidden; touch-action: pan-y pinch-zoom; }
+        .viewer-stage img { margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+        .viewer-stage.zoomable img { cursor: zoom-in; }
+        .viewer-stage.zoomed { overflow: auto; touch-action: auto; }
+        .viewer-stage.zoomed img { max-width: none; max-height: none; cursor: grab; }
+        .viewer-stage.dragging img { cursor: grabbing; }
+        .viewer-main .vbtn.prev, .viewer-main .vbtn.next { position: absolute; top: 50%; transform: translateY(-50%); z-index: 1; }
+        .viewer-main .prev { left: .75rem; } .viewer-main .next { right: .75rem; }
+        .viewer-thumbs { display: flex; gap: .4rem; overflow-x: auto; padding: .5rem .75rem calc(.5rem + env(safe-area-inset-bottom)); justify-content: safe center; }
+        .viewer-thumbs button { flex: none; padding: 0; border: 2px solid transparent; border-radius: .4rem; background: none; opacity: .6; }
+        .viewer-thumbs button[aria-current="true"] { border-color: #fff; opacity: 1; }
+        .viewer-thumbs img { display: block; height: 52px; width: auto; max-width: 92px; object-fit: cover; border-radius: .25rem; }
+        @media (max-width: 575.98px) { .viewer-main .vbtn.prev, .viewer-main .vbtn.next { display: none; } }
     </style>
 </head>
 <body class="bg-body-tertiary" data-game-id="{{ game_id }}">
@@ -262,6 +289,21 @@
         </section>
     </div>
 </div>
+
+<!-- The pictures, large (game.js openViewer) -->
+<dialog id="viewer" class="viewer" data-i18n-aria-label="pictures">
+    <div class="viewer-bar">
+        <span id="viewer-count" class="count" aria-live="polite"></span>
+        <button type="button" id="viewer-zoom" class="vbtn" hidden></button>
+        <button type="button" id="viewer-close" class="vbtn" data-i18n-aria-label="viewer_close" data-i18n-title="viewer_close"></button>
+    </div>
+    <div class="viewer-main">
+        <button type="button" id="viewer-prev" class="vbtn prev" data-i18n-aria-label="previous_picture" data-i18n-title="previous_picture"></button>
+        <div id="viewer-stage" class="viewer-stage"><img id="viewer-img" alt=""></div>
+        <button type="button" id="viewer-next" class="vbtn next" data-i18n-aria-label="next_picture" data-i18n-title="next_picture"></button>
+    </div>
+    <div id="viewer-thumbs" class="viewer-thumbs"></div>
+</dialog>
 
 <!-- A wish's target price (game.js openTarget) -->
 <dialog id="target-dialog" class="item-dialog" aria-labelledby="item-dialog-title">
