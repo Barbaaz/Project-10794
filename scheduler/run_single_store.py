@@ -5,8 +5,9 @@ Scrape one store into the database (useful while writing a new scraper).
     python -m scheduler.run_single_store press_start --force
     python -m scheduler.run_single_store press_start --accept-drop
 
---force: run even if the store was scraped successfully less than 12 hours ago
-         (the limit exists so repeated runs don't flood the store with requests).
+--force: run even if the store was scraped successfully less than MIN_HOURS_BETWEEN_RUNS (8) hours
+         ago, or answered 403 / 429 less than BLOCKED_PAUSE_HOURS (24) hours ago (both in jobs.py; the
+         limits exist so repeated runs don't flood the store with requests).
 --accept-drop: the store really has far fewer products than last time (not a broken
                scraper), so deactivate the products that are gone. See MIN_PRODUCT_RATIO in jobs.py.
 """

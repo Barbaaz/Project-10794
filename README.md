@@ -370,8 +370,8 @@ All scraper requests go through `scrapers/base/http_client.py`:
 - URLs disallowed by robots.txt are never fetched
 - a 403 / 429 answer stops that store's run immediately (no retrying into a block)
 - at most 600 requests per store per run; at most 50 product pages for release dates per run
-- a store isn't scraped again within 12 hours of a successful run:
-  `python -m scheduler.run_single_store <store> --force` overrides it
+- a store isn't scraped again within 8 hours of a successful run (`MIN_HOURS_BETWEEN_RUNS` in
+  `scheduler/jobs.py`): `python -m scheduler.run_single_store <store> --force` overrides it
 
 A daily run makes about 150 requests to Press Start, 60 to Mega Mania, 16 to CSTech, ~110 to
 Gaming Replay, ~72 to Rádio Popular and ~155 to Techinn. Shopify stores (CSTech) answer 429 after many requests in a
