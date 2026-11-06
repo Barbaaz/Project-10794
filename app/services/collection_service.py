@@ -22,7 +22,7 @@ from app.models import (
 from db import session
 
 # No limit on a collection's size (user, 2026-10-15); only one import request of browser favourites is capped
-MAX_FAVOURITES = 2000
+MAX_IMPORTED_FAVOURITES = 2000
 MAX_NOTES = 1000
 MAX_HOURS = Decimal("99999.9")
 # "In demand" (user, 2026-10-11): games this many users wish for, at least; one wish is never shown
@@ -31,7 +31,7 @@ MIN_WISHERS = 2
 # The profile's showcase (user, 2026-10-11): sections the user shows, in their order (users.profile_sections)
 SHOWCASE = ("favourites", "most_played", "most_valuable", "achievements")
 SHOWCASE_SIZE = 5           # games in each section but the favourites
-MAX_FAVOURITES = 10
+MAX_FAVOURITES = 10         # the favourites section (static/pages/profile.js has the same number)
 # An edition the user names (user, 2026-10-11: "Lumière Edition", which neither the stores nor IGDB list)
 MIN_EDITION_NAME, MAX_EDITION_NAME = 2, 100
 # A wish's target price (user, 2026-10-16), as a listing's price
@@ -254,7 +254,7 @@ def add_wishes(user_id, edition_ids):
     """
     from app.services.game_service import merged_into
     try:
-        ids = list(dict.fromkeys(int(i) for i in edition_ids))[:MAX_FAVOURITES]
+        ids = list(dict.fromkeys(int(i) for i in edition_ids))[:MAX_IMPORTED_FAVOURITES]
     except (TypeError, ValueError):
         raise CollectionError("edition_invalid")
     merged = merged_into("edition", ids)

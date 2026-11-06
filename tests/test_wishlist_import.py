@@ -25,6 +25,16 @@ def test_browser_favorites_go_onto_the_wishlist(market):
         market["db"].execute("DELETE FROM merged_ids WHERE old_id = 888001")
 
 
+def test_an_import_takes_more_than_the_profile_favourites(market):
+    # the profile shows 10 favourites; an import keeps far more (an edition after 10 unknown ids still counts)
+    client = market["client"]
+    sign_up(client, "fan_six")
+    response = client.post("/api/collection/import", json={"ids": [*range(990001, 990011), market["edition"]]},
+                           headers=HEADERS)
+    assert response.get_json() == {"added": 1}
+    assert wished(client) == [market["edition"]]
+
+
 def test_owned_or_wished_editions_are_left_as_they_are(market):
     client = market["client"]
     sign_up(client, "fan_five")
