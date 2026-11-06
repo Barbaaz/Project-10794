@@ -47,7 +47,7 @@ static/
   sw.js, manifest.webmanifest, offline.html   the installable app and its offline page
 tests/                     pytest; fixtures/ holds saved store pages
 docker/                    container start, nightly backup, Caddy config for HTTPS
-docs/                      knowledge base: README.md (its index), architecture.md, adr/ (decisions)
+docs/                      knowledge base: README.md (its index), architecture.md, adr/, how-to/
   agents/                  these rules
 Dockerfile, docker-compose.yml, docker-compose.production.yml
 GLOSSARY.md                the project's terms
