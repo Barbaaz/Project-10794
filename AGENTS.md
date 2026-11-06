@@ -6,6 +6,7 @@ The daily run (`scheduler/`) writes the prices. The web app (`app/`) reads them 
 
 ## Read before working
 
+- **Knowledge base**: before changing how a part works, or when a term, a past decision or the architecture is unclear → [docs/README.md](docs/README.md)
 - **Python**: before writing or reviewing `.py` in `app/`, `scrapers/`, `pipeline/`, `core/`, `scheduler/`, `database/` or `migrations/` → [docs/agents/python.md](docs/agents/python.md)
 - **Frontend**: before editing `templates/` or `static/` → [docs/agents/html.md](docs/agents/html.md)
 - **Domain**: before naming a concept or making an architecture decision → [docs/agents/domain.md](docs/agents/domain.md)
@@ -46,8 +47,10 @@ static/
   sw.js, manifest.webmanifest, offline.html   the installable app and its offline page
 tests/                     pytest; fixtures/ holds saved store pages
 docker/                    container start, nightly backup, Caddy config for HTTPS
-docs/agents/               these rules
+docs/                      knowledge base: README.md (its index), architecture.md, adr/ (decisions)
+  agents/                  these rules
 Dockerfile, docker-compose.yml, docker-compose.production.yml
+GLOSSARY.md                the project's terms
 README.md, DEPLOY.md       local setup and server deployment
 ```
 
