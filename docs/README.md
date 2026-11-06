@@ -22,6 +22,12 @@ One file per decision in [adr/](adr/). Read the ones that touch the area you're 
 | [0007](adr/0007-request-guards.md) | Changes need our request header and a SameSite cookie; scripts run only from files | Accepted |
 | [0008](adr/0008-psn-unofficial-api.md) | The PSN import uses PSN's unofficial API | Accepted |
 | [0009](adr/0009-who-creates-games.md) | Only stores and IGDB create games; never a typed name | Accepted |
+| [0010](adr/0010-price-per-hour.md) | Price per hour: the edition's best price over IGDB's story time, worked out in the page | Proposed |
+| [0011](adr/0011-store-pages.md) | Store pages show measured facts about each store, never a score | Proposed |
+| [0012](adr/0012-weekly-deals-digest.md) | A weekly deals digest by platform: opt-in, separate from wishlist alerts | Proposed |
+| [0013](adr/0013-deal-feeds.md) | Deal feeds: one Atom feed of real discounts, filtered by platform | Proposed |
+| [0014](adr/0014-sell-price-hint.md) | The sell form suggests a range from used prices, never a single price | Proposed |
+| [0015](adr/0015-collection-value-over-time.md) | Collection value over time: monthly, from store price history, for the games owned then | Proposed |
 
 ## How-to
 
